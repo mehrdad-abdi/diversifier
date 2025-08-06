@@ -8,6 +8,9 @@ dependencies = [
     "langchain>=0.3.27",
 ]
 
+[project.scripts]
+diversifier = "src.cli:main"
+
 [dependency-groups]
 dev = [
     "black>=25.1.0",
