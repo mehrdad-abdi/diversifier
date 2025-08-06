@@ -26,7 +26,7 @@ uv run diversifier <project_path> <remove_lib> <inject_lib>
 uv run black src/ main.py
 
 # Linting
-uv run flake8 src/ main.py
+uv run flake8 --select F src/ main.py
 
 # Type checking
 uv run mypy src/ main.py
@@ -35,7 +35,7 @@ uv run mypy src/ main.py
 uv run pytest
 
 # Run tests with coverage
-uv run pytest --cov=src
+uv run pytest --cov=src --cov-report=term-missing
 ```
 
 ## Architecture
@@ -77,6 +77,20 @@ The project is in early development phase with GitHub project management:
 - **Python**: Requires Python >=3.13
 
 ## Development Guidelines
+
+### Code Quality Requirements
+- **ALWAYS write unit tests** for every code change, new function, or feature
+- **MANDATORY pre-push checks**: Run these commands before every push to the repository:
+  ```bash
+  uv run black src/ tests/ main.py     # Code formatting
+  uv run flake8 --select F src/ tests/ main.py    # Linting
+  uv run mypy src/ tests/ main.py      # Type checking
+  uv run pytest                       # Unit tests
+  ```
+- All checks must pass before pushing code to any branch
+- Test coverage should be comprehensive, including edge cases and error conditions
+- Use descriptive test names that explain the expected behavior being tested
+- Mock external dependencies (file system, network, subprocess) in unit tests
 
 ### Security Considerations
 - This tool is designed for defensive security purposes only
