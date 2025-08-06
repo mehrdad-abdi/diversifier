@@ -153,18 +153,15 @@ docker-compose -f mcp-servers/docker-compose.yml up -d
 
 ```bash
 # Example: Migrate from requests to httpx
-docker run --rm -it \
-  --network mcp-network \
-  -v /path/to/your/project:/workspace \
-  diversifier /workspace requests httpx
+diversifier /path/to/your/project requests httpx
 ```
 
 ### 3. Review Results
 
 The agent will create a migrated version of your project and provide a comprehensive report showing:
 - All code changes made
-- Test results comparison  
-- Performance impact analysis
+- Test results comparison (functional equivalence validation)
+- Migration success/failure status
 - Deployment readiness confirmation
 
 ## How It Works
@@ -188,34 +185,34 @@ graph LR
 - Maps dependencies and potential compatibility issues
 
 ### 2. 🧪 Test Generation  
-- Creates comprehensive acceptance tests covering current functionality
-- Generates pytest-compatible test files
-- Tests all API endpoints, data processing functions, and edge cases
-- Establishes performance benchmarks
+- Creates library-independent acceptance tests covering core functionality
+- Analyzes project documentation and existing tests for patterns
+- Generates pytest-compatible test files focused on key functionality
+- Tests validate external behavior without depending on specific libraries
 
 ### 3. ✅ Baseline Validation
-- Builds Docker container from original project
-- Runs generated tests against original implementation  
-- Captures baseline results, performance metrics, and coverage data
-- Validates test reliability and completeness
+- Runs generated acceptance tests against original project
+- Captures baseline results for functional equivalence comparison
+- Validates test reliability and coverage
+- Establishes success criteria for migration
 
 ### 4. 🔄 Code Migration
-- Updates all import statements throughout codebase
-- Translates function calls and API usage patterns
-- Handles async/sync conversions when necessary
-- Updates configuration files and dependencies
+- Uses LLM prompts to analyze and transform code
+- Updates import statements and API usage patterns
+- Handles library-specific transformations (async/sync, parameter mapping)
+- Updates configuration files and dependencies via MCP servers
 
 ### 5. 🚀 Migration Testing
-- Builds new Docker container with target library
-- Runs identical test suite against migrated code
-- Compares results with baseline metrics
-- Identifies any functional or performance regressions
+- Runs acceptance tests on transformed project
+- Compares results with baseline for functional equivalence
+- Identifies failures that need repair
+- Determines migration success or triggers repair workflow
 
-### 6. 🛠️ Debugging & Iteration
-- Automatically fixes import errors and API mismatches
-- Resolves type annotation conflicts
-- Addresses performance issues
-- Repeats testing cycle until all tests pass
+### 6. 🛠️ Debugging & Repair
+- Uses LLM prompts to analyze test failures and diagnose issues
+- Generates corrective code changes for transformation problems
+- Applies fixes via MCP servers with rollback capability
+- Iterates repair → test → analyze cycle until all tests pass
 
 ### 7. 📋 Results & Reporting
 - Generates comprehensive migration report
@@ -253,49 +250,47 @@ When a vulnerability is discovered in a critical Python library (e.g., a specifi
 - Reduce blast radius of security vulnerabilities
 - Test alternative implementations before full migration
 
-## Project Structure
+## Development Roadmap
 
-```
-diversifier/
-├── README.md                  # This file
-├── src/                      # Main diversifier agent code
-│   ├── main.py              # CLI entry point
-│   ├── agent/               # Core LLM agent logic
-│   │   ├── analyzer.py      # Project analysis engine
-│   │   ├── test_generator.py # Acceptance test generation
-│   │   ├── migrator.py      # Library substitution engine
-│   │   └── validator.py     # Migration validation
-│   ├── mcp_clients/         # MCP client interfaces
-│   │   ├── docker_client.py
-│   │   ├── git_client.py
-│   │   ├── fs_client.py
-│   │   └── testing_client.py
-│   └── utils/               # Shared utilities
-├── mcp-servers/             # MCP server implementations
-│   ├── docker-mcp/          # Docker operations server
-│   │   ├── Dockerfile
-│   │   ├── server.py
-│   │   └── requirements.txt
-│   ├── git-mcp/             # Git operations server
-│   │   ├── Dockerfile
-│   │   ├── server.py
-│   │   └── requirements.txt
-│   ├── fs-mcp/              # File system operations server
-│   │   ├── Dockerfile
-│   │   ├── server.py
-│   │   └── requirements.txt
-│   ├── testing-mcp/         # Python testing server
-│   │   ├── Dockerfile
-│   │   ├── server.py
-│   │   └── requirements.txt
-│   └── docker-compose.yml   # MCP servers stack
-├── docker-compose.yml       # Complete application stack
-├── Dockerfile               # Main diversifier agent container
-├── scripts/
-│   ├── migrate.sh          # Convenience migration script
-│   └── setup-dev.sh        # Development environment setup
-└── tests/                   # Agent tests
-```
+The project development is organized into 7 epics with 35 individual tasks tracked in GitHub issues:
+
+### Epic 1: CLI Interface & Core Architecture
+- CLI entry point with argument parsing (`diversifier <project_path> <remove_lib> <inject_lib>`)
+- LangChain orchestration and MCP client integration
+- Configuration management and logging
+- Error handling and user feedback
+
+### Epic 2: MCP Server Infrastructure  
+- Docker Compose setup for 4 specialized servers
+- File System MCP (code analysis and modification)
+- Docker MCP (container operations)
+- Git MCP (version control)
+- Testing MCP (test execution)
+
+### Epic 3: Library-Independent Test Generation
+- LLM prompts for documentation and test analysis
+- Comprehensive acceptance test generation
+- Baseline test execution and validation
+
+### Epic 4: LLM-Driven Code Migration
+- Project analysis and library usage detection
+- Import and API transformation prompts
+- Configuration file updates
+- Migration workflow orchestration
+
+### Epic 5: Post-Migration Testing & Validation
+- Test execution on transformed projects
+- Result analysis and comparison
+- Success/failure determination
+
+### Epic 6: Iterative Transformation Repair
+- Failure analysis and debugging prompts
+- Corrective change generation
+- Repair iteration loops
+
+### Epic 7: Integration & Documentation
+- End-to-end pipeline integration
+- Example migrations and documentation
 
 ## MCP Server Details
 
