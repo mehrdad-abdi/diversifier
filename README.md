@@ -134,26 +134,24 @@ When vulnerabilities are discovered in critical Python libraries, teams can quic
 
 ### Prerequisites
 
-- Docker and Docker Compose
+- Python >=3.13
+- uv package manager
 - Access to your Python project's source code
-- Project must have a Dockerfile
 
-### 1. Start MCP Servers
+### 1. Install Diversifier
 
 ```bash
-# Start required MCP servers (from the diversifier repo)
+# Clone and install
 git clone https://github.com/mehrdad-abdi/diversifier
 cd diversifier
-
-# Start MCP servers from docker-compose
-docker-compose -f mcp-servers/docker-compose.yml up -d
+uv sync
 ```
 
 ### 2. Run Migration
 
 ```bash
 # Example: Migrate from requests to httpx
-diversifier /path/to/your/project requests httpx
+uv run diversifier /path/to/your/project requests httpx
 ```
 
 ### 3. Review Results
@@ -261,11 +259,11 @@ The project development is organized into 7 epics with 35 individual tasks track
 - Error handling and user feedback
 
 ### Epic 2: MCP Server Infrastructure  
-- Docker Compose setup for 4 specialized servers
+- Local MCP server architecture with stdio communication
 - File System MCP (code analysis and modification)
-- Docker MCP (container operations)
-- Git MCP (version control)
-- Testing MCP (test execution)
+- Git MCP (version control operations)
+- Testing MCP (test execution and validation)
+- Optional Docker MCP (isolated test environments)
 
 ### Epic 3: Library-Independent Test Generation
 - LLM prompts for documentation and test analysis
@@ -292,27 +290,39 @@ The project development is organized into 7 epics with 35 individual tasks track
 - End-to-end pipeline integration
 - Example migrations and documentation
 
-## MCP Server Details
+## MCP Server Architecture
 
-### 🐳 Docker MCP Server
-- **Purpose**: Container lifecycle management
-- **Capabilities**: Build images, run containers, manage volumes
-- **Integration**: Mounts project code, executes tests in isolated environments
+Diversifier uses **local MCP servers with stdio communication** - a simpler, more secure approach than containerized services.
+
+### 📁 File System MCP Server
+- **Purpose**: Project file manipulation and analysis
+- **Communication**: Local stdio process
+- **Capabilities**: Python AST parsing, import analysis, code modification
+- **Integration**: Analyzes dependencies, transforms code, updates requirements
+
+### 🧪 Testing MCP Server  
+- **Purpose**: Test execution and validation
+- **Communication**: Local stdio process
+- **Capabilities**: pytest execution, result parsing, coverage analysis
+- **Integration**: Runs acceptance tests, compares baseline results
 
 ### 🔄 Git MCP Server
 - **Purpose**: Version control operations
-- **Capabilities**: Branch creation, file diff, commit tracking
-- **Integration**: Creates migration branches, tracks all changes
+- **Communication**: Local stdio process
+- **Capabilities**: Branch management, change tracking, commit operations
+- **Integration**: Creates migration branches, tracks transformations
 
-### 📁 File System MCP Server
-- **Purpose**: Project file manipulation
-- **Capabilities**: Read/write Python files, parse dependencies
-- **Integration**: Analyzes imports, modifies code, updates requirements.txt
+### 🐳 Docker MCP Server (Optional)
+- **Purpose**: Isolated test environments
+- **Communication**: Local stdio process
+- **Capabilities**: Container lifecycle for complex test scenarios
+- **Integration**: Used only when local testing is insufficient
 
-### 🧪 Testing MCP Server
-- **Purpose**: Test execution and analysis
-- **Capabilities**: Run pytest, parse results, generate coverage reports
-- **Integration**: Executes acceptance tests, compares baseline results
+### Architecture Benefits
+- **Simplified Deployment**: No Docker Compose complexity
+- **Enhanced Security**: Local processes, no network exposure
+- **Better Performance**: Direct stdio communication
+- **Easier Development**: Standard Python subprocess management
 
 ## License
 
