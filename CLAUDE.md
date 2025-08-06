@@ -26,7 +26,7 @@ uv run diversifier <project_path> <remove_lib> <inject_lib>
 uv run black src/ main.py
 
 # Linting
-uv run flake8 src/ main.py
+uv run flake8 --select F src/ main.py
 
 # Type checking
 uv run mypy src/ main.py
@@ -83,7 +83,7 @@ The project is in early development phase with GitHub project management:
 - **MANDATORY pre-push checks**: Run these commands before every push to the repository:
   ```bash
   uv run black src/ tests/ main.py     # Code formatting
-  uv run flake8 src/ tests/ main.py    # Linting
+  uv run flake8 --select F src/ tests/ main.py    # Linting
   uv run mypy src/ tests/ main.py      # Type checking
   uv run pytest                       # Unit tests
   ```

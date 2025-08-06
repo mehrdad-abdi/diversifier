@@ -75,9 +75,7 @@ def validate_library_name_format(lib_name: str) -> Tuple[bool, str]:
     return True, f"Library name '{lib_name}' is valid"
 
 
-def find_library_usage(
-    project_path: Path, library_name: str
-) -> Tuple[bool, List[str]]:
+def find_library_usage(project_path: Path, library_name: str) -> Tuple[bool, List[str]]:
     usage_patterns = [
         rf"^import\s+{re.escape(library_name)}\b",
         rf"^from\s+{re.escape(library_name)}\b",

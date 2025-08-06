@@ -30,9 +30,7 @@ class TestCreateParser:
     def test_parser_optional_flags(self):
         parser = create_parser()
 
-        args = parser.parse_args(
-            [".", "requests", "httpx", "--dry-run", "--verbose"]
-        )
+        args = parser.parse_args([".", "requests", "httpx", "--dry-run", "--verbose"])
         assert args.dry_run is True
         assert args.verbose is True
 
