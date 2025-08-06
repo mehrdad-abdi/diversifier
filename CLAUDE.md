@@ -46,15 +46,24 @@ Diversifier uses a **Model Context Protocol (MCP) based architecture** with spec
 - **Main Agent** (`src/`): LLM-powered migration orchestration using LangChain
 - **MCP Servers**: Specialized microservices for different operations (planned implementation)
 
-### Planned MCP Server Architecture
-1. **Docker MCP Server**: Container lifecycle management, image building, test execution in isolation
-2. **Git MCP Server**: Version control operations, branch management, change tracking  
-3. **File System MCP Server**: Python file analysis, import parsing, code modification
-4. **Testing MCP Server**: pytest execution, result analysis, coverage reporting
+### MCP Server Architecture
+
+Diversifier uses **local MCP servers with stdio communication** for better security, performance, and simplicity:
+
+1. **File System MCP Server**: Python AST parsing, import analysis, code modification via local stdio
+2. **Testing MCP Server**: pytest execution, result analysis, coverage reporting via local stdio  
+3. **Git MCP Server**: Version control operations, branch management, change tracking via local stdio
+4. **Docker MCP Server** (Optional): Container operations only when local testing is insufficient
+
+**Architecture Benefits:**
+- **Simplified Deployment**: No Docker Compose complexity required
+- **Enhanced Security**: Local processes, no network exposure or container vulnerabilities
+- **Better Performance**: Direct stdio communication, faster than HTTP/containerized services
+- **Easier Development**: Standard Python subprocess management patterns
 
 ### Migration Workflow (7 Epics)
 1. **CLI Interface & Core Architecture**: Command-line tool and LangChain orchestration
-2. **MCP Server Infrastructure**: Docker Compose with 4 specialized servers
+2. **MCP Server Infrastructure**: Local MCP servers with stdio communication
 3. **Library-Independent Test Generation**: Create acceptance tests using LLM analysis
 4. **Project Analysis & Code Migration**: LLM-driven transformation via MCP servers
 5. **Post-Migration Testing & Validation**: Execute tests and validate equivalence
@@ -107,7 +116,9 @@ The project is in early development phase with GitHub project management:
 
 ### Key Architecture Principles
 - **LLM-Driven Intelligence**: Use sophisticated prompts rather than hardcoded logic
-- **MCP Server Coordination**: Leverage specialized servers for different operations
+- **Local MCP Architecture**: Use stdio-based MCP servers instead of containerized services
+- **MCP Server Coordination**: Leverage specialized local servers for different operations
 - **Functional Equivalence Focus**: Ignore performance differences in POC phase
 - **Iterative Repair**: Build in debugging and correction capabilities
 - **Library Independence**: Generate tests that don't depend on specific implementations
+- **Security-First Design**: Local processes minimize attack surface for defensive security tool
