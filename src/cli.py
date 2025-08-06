@@ -90,6 +90,13 @@ def main() -> int:
     if not project_path:
         return 1
         
+    is_valid_python_project, project_errors = validate_python_project(project_path)
+    if not is_valid_python_project:
+        print("Error: Invalid Python project:")
+        for error in project_errors:
+            print(f"  - {error}")
+        return 1
+        
     if not validate_library_name(args.remove_lib):
         return 1
         
