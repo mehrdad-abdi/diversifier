@@ -7,6 +7,8 @@ from src.validation import (
     validate_library_name_format,
     find_library_usage,
     validate_migration_feasibility,
+    validate_project_path,
+    validate_library_name,
 )
 
 
@@ -208,3 +210,57 @@ class TestValidateMigrationFeasibility:
         )
         assert is_feasible is False
         assert len(issues) == 2
+
+
+class TestValidateProjectPath:
+    def test_valid_directory_path(self, tmp_path):
+        result = validate_project_path(str(tmp_path))
+        assert result == tmp_path.resolve()
+
+    def test_nonexistent_path(self):
+        with patch("builtins.print"):
+            result = validate_project_path("/nonexistent/path")
+            assert result is None
+
+    def test_file_instead_of_directory(self, tmp_path):
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
+
+        with patch("builtins.print"):
+            result = validate_project_path(str(test_file))
+            assert result is None
+
+    def test_relative_path_resolution(self):
+        with patch("builtins.print"):
+            result = validate_project_path(".")
+            assert result is not None
+            assert result.is_absolute()
+
+
+class TestValidateLibraryName:
+    def test_valid_library_names(self):
+        valid_names = [
+            "requests",
+            "django-rest-framework",
+            "my_package",
+            "test.pkg",
+            "Package123",
+        ]
+
+        for name in valid_names:
+            with patch("builtins.print"):
+                assert validate_library_name(name) is True
+
+    def test_invalid_library_names(self):
+        invalid_names = [
+            "",
+            "package..name",
+            "-package",
+            "package-",
+            "_package",
+            "package_",
+        ]
+
+        for name in invalid_names:
+            with patch("builtins.print"):
+                assert validate_library_name(name) is False

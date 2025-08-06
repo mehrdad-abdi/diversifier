@@ -6,8 +6,6 @@ from io import StringIO
 from src.cli import (
     main,
     create_parser,
-    validate_project_path,
-    validate_library_name,
 )
 
 
@@ -50,57 +48,6 @@ class TestCreateParser:
             assert "project_path" in help_output
             assert "remove_lib" in help_output
             assert "inject_lib" in help_output
-
-
-class TestValidateProjectPath:
-    def test_valid_directory_path(self, tmp_path):
-        result = validate_project_path(str(tmp_path))
-        assert result == tmp_path.resolve()
-
-    def test_nonexistent_path(self):
-        result = validate_project_path("/nonexistent/path")
-        assert result is None
-
-    def test_file_instead_of_directory(self, tmp_path):
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("content")
-
-        result = validate_project_path(str(test_file))
-        assert result is None
-
-    def test_relative_path_resolution(self):
-        result = validate_project_path(".")
-        assert result is not None
-        assert result.is_absolute()
-
-
-class TestValidateLibraryName:
-    def test_valid_library_names(self):
-        valid_names = [
-            "requests",
-            "django-rest-framework",
-            "my_package",
-            "test.pkg",
-            "Package123",
-        ]
-
-        for name in valid_names:
-            with patch("builtins.print"):
-                assert validate_library_name(name) is True
-
-    def test_invalid_library_names(self):
-        invalid_names = [
-            "",
-            "package..name",
-            "-package",
-            "package-",
-            "_package",
-            "package_",
-        ]
-
-        for name in invalid_names:
-            with patch("builtins.print"):
-                assert validate_library_name(name) is False
 
 
 class TestMainFunction:
@@ -187,7 +134,5 @@ class TestMainFunction:
         assert result == 0
 
         print_calls = [call.args[0] for call in mock_print.call_args_list]
-        verbose_output = any(
-            "Project path:" in call for call in print_calls
-        )
+        verbose_output = any("Project path:" in call for call in print_calls)
         assert verbose_output

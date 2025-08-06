@@ -1,11 +1,10 @@
 import argparse
 import sys
-from pathlib import Path
-from typing import Optional
 
 from .validation import (
     validate_python_project,
-    validate_library_name_format,
+    validate_project_path,
+    validate_library_name,
 )
 
 
@@ -48,31 +47,6 @@ Examples:
     )
 
     return parser
-
-
-def validate_project_path(path_str: str) -> Optional[Path]:
-    try:
-        path = Path(path_str).resolve()
-
-        if not path.exists():
-            print(f"Error: Project path does not exist: {path}")
-            return None
-
-        if not path.is_dir():
-            print(f"Error: Project path is not a directory: {path}")
-            return None
-
-        return path
-    except Exception as e:
-        print(f"Error: Invalid project path '{path_str}': {e}")
-        return None
-
-
-def validate_library_name(lib_name: str) -> bool:
-    is_valid, message = validate_library_name_format(lib_name)
-    if not is_valid:
-        print(f"Error: {message}")
-    return is_valid
 
 
 def main() -> int:

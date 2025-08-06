@@ -2,7 +2,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 
 def validate_python_project(project_path: Path) -> Tuple[bool, List[str]]:
@@ -122,3 +122,30 @@ def validate_migration_feasibility(
         )
 
     return len(issues) == 0, issues
+
+
+def validate_project_path(path_str: str) -> Optional[Path]:
+    """Validate that the given path exists and is a directory."""
+    try:
+        path = Path(path_str).resolve()
+
+        if not path.exists():
+            print(f"Error: Project path does not exist: {path}")
+            return None
+
+        if not path.is_dir():
+            print(f"Error: Project path is not a directory: {path}")
+            return None
+
+        return path
+    except Exception as e:
+        print(f"Error: Invalid project path '{path_str}': {e}")
+        return None
+
+
+def validate_library_name(lib_name: str) -> bool:
+    """Validate library name format and provide user-friendly messages."""
+    is_valid, message = validate_library_name_format(lib_name)
+    if not is_valid:
+        print(f"Error: {message}")
+    return is_valid
