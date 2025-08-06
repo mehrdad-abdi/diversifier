@@ -1,0 +1,99 @@
+"""Docker MCP Server launcher with subprocess management."""
+
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional
+
+
+class DockerMCPLauncher:
+    """Launcher for Docker MCP Server with stdio communication."""
+
+    def __init__(self, project_root: Optional[str] = None):
+        """Initialize the Docker MCP Server launcher.
+
+        Args:
+            project_root: Root directory for Docker operations.
+                         If None, uses current working directory.
+        """
+        self.project_root = project_root or str(Path.cwd())
+        self.process: Optional[subprocess.Popen] = None
+
+    def start(self) -> subprocess.Popen:
+        """Start the Docker MCP Server as a subprocess.
+
+        Returns:
+            The subprocess.Popen object for the server process.
+        """
+        server_module = Path(__file__).parent / "server.py"
+
+        # Start server process
+        cmd = [sys.executable, str(server_module)]
+        if self.project_root:
+            cmd.append(self.project_root)
+
+        self.process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=0,  # Unbuffered for real-time communication
+        )
+
+        return self.process
+
+    def stop(self) -> None:
+        """Stop the Docker MCP Server process."""
+        if self.process:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+            finally:
+                self.process = None
+
+    def is_running(self) -> bool:
+        """Check if the Docker MCP Server process is running."""
+        return self.process is not None and self.process.poll() is None
+
+    def __enter__(self):
+        """Context manager entry."""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.stop()
+
+
+def main():
+    """Main entry point for launching Docker MCP Server."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Launch Docker MCP Server")
+    parser.add_argument("--project-root", help="Root directory for Docker operations")
+
+    args = parser.parse_args()
+
+    launcher = DockerMCPLauncher(project_root=args.project_root)
+
+    try:
+        process = launcher.start()
+        print(f"Docker MCP Server started with PID: {process.pid}")
+
+        # Keep launcher running until interrupted
+        process.wait()
+
+    except KeyboardInterrupt:
+        print("\nStopping Docker MCP Server...")
+        launcher.stop()
+    except Exception as e:
+        print(f"Error: {e}")
+        launcher.stop()
+
+
+if __name__ == "__main__":
+    main()
