@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import sys
 
 from .validation import (
@@ -6,6 +7,8 @@ from .validation import (
     validate_project_path,
     validate_library_name,
 )
+from .orchestration.coordinator import DiversificationCoordinator
+from .orchestration.logging_config import setup_logging
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -46,7 +49,47 @@ Examples:
         "--verbose", "-v", action="store_true", help="Enable verbose output"
     )
 
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Set logging level (default: INFO)",
+    )
+
+    parser.add_argument("--log-file", type=str, help="Write logs to file")
+
     return parser
+
+
+async def run_diversification(args) -> int:
+    """Run the diversification workflow."""
+    # Setup logging
+    log_level = "DEBUG" if args.verbose else args.log_level
+    setup_logging(level=log_level, log_file=args.log_file, console=True)
+
+    try:
+        # Initialize coordinator
+        coordinator = DiversificationCoordinator(
+            project_path=str(args.project_path),
+            source_library=args.remove_lib,
+            target_library=args.inject_lib,
+        )
+
+        # Execute workflow
+        success = await coordinator.execute_workflow(
+            dry_run=args.dry_run, auto_proceed=True  # For now, auto-proceed in CLI mode
+        )
+
+        if success:
+            print("✅ Diversification completed successfully!")
+            return 0
+        else:
+            print("❌ Diversification failed")
+            return 1
+
+    except Exception as e:
+        print(f"❌ Diversification failed with error: {e}")
+        return 1
 
 
 def main() -> int:
@@ -80,14 +123,11 @@ def main() -> int:
         print(f"Inject library: {args.inject_lib}")
         print(f"Dry run: {args.dry_run}")
 
-    if args.dry_run:
-        print("DRY RUN: Would perform library substitution:")
-        print(f"  Project: {project_path}")
-        print(f"  Replace '{args.remove_lib}' with '{args.inject_lib}'")
-        return 0
+    # Store validated path
+    args.project_path = project_path
 
-    print("Diversifier CLI is ready - core migration logic to be implemented")
-    return 0
+    # Run the diversification workflow
+    return asyncio.run(run_diversification(args))
 
 
 if __name__ == "__main__":
