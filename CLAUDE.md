@@ -92,6 +92,12 @@ The project is in early development phase with GitHub project management:
 - Use descriptive test names that explain the expected behavior being tested
 - Mock external dependencies (file system, network, subprocess) in unit tests
 
+### Git Workflow Requirements
+- **ALWAYS work on a GitHub issue**: Every development task must correspond to an existing GitHub issue
+- **Create dedicated dev branches**: Use descriptive branch names like `feature/issue-#-description` or `fix/issue-#-description`
+- **Complete workflow**: When work is finished, create a PR → merge PR → close the associated issue
+- Never work directly on main branch for development tasks
+
 ### Security Considerations
 - This tool is designed for defensive security purposes only
 - Focus on library migrations that maintain functional equivalence
