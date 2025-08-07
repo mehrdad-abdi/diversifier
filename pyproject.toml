@@ -8,6 +8,7 @@ dependencies = [
     "langchain>=0.3.27",
     "langchain-openai>=0.2.14",
     "mcp>=1.1.0",
+    "docker>=7.1.0",
 ]
 
 [project.scripts]
@@ -31,4 +32,5 @@ dev = [
     "pytest>=8.4.1",
     "pytest-cov>=6.0.0",
     "pytest-asyncio>=0.25.0",
+    "types-docker>=7.1.0.20241217",
 ]
