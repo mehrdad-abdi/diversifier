@@ -5,7 +5,6 @@ import tempfile
 import logging
 from unittest.mock import Mock, patch
 from pathlib import Path
-from datetime import datetime
 
 from src.orchestration.agent import AgentManager, AgentType, DiversificationAgent
 from src.orchestration.mcp_manager import MCPManager, MCPServerType, MCPConnection
@@ -31,11 +30,11 @@ class TestDiversificationAgent:
         """Clean up test environment."""
         self.temp_dir.cleanup()
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_agent_initialization(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_agent_initialization(self, mock_init_chat_model):
         """Test agent initialization."""
         mock_llm = Mock()
-        mock_openai.return_value = mock_llm
+        mock_init_chat_model.return_value = mock_llm
 
         agent = DiversificationAgent(
             agent_type=AgentType.ANALYZER, model_name="gpt-3.5-turbo", temperature=0.2
@@ -48,11 +47,11 @@ class TestDiversificationAgent:
         assert agent.memory is not None
         assert len(agent.tools) == 0
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_agent_with_tools(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_agent_with_tools(self, mock_init_chat_model):
         """Test agent initialization with tools."""
         mock_llm = Mock()
-        mock_openai.return_value = mock_llm
+        mock_init_chat_model.return_value = mock_llm
 
         # Create a proper mock tool with required attributes
         mock_tool = Mock()
@@ -69,14 +68,14 @@ class TestDiversificationAgent:
         assert len(agent.tools) == 1
         assert agent.tools[0] == mock_tool
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_agent_invoke_without_tools(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_agent_invoke_without_tools(self, mock_init_chat_model):
         """Test agent invocation without tools."""
         mock_llm = Mock()
         mock_response = Mock()
         mock_response.content = "Test response"
         mock_llm.invoke.return_value = mock_response
-        mock_openai.return_value = mock_llm
+        mock_init_chat_model.return_value = mock_llm
 
         agent = DiversificationAgent(agent_type=AgentType.ANALYZER)
         result = agent.invoke("Test input")
@@ -84,10 +83,10 @@ class TestDiversificationAgent:
         assert result["output"] == "Test response"
         mock_llm.invoke.assert_called_once()
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_add_tool(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_add_tool(self, mock_init_chat_model):
         """Test adding a tool to an agent."""
-        mock_openai.return_value = Mock()
+        mock_init_chat_model.return_value = Mock()
 
         agent = DiversificationAgent(agent_type=AgentType.TESTER)
 
@@ -102,25 +101,26 @@ class TestDiversificationAgent:
         assert mock_tool in agent.tools
         assert len(agent.tools) == 1
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_clear_memory(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_clear_memory(self, mock_init_chat_model):
         """Test clearing agent memory."""
-        mock_openai.return_value = Mock()
+        mock_init_chat_model.return_value = Mock()
 
         agent = DiversificationAgent(agent_type=AgentType.REPAIRER)
+        original_memory = agent.memory
         agent.clear_memory()
 
-        # Memory should be cleared
-        assert len(agent.memory.chat_memory.messages) == 0
+        # Memory should be a new instance (cleared)
+        assert agent.memory is not original_memory
 
 
 class TestAgentManager:
     """Test cases for AgentManager."""
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_agent_manager_initialization(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_agent_manager_initialization(self, mock_init_chat_model):
         """Test agent manager initialization."""
-        mock_openai.return_value = Mock()
+        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager(model_name="gpt-4", temperature=0.1)
 
@@ -128,10 +128,10 @@ class TestAgentManager:
         assert manager.temperature == 0.1
         assert len(manager.agents) == 0
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_get_agent(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_get_agent(self, mock_init_chat_model):
         """Test getting an agent from manager."""
-        mock_openai.return_value = Mock()
+        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager()
         agent = manager.get_agent(AgentType.ANALYZER)
@@ -140,10 +140,10 @@ class TestAgentManager:
         assert agent.agent_type == AgentType.ANALYZER
         assert AgentType.ANALYZER in manager.agents
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_get_same_agent_twice(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_get_same_agent_twice(self, mock_init_chat_model):
         """Test getting the same agent type twice returns same instance."""
-        mock_openai.return_value = Mock()
+        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager()
         agent1 = manager.get_agent(AgentType.MIGRATOR)
@@ -151,20 +151,23 @@ class TestAgentManager:
 
         assert agent1 is agent2
 
-    @patch("src.orchestration.agent.ChatOpenAI")
-    def test_clear_all_memories(self, mock_openai):
+    @patch("src.orchestration.agent.init_chat_model")
+    def test_clear_all_memories(self, mock_init_chat_model):
         """Test clearing all agent memories."""
-        mock_openai.return_value = Mock()
+        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager()
         agent1 = manager.get_agent(AgentType.ANALYZER)
         agent2 = manager.get_agent(AgentType.MIGRATOR)
 
+        original_memory1 = agent1.memory
+        original_memory2 = agent2.memory
+
         manager.clear_all_memories()
 
-        # Both agents should have cleared memories
-        assert len(agent1.memory.chat_memory.messages) == 0
-        assert len(agent2.memory.chat_memory.messages) == 0
+        # Both agents should have new memory instances (cleared)
+        assert agent1.memory is not original_memory1
+        assert agent2.memory is not original_memory2
 
 
 class TestMCPConnection:

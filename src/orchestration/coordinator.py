@@ -1,13 +1,12 @@
 """High-level workflow orchestration coordinator."""
 
-import asyncio
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 from pathlib import Path
 
 from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
-from .workflow import WorkflowState, MigrationContext, WorkflowStage, WorkflowStatus
+from .workflow import WorkflowState, MigrationContext
 
 
 class DiversificationCoordinator:
@@ -363,7 +362,7 @@ class DiversificationCoordinator:
             # Get repairer agent
             repairer = self.agent_manager.get_agent(AgentType.REPAIRER)
 
-            repair_prompt = f"""
+            repair_prompt = """
             Please analyze and repair the issues found during migration validation.
             
             Issues to address:

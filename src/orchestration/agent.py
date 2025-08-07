@@ -4,12 +4,12 @@ import logging
 from typing import Dict, Any, Optional, List
 from enum import Enum
 
-from langchain.agents import AgentExecutor, create_openai_functions_agent
-from langchain.memory import ConversationBufferMemory
-from langchain.schema import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
-from langchain_openai import ChatOpenAI
+from langchain.chat_models import init_chat_model
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt import create_react_agent
+from langchain.schema import BaseMessage
 
 
 class AgentType(Enum):
@@ -46,16 +46,13 @@ class DiversificationAgent:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.tools = tools or []
+        self.agent_executor: Any = None
 
         self.logger = logging.getLogger(f"diversifier.agent.{agent_type.value}")
 
-        # Initialize LLM
+        # Initialize LLM and memory
         self._initialize_llm()
-
-        # Initialize memory
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history", return_messages=True
-        )
+        self.memory = MemorySaver()
 
         # Initialize agent
         self._initialize_agent()
@@ -63,18 +60,8 @@ class DiversificationAgent:
     def _initialize_llm(self) -> None:
         """Initialize the LLM with configuration."""
         try:
-            llm_kwargs = {
-                "model_name": self.model_name,
-                "temperature": self.temperature,
-            }
-
-            if self.max_tokens:
-                llm_kwargs["max_tokens"] = self.max_tokens
-
-            self.llm = ChatOpenAI(
-                model=self.model_name,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
+            self.llm = init_chat_model(
+                f"openai:{self.model_name}", temperature=self.temperature
             )
             self.logger.info(
                 f"Initialized {self.model_name} LLM for {self.agent_type.value} agent"
@@ -87,26 +74,14 @@ class DiversificationAgent:
     def _initialize_agent(self) -> None:
         """Initialize the LangChain agent with tools and prompt."""
         try:
-            # Get agent-specific prompt
-            prompt = self._get_agent_prompt()
-
             # Create agent
             if self.tools:
-                agent = create_openai_functions_agent(
-                    llm=self.llm, tools=self.tools, prompt=prompt
-                )
-
-                self.agent_executor = AgentExecutor(
-                    agent=agent,
-                    tools=self.tools,
-                    memory=self.memory,
-                    verbose=True,
-                    handle_parsing_errors=True,
-                    max_iterations=10,
+                self.agent_executor = create_react_agent(
+                    self.llm, self.tools, checkpointer=self.memory
                 )
             else:
                 # For agents without tools, we'll use the LLM directly
-                self.agent_executor: Optional[AgentExecutor] = None
+                self.agent_executor = None
 
             self.logger.info(
                 f"Initialized {self.agent_type.value} agent with {len(self.tools)} tools"
@@ -199,7 +174,12 @@ class DiversificationAgent:
         """
         try:
             if self.agent_executor:
-                result = self.agent_executor.invoke({"input": input_text}, **kwargs)
+                config = {
+                    "configurable": {"thread_id": f"agent_{self.agent_type.value}"}
+                }
+                result = self.agent_executor.invoke(
+                    {"messages": [{"role": "user", "content": input_text}]}, config
+                )
             else:
                 # For agents without tools, use LLM directly
                 prompt = self._get_agent_prompt()
@@ -235,11 +215,13 @@ class DiversificationAgent:
         Returns:
             List of conversation messages
         """
-        return self.memory.chat_memory.messages
+        # MemorySaver doesn't have direct message access
+        return []
 
     def clear_memory(self) -> None:
         """Clear the agent's conversation memory."""
-        self.memory.clear()
+        # MemorySaver doesn't have a direct clear method, so we reinitialize it
+        self.memory = MemorySaver()
         self.logger.info(f"Cleared memory for {self.agent_type.value} agent")
 
 
