@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 import docker
-from docker.errors import DockerException, APIError, BuildError
+from docker.errors import APIError, BuildError
 from docker.models.containers import Container
 
 from mcp.server.models import InitializationOptions
@@ -408,8 +408,10 @@ class DockerMCPServer:
             # Collect build logs
             build_output = []
             for log_entry in logs:
-                if "stream" in log_entry:
-                    build_output.append(log_entry["stream"].strip())
+                if isinstance(log_entry, dict) and "stream" in log_entry:
+                    stream_value = log_entry["stream"]
+                    if isinstance(stream_value, str):
+                        build_output.append(stream_value.strip())
 
             result = {
                 "status": "success",
@@ -472,7 +474,7 @@ class DockerMCPServer:
                 }
 
             # Prepare container configuration
-            container_config = {
+            container_config: Dict[str, Any] = {
                 "image": image,
                 "detach": detach,
                 "remove": remove,
@@ -572,13 +574,20 @@ class DockerMCPServer:
         try:
             container = self.docker_client.containers.get(container_id)
 
-            logs = container.logs(
-                stdout=True,
-                stderr=True,
-                tail=tail,
-                follow=follow,
-                stream=follow,
-            )
+            if follow:
+                log_stream = container.logs(
+                    stdout=True,
+                    stderr=True,
+                    tail=tail,
+                    stream=True,
+                )
+            else:
+                logs_bytes = container.logs(
+                    stdout=True,
+                    stderr=True,
+                    tail=tail,
+                    stream=False,
+                )
 
             if follow:
                 # For streaming logs, return initial batch
@@ -586,7 +595,7 @@ class DockerMCPServer:
                 log_lines = []
                 for _ in range(min(tail, 50)):  # Limit streaming
                     try:
-                        line = next(logs).decode("utf-8").strip()
+                        line = next(log_stream).decode("utf-8").strip()
                         log_lines.append(line)
                     except StopIteration:
                         break
@@ -597,9 +606,7 @@ class DockerMCPServer:
                     "streaming": True,
                 }
             else:
-                log_content = (
-                    logs.decode("utf-8") if isinstance(logs, bytes) else str(logs)
-                )
+                log_content = logs_bytes.decode("utf-8")
                 result = {
                     "container_id": container_id,
                     "logs": log_content.strip().split("\n"),
@@ -783,6 +790,7 @@ def main():
 
     try:
         import asyncio
+
         server = DockerMCPServer(project_root=project_root)
         asyncio.run(server.run())
     except RuntimeError as e:
