@@ -3,13 +3,13 @@
 import logging
 from typing import Dict, Any, Optional, List
 from enum import Enum
+from pathlib import Path
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
-from langchain.schema import BaseMessage
 
 
 class AgentType(Enum):
@@ -91,57 +91,30 @@ class DiversificationAgent:
             self.logger.error(f"Failed to initialize agent: {e}")
             raise
 
+    def _load_agent_prompt(self) -> str:
+        """Load the appropriate prompt template for this agent type from file."""
+        prompt_dir = Path(__file__).parent / "prompts"
+
+        # Map agent types to prompt files
+        prompt_files = {
+            AgentType.ANALYZER: "analyzer.txt",
+            AgentType.MIGRATOR: "migrator.txt",
+            AgentType.TESTER: "tester.txt",
+            AgentType.REPAIRER: "repairer.txt",
+        }
+
+        prompt_file = prompt_files.get(self.agent_type)
+        if prompt_file:
+            prompt_path = prompt_dir / prompt_file
+            if prompt_path.exists():
+                return prompt_path.read_text().strip()
+
+        # Fallback for unknown agent types
+        return "You are a helpful assistant for Python code migration tasks."
+
     def _get_agent_prompt(self) -> ChatPromptTemplate:
         """Get the appropriate prompt template for this agent type."""
-
-        if self.agent_type == AgentType.ANALYZER:
-            system_message = """You are an expert Python code analyzer specializing in library migration analysis.
-            Your role is to analyze Python codebases to understand:
-            1. Current library usage patterns
-            2. Import structures and dependencies
-            3. API usage patterns that need to be migrated
-            4. Project structure and organization
-            
-            You have access to file system tools to read and analyze Python files.
-            Provide detailed analysis reports that will guide the migration process."""
-
-        elif self.agent_type == AgentType.MIGRATOR:
-            system_message = """You are an expert Python code migrator specializing in library substitution.
-            Your role is to:
-            1. Transform code from one library to another while maintaining functionality
-            2. Update import statements and API calls
-            3. Handle parameter mappings and structural changes
-            4. Ensure the migrated code follows best practices
-            
-            You have access to file system tools to read and modify Python files.
-            Make precise, surgical changes that maintain code functionality."""
-
-        elif self.agent_type == AgentType.TESTER:
-            system_message = """You are an expert test engineer specializing in functional equivalence testing.
-            Your role is to:
-            1. Generate comprehensive test cases for library migrations
-            2. Execute tests to validate functional equivalence
-            3. Identify behavioral differences between library implementations
-            4. Create regression test suites
-            
-            You have access to testing tools and can run Python test suites.
-            Focus on ensuring migrated code behaves identically to the original."""
-
-        elif self.agent_type == AgentType.REPAIRER:
-            system_message = """You are an expert debugging specialist for Python library migrations.
-            Your role is to:
-            1. Diagnose failures in migrated code
-            2. Identify root causes of migration problems
-            3. Apply targeted fixes to resolve issues
-            4. Validate that repairs maintain functional equivalence
-            
-            You have access to testing and file system tools.
-            Use systematic debugging approaches to resolve migration issues."""
-
-        else:
-            system_message = (
-                "You are a helpful assistant for Python code migration tasks."
-            )
+        system_message = self._load_agent_prompt()
 
         if self.tools:
             prompt = ChatPromptTemplate.from_messages(
@@ -162,12 +135,11 @@ class DiversificationAgent:
 
         return prompt
 
-    def invoke(self, input_text: str, **kwargs) -> Dict[str, Any]:
+    def invoke(self, input_text: str) -> Dict[str, Any]:
         """Invoke the agent with input text.
 
         Args:
             input_text: Input text for the agent
-            **kwargs: Additional parameters
 
         Returns:
             Agent response dictionary
@@ -208,15 +180,6 @@ class DiversificationAgent:
 
             # Reinitialize agent with new tools
             self._initialize_agent()
-
-    def get_conversation_history(self) -> List[BaseMessage]:
-        """Get the conversation history from memory.
-
-        Returns:
-            List of conversation messages
-        """
-        # MemorySaver doesn't have direct message access
-        return []
 
     def clear_memory(self) -> None:
         """Clear the agent's conversation memory."""

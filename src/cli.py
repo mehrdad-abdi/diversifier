@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import os
 import sys
 
 from .validation import (
@@ -58,6 +59,20 @@ Examples:
 
     parser.add_argument("--log-file", type=str, help="Write logs to file")
 
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=os.getenv("DIVERSIFIER_MODEL", "gpt-4"),
+        help="LLM model to use (default: gpt-4, can be set via DIVERSIFIER_MODEL env var)",
+    )
+
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=float(os.getenv("DIVERSIFIER_TEMPERATURE", "0.1")),
+        help="LLM temperature (default: 0.1, can be set via DIVERSIFIER_TEMPERATURE env var)",
+    )
+
     return parser
 
 
@@ -73,6 +88,8 @@ async def run_diversification(args) -> int:
             project_path=str(args.project_path),
             source_library=args.remove_lib,
             target_library=args.inject_lib,
+            model_name=args.model,
+            temperature=args.temperature,
         )
 
         # Execute workflow
