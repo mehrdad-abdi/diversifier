@@ -369,6 +369,114 @@ class TestMCPManager:
 
         assert result == {"result": "success"}
 
+    def test_mcp_connection_health_check(self):
+        """Test MCP connection health checking."""
+        mock_client = Mock()
+        mock_client.list_tools.return_value = {"result": []}
+
+        connection = MCPConnection(MCPServerType.FILESYSTEM, mock_client)
+        connection.is_connected = True
+
+        assert connection.is_healthy() is True
+        mock_client.list_tools.assert_called_once()
+
+    def test_mcp_connection_health_check_failed(self):
+        """Test MCP connection health check failure."""
+        mock_client = Mock()
+        mock_client.list_tools.side_effect = Exception("Connection failed")
+
+        connection = MCPConnection(MCPServerType.FILESYSTEM, mock_client)
+        connection.is_connected = True
+
+        assert connection.is_healthy() is False
+        assert connection.is_connected is False
+
+    @pytest.mark.asyncio
+    async def test_mcp_connection_restart_success(self):
+        """Test successful MCP connection restart."""
+        mock_client = Mock()
+        mock_client.start_server.return_value = True
+        mock_client.stop_server = Mock()
+
+        connection = MCPConnection(MCPServerType.FILESYSTEM, mock_client)
+        connection.is_connected = True
+
+        success = await connection.restart()
+
+        assert success is True
+        assert connection.restart_count == 0  # Reset to 0 on successful connect
+        mock_client.stop_server.assert_called_once()
+        mock_client.start_server.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mcp_connection_restart_max_attempts(self):
+        """Test MCP connection restart with max attempts reached."""
+        mock_client = Mock()
+
+        connection = MCPConnection(MCPServerType.FILESYSTEM, mock_client)
+        connection.restart_count = 3  # Already at max
+
+        success = await connection.restart()
+
+        assert success is False
+
+    @pytest.mark.asyncio
+    async def test_detailed_health_check(self):
+        """Test detailed health check."""
+        mock_client = Mock()
+        connection = MCPConnection(MCPServerType.FILESYSTEM, mock_client)
+        connection.is_connected = True
+        connection.restart_count = 1
+
+        manager = MCPManager(project_root=self.project_root)
+        manager.connections[MCPServerType.FILESYSTEM] = connection
+
+        with patch.object(connection, "is_healthy", return_value=True):
+            health_status = await manager.health_check(detailed=True)
+
+        assert MCPServerType.FILESYSTEM in health_status
+        health_info = health_status[MCPServerType.FILESYSTEM]
+        assert health_info["healthy"] is True
+        assert health_info["connected"] is True
+        assert health_info["restart_count"] == 1
+        assert health_info["max_restarts"] == 3
+
+    @pytest.mark.asyncio
+    async def test_restart_failed_servers(self):
+        """Test restarting failed servers."""
+        mock_client = Mock()
+        connection = MCPConnection(MCPServerType.FILESYSTEM, mock_client)
+        connection.is_connected = False
+
+        manager = MCPManager(project_root=self.project_root)
+        manager.connections[MCPServerType.FILESYSTEM] = connection
+
+        with patch.object(connection, "is_healthy", return_value=False):
+            with patch.object(connection, "restart", return_value=True) as mock_restart:
+                restart_results = await manager.restart_failed_servers()
+
+                assert restart_results[MCPServerType.FILESYSTEM] is True
+                mock_restart.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_server_statistics(self):
+        """Test getting server statistics."""
+        mock_client = Mock()
+        connection = MCPConnection(MCPServerType.FILESYSTEM, mock_client)
+        connection.is_connected = True
+
+        manager = MCPManager(project_root=self.project_root)
+        manager.connections[MCPServerType.FILESYSTEM] = connection
+
+        with patch.object(connection, "is_healthy", return_value=True):
+            stats = await manager.get_server_statistics()
+
+        assert stats["total_servers"] == len(MCPServerType)
+        assert stats["connected_servers"] >= 1
+        assert stats["healthy_servers"] >= 1
+        assert "servers" in stats
+        assert "filesystem" in stats["servers"]
+
 
 class TestWorkflowState:
     """Test cases for WorkflowState."""

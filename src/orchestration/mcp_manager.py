@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional, List
+import time
+from typing import Dict, Any, Optional, List, Union
 from enum import Enum
 from pathlib import Path
 
@@ -34,6 +35,10 @@ class MCPConnection:
         self.server_type = server_type
         self.client = client
         self.is_connected = False
+        self.last_health_check = 0.0
+        self.restart_count = 0
+        self.max_restarts = 3
+        self.restart_backoff = 1.0
         self.logger = logging.getLogger(f"diversifier.mcp.{server_type.value}")
 
     async def connect(self) -> bool:
@@ -47,6 +52,8 @@ class MCPConnection:
                 success = self.client.start_server()
                 self.is_connected = success
                 if success:
+                    self.last_health_check = time.time()
+                    self.restart_count = 0
                     self.logger.info(
                         f"Connected to {self.server_type.value} MCP server"
                     )
@@ -103,10 +110,17 @@ class MCPConnection:
         try:
             if hasattr(self.client, "call_tool"):
                 result = self.client.call_tool(tool_name, arguments)
-                self.logger.debug(
-                    f"Called {tool_name} on {self.server_type.value} server"
-                )
-                return result
+                if result is not None:
+                    self.last_health_check = time.time()
+                    self.logger.debug(
+                        f"Called {tool_name} on {self.server_type.value} server"
+                    )
+                    return result
+                else:
+                    self.logger.warning(
+                        f"Tool {tool_name} returned None on {self.server_type.value} server"
+                    )
+                    return None
             else:
                 self.logger.error(
                     f"Client for {self.server_type.value} does not support tool calling"
@@ -117,6 +131,7 @@ class MCPConnection:
             self.logger.error(
                 f"Error calling tool {tool_name} on {self.server_type.value} server: {e}"
             )
+            self.is_connected = False
             return None
 
     def list_tools(self) -> Optional[List[str]]:
@@ -135,9 +150,11 @@ class MCPConnection:
             if hasattr(self.client, "list_tools"):
                 result = self.client.list_tools()
                 if result and "result" in result:
+                    self.last_health_check = time.time()
                     # Extract tool names from the result
                     tools = [tool.get("name", "") for tool in result.get("result", [])]
                     return tools
+                self.last_health_check = time.time()
                 return []
             else:
                 self.logger.error(
@@ -149,7 +166,70 @@ class MCPConnection:
             self.logger.error(
                 f"Error listing tools on {self.server_type.value} server: {e}"
             )
+            self.is_connected = False
             return None
+
+    def is_healthy(self, health_check_interval: float = 30.0) -> bool:
+        """Check if the server is healthy.
+
+        Args:
+            health_check_interval: Minimum seconds between health checks
+
+        Returns:
+            True if server is healthy, False otherwise
+        """
+        if not self.is_connected:
+            return False
+
+        current_time = time.time()
+        if current_time - self.last_health_check < health_check_interval:
+            return True
+
+        try:
+            tools = self.list_tools()
+            return tools is not None
+        except Exception as e:
+            self.logger.error(
+                f"Health check failed for {self.server_type.value} server: {e}"
+            )
+            self.is_connected = False
+            return False
+
+    async def restart(self) -> bool:
+        """Restart the MCP server connection.
+
+        Returns:
+            True if restart successful, False otherwise
+        """
+        if self.restart_count >= self.max_restarts:
+            self.logger.error(
+                f"Max restart attempts ({self.max_restarts}) reached for {self.server_type.value} server"
+            )
+            return False
+
+        self.logger.info(
+            f"Restarting {self.server_type.value} server (attempt {self.restart_count + 1})"
+        )
+
+        await self.disconnect()
+
+        if self.restart_count > 0:
+            backoff_time = self.restart_backoff * (2 ** (self.restart_count - 1))
+            self.logger.info(
+                f"Waiting {backoff_time:.1f}s before restart attempt {self.restart_count + 1}"
+            )
+            await asyncio.sleep(backoff_time)
+
+        self.restart_count += 1
+        success = await self.connect()
+
+        if success:
+            self.logger.info(f"Successfully restarted {self.server_type.value} server")
+            # Note: restart_count is reset to 0 in connect() on success
+        else:
+            self.logger.error(f"Failed to restart {self.server_type.value} server")
+
+        return success
 
 
 class MCPManager:
@@ -325,7 +405,12 @@ class MCPManager:
         """
         connection = self.get_connection(server_type)
         if connection:
-            return connection.call_tool(tool_name, arguments)
+            result = connection.call_tool(tool_name, arguments)
+            if result is None and connection.is_connected:
+                self.logger.warning(
+                    f"Tool call returned None but server is still connected: {server_type.value}"
+                )
+            return result
         return None
 
     async def list_tools(self, server_type: MCPServerType) -> Optional[List[str]]:
@@ -352,24 +437,130 @@ class MCPManager:
         self.connections.clear()
         self.logger.info("All MCP servers shutdown")
 
-    async def health_check(self) -> Dict[MCPServerType, bool]:
+    async def health_check(
+        self, detailed: bool = False
+    ) -> Dict[MCPServerType, Union[bool, Dict[str, Any]]]:
         """Perform health check on all MCP servers.
 
+        Args:
+            detailed: Return detailed health information
+
         Returns:
-            Dictionary mapping server types to health status
+            Dictionary mapping server types to health status or detailed info
         """
-        health_status = {}
+        health_status: Dict[MCPServerType, Union[bool, Dict[str, Any]]] = {}
 
         for server_type in MCPServerType:
             connection = self.connections.get(server_type)
             if connection:
-                # Try to list tools as a basic health check
-                tools = connection.list_tools()
-                health_status[server_type] = tools is not None
+                is_healthy = connection.is_healthy()
+                if detailed:
+                    health_status[server_type] = {
+                        "healthy": is_healthy,
+                        "connected": connection.is_connected,
+                        "last_check": connection.last_health_check,
+                        "restart_count": connection.restart_count,
+                        "max_restarts": connection.max_restarts,
+                    }
+                else:
+                    health_status[server_type] = is_healthy
             else:
-                health_status[server_type] = False
+                if detailed:
+                    health_status[server_type] = {
+                        "healthy": False,
+                        "connected": False,
+                        "last_check": 0.0,
+                        "restart_count": 0,
+                        "max_restarts": 3,
+                    }
+                else:
+                    health_status[server_type] = False
 
         return health_status
+
+    async def restart_failed_servers(self) -> Dict[MCPServerType, bool]:
+        """Restart any failed servers.
+
+        Returns:
+            Dictionary mapping server types to restart success status
+        """
+        restart_results = {}
+
+        for server_type, connection in self.connections.items():
+            if not connection.is_healthy():
+                self.logger.info(
+                    f"Attempting to restart failed {server_type.value} server"
+                )
+                restart_results[server_type] = await connection.restart()
+            else:
+                restart_results[server_type] = True
+
+        return restart_results
+
+    async def monitor_servers(
+        self, interval: float = 60.0, max_iterations: int = -1
+    ) -> None:
+        """Monitor server health and restart failed servers.
+
+        Args:
+            interval: Monitoring interval in seconds
+            max_iterations: Max monitoring cycles (-1 for infinite)
+        """
+        iteration = 0
+
+        while max_iterations == -1 or iteration < max_iterations:
+            try:
+                health_status = await self.health_check()
+                failed_servers = [t for t, h in health_status.items() if not h]
+
+                if failed_servers:
+                    self.logger.warning(
+                        f"Failed servers detected: {[t.value for t in failed_servers]}"
+                    )
+                    await self.restart_failed_servers()
+
+                await asyncio.sleep(interval)
+                iteration += 1
+
+            except Exception as e:
+                self.logger.error(f"Error in server monitoring: {e}")
+                await asyncio.sleep(interval)
+                iteration += 1
+
+    async def get_server_statistics(self) -> Dict[str, Any]:
+        """Get statistics about server connections.
+
+        Returns:
+            Dictionary with server connection statistics
+        """
+        connected_count = len([c for c in self.connections.values() if c.is_connected])
+        stats: Dict[str, Any] = {
+            "total_servers": len(MCPServerType),
+            "connected_servers": connected_count,
+            "healthy_servers": 0,
+            "failed_servers": 0,
+            "servers": {},
+        }
+
+        health_status = await self.health_check(detailed=True)
+
+        for server_type, health_info in health_status.items():
+            if isinstance(health_info, dict):
+                if health_info["healthy"]:
+                    stats["healthy_servers"] += 1
+                else:
+                    stats["failed_servers"] += 1
+
+                stats["servers"][server_type.value] = health_info
+            else:
+                if health_info:
+                    stats["healthy_servers"] += 1
+                else:
+                    stats["failed_servers"] += 1
+
+                stats["servers"][server_type.value] = {"healthy": health_info}
+
+        return stats
 
     def __enter__(self):
         """Context manager entry."""
