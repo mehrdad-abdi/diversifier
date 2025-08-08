@@ -178,14 +178,16 @@ class TestUserFeedback:
             recovery_suggestions=["Retry connection", "Check network"],
         )
 
-        with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr, \
-             patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+        with (
+            patch("sys.stderr", new_callable=io.StringIO) as mock_stderr,
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+        ):
             feedback.display_error_info(error_info)
 
             stderr_output = mock_stderr.getvalue()
             stdout_output = mock_stdout.getvalue()
             full_output = stderr_output + stdout_output
-            
+
             assert "Connection failed" in full_output
             assert "Suggested actions:" in full_output
             assert "Retry connection" in full_output
@@ -200,14 +202,16 @@ class TestUserFeedback:
             recovery_suggestions=["Check config"],
         )
 
-        with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr, \
-             patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+        with (
+            patch("sys.stderr", new_callable=io.StringIO) as mock_stderr,
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+        ):
             feedback.display_exception(exception)
 
             stderr_output = mock_stderr.getvalue()
             stdout_output = mock_stdout.getvalue()
             full_output = stderr_output + stdout_output
-            
+
             assert "Test error" in full_output
             assert "Check config" in full_output
 

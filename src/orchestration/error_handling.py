@@ -550,7 +550,9 @@ class ErrorHandler:
         """
         try:
             # Try to restart MCP server if server type is available
-            server_type = error_info.context.get("server_type") if error_info.context else None
+            server_type = (
+                error_info.context.get("server_type") if error_info.context else None
+            )
             if server_type:
                 self.logger.info(f"Attempting to restart {server_type} MCP server")
                 # This would integrate with MCP manager to restart server
@@ -576,7 +578,9 @@ class ErrorHandler:
         """
         try:
             # Clear agent memory and retry with simpler prompt
-            agent_type = error_info.context.get("agent_type") if error_info.context else None
+            agent_type = (
+                error_info.context.get("agent_type") if error_info.context else None
+            )
             if agent_type:
                 self.logger.info(f"Clearing memory for {agent_type} agent")
                 # Would integrate with agent system to clear memory
@@ -599,8 +603,12 @@ class ErrorHandler:
         """
         try:
             # Create backup or temporary file location
-            file_path = error_info.context.get("file_path") if error_info.context else None
-            operation = error_info.context.get("operation") if error_info.context else None
+            file_path = (
+                error_info.context.get("file_path") if error_info.context else None
+            )
+            operation = (
+                error_info.context.get("operation") if error_info.context else None
+            )
 
             if file_path and operation:
                 self.logger.info(
@@ -625,7 +633,9 @@ class ErrorHandler:
             True if resource recovery was successful
         """
         try:
-            resource_type = error_info.context.get("resource_type") if error_info.context else None
+            resource_type = (
+                error_info.context.get("resource_type") if error_info.context else None
+            )
 
             if resource_type == "memory":
                 self.logger.info("Attempting memory cleanup")
