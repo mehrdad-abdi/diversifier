@@ -269,6 +269,36 @@ class TestMCPManager:
         assert result is False
         assert MCPServerType.FILESYSTEM not in manager.connections
 
+    @patch("src.orchestration.mcp_manager.GitMCPClient")
+    @pytest.mark.asyncio
+    async def test_initialize_git_server_success(self, mock_client_class):
+        """Test successful git server initialization."""
+        mock_client = Mock()
+        mock_client.start_server.return_value = True
+        mock_client_class.return_value = mock_client
+
+        manager = MCPManager(project_root=self.project_root)
+        result = await manager.initialize_git_server()
+
+        assert result is True
+        assert MCPServerType.GIT in manager.connections
+        mock_client_class.assert_called_once_with(project_root=self.project_root)
+
+    @patch("src.orchestration.mcp_manager.DockerMCPLauncher")
+    @pytest.mark.asyncio
+    async def test_initialize_docker_server_success(self, mock_client_class):
+        """Test successful docker server initialization."""
+        mock_client = Mock()
+        mock_client.start_server.return_value = True
+        mock_client_class.return_value = mock_client
+
+        manager = MCPManager(project_root=self.project_root)
+        result = await manager.initialize_docker_server()
+
+        assert result is True
+        assert MCPServerType.DOCKER in manager.connections
+        mock_client_class.assert_called_once_with(project_root=self.project_root)
+
     @pytest.mark.asyncio
     async def test_initialize_all_servers(self):
         """Test initializing all servers."""
@@ -317,7 +347,9 @@ class TestMCPManager:
         manager.connections[MCPServerType.FILESYSTEM] = connection
 
         assert manager.is_server_available(MCPServerType.FILESYSTEM) is True
-        assert manager.is_server_available(MCPServerType.GIT) is False
+        assert (
+            manager.is_server_available(MCPServerType.GIT) is False
+        )  # Not connected in this test
 
     @pytest.mark.asyncio
     async def test_call_tool(self):

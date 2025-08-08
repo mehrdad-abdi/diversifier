@@ -10,6 +10,7 @@ dependencies = [
     "mcp>=1.1.0",
     "docker>=7.1.0",
     "langgraph>=0.6.4",
+    "gitpython>=3.1.45",
 ]
 
 [project.scripts]

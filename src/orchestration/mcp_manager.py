@@ -7,6 +7,8 @@ from enum import Enum
 from pathlib import Path
 
 from src.mcp_servers.filesystem.launcher import FileSystemMCPClient
+from src.mcp_servers.git.launcher import GitMCPClient
+from src.mcp_servers.docker.launcher import DockerMCPLauncher
 
 
 class MCPServerType(Enum):
@@ -198,26 +200,44 @@ class MCPManager:
     async def initialize_git_server(self) -> bool:
         """Initialize the git MCP server.
 
-        Note: This is a placeholder - git server not yet implemented.
-
         Returns:
             True if successful, False otherwise
         """
-        self.logger.info("Git MCP server initialization - placeholder")
-        # TODO: Implement when git server is available
-        return True
+        try:
+            client = GitMCPClient(project_root=self.project_root)
+            connection = MCPConnection(MCPServerType.GIT, client)
+
+            success = await connection.connect()
+            if success:
+                self.connections[MCPServerType.GIT] = connection
+                self.logger.info("Git MCP server initialized")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize git server: {e}")
+            return False
 
     async def initialize_docker_server(self) -> bool:
         """Initialize the docker MCP server.
 
-        Note: This is a placeholder - docker server not yet implemented.
-
         Returns:
             True if successful, False otherwise
         """
-        self.logger.info("Docker MCP server initialization - placeholder")
-        # TODO: Implement when docker server is available
-        return True
+        try:
+            client = DockerMCPLauncher(project_root=self.project_root)
+            connection = MCPConnection(MCPServerType.DOCKER, client)
+
+            success = await connection.connect()
+            if success:
+                self.connections[MCPServerType.DOCKER] = connection
+                self.logger.info("Docker MCP server initialized")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize docker server: {e}")
+            return False
 
     async def initialize_all_servers(self) -> Dict[MCPServerType, bool]:
         """Initialize all MCP servers.
@@ -230,7 +250,7 @@ class MCPManager:
         # Initialize filesystem server (implemented)
         results[MCPServerType.FILESYSTEM] = await self.initialize_filesystem_server()
 
-        # Initialize other servers (placeholders)
+        # Initialize other servers
         results[MCPServerType.TESTING] = await self.initialize_testing_server()
         results[MCPServerType.GIT] = await self.initialize_git_server()
         results[MCPServerType.DOCKER] = await self.initialize_docker_server()
