@@ -1,6 +1,6 @@
 import pytest
 import sys
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from io import StringIO
 
 from src.cli import (
@@ -49,10 +49,18 @@ class TestCreateParser:
 
 
 class TestMainFunction:
-    @patch("src.cli.validate_python_project")
+    @patch("src.cli.DiversificationCoordinator")
+    @patch("src.validation.validate_library_name")
+    @patch("src.validation.validate_project_path")
+    @patch("src.validation.validate_python_project")
     @patch("builtins.print")
-    def test_main_dry_run_success(self, mock_print, mock_validate_python):
+    def test_main_dry_run_success(self, mock_print, mock_validate_python, mock_validate_path, mock_validate_lib, mock_coordinator_class):
         mock_validate_python.return_value = (True, [])
+        mock_validate_path.return_value = "/fake/path"
+        mock_validate_lib.return_value = True
+        mock_coordinator = Mock()
+        mock_coordinator.execute_workflow.return_value = None
+        mock_coordinator_class.return_value = mock_coordinator
 
         test_args = [
             "diversifier",
@@ -91,9 +99,10 @@ class TestMainFunction:
 
         assert result == 1
 
+    @patch("src.cli.DiversificationCoordinator")
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
-    def test_main_same_libraries(self, mock_print, mock_validate_python):
+    def test_main_same_libraries(self, mock_print, mock_validate_python, mock_coordinator_class):
         mock_validate_python.return_value = (True, [])
 
         test_args = ["diversifier", ".", "requests", "requests"]
@@ -102,9 +111,10 @@ class TestMainFunction:
 
         assert result == 1
 
+    @patch("src.cli.DiversificationCoordinator")
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
-    def test_main_invalid_library_name(self, mock_print, mock_validate_python):
+    def test_main_invalid_library_name(self, mock_print, mock_validate_python, mock_coordinator_class):
         mock_validate_python.return_value = (True, [])
 
         test_args = ["diversifier", ".", "requests", ""]
@@ -113,9 +123,10 @@ class TestMainFunction:
 
         assert result == 1
 
+    @patch("src.cli.DiversificationCoordinator")
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
-    def test_main_verbose_output(self, mock_print, mock_validate_python):
+    def test_main_verbose_output(self, mock_print, mock_validate_python, mock_coordinator_class):
         mock_validate_python.return_value = (True, [])
 
         test_args = [

@@ -33,5 +33,15 @@ dev = [
     "pytest>=8.4.1",
     "pytest-cov>=6.0.0",
     "pytest-asyncio>=0.25.0",
+    "pytest-timeout>=2.1.0",
     "types-docker>=7.1.0.20241217",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--timeout=300",
+    "--timeout-method=signal",
+    "-v"
+]
+

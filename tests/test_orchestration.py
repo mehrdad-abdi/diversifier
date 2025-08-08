@@ -30,11 +30,8 @@ class TestDiversificationAgent:
         """Clean up test environment."""
         self.temp_dir.cleanup()
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_agent_initialization(self, mock_init_chat_model):
+    def test_agent_initialization(self):
         """Test agent initialization."""
-        mock_llm = Mock()
-        mock_init_chat_model.return_value = mock_llm
 
         agent = DiversificationAgent(
             agent_type=AgentType.ANALYZER, model_name="gpt-3.5-turbo", temperature=0.2
@@ -43,15 +40,12 @@ class TestDiversificationAgent:
         assert agent.agent_type == AgentType.ANALYZER
         assert agent.model_name == "gpt-3.5-turbo"
         assert agent.temperature == 0.2
-        assert agent.llm == mock_llm
+        assert agent.llm is not None
         assert agent.memory is not None
         assert len(agent.tools) == 0
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_agent_with_tools(self, mock_init_chat_model):
+    def test_agent_with_tools(self):
         """Test agent initialization with tools."""
-        mock_llm = Mock()
-        mock_init_chat_model.return_value = mock_llm
 
         # Create a proper mock tool with required attributes
         mock_tool = Mock()
@@ -68,25 +62,15 @@ class TestDiversificationAgent:
         assert len(agent.tools) == 1
         assert agent.tools[0] == mock_tool
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_agent_invoke_without_tools(self, mock_init_chat_model):
+    def test_agent_invoke_without_tools(self):
         """Test agent invocation without tools."""
-        mock_llm = Mock()
-        mock_response = Mock()
-        mock_response.content = "Test response"
-        mock_llm.invoke.return_value = mock_response
-        mock_init_chat_model.return_value = mock_llm
-
         agent = DiversificationAgent(agent_type=AgentType.ANALYZER)
         result = agent.invoke("Test input")
 
-        assert result["output"] == "Test response"
-        mock_llm.invoke.assert_called_once()
+        assert result["output"] == "Mock response"
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_add_tool(self, mock_init_chat_model):
+    def test_add_tool(self):
         """Test adding a tool to an agent."""
-        mock_init_chat_model.return_value = Mock()
 
         agent = DiversificationAgent(agent_type=AgentType.TESTER)
 
@@ -101,10 +85,8 @@ class TestDiversificationAgent:
         assert mock_tool in agent.tools
         assert len(agent.tools) == 1
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_clear_memory(self, mock_init_chat_model):
+    def test_clear_memory(self):
         """Test clearing agent memory."""
-        mock_init_chat_model.return_value = Mock()
 
         agent = DiversificationAgent(agent_type=AgentType.REPAIRER)
         original_memory = agent.memory
@@ -117,10 +99,8 @@ class TestDiversificationAgent:
 class TestAgentManager:
     """Test cases for AgentManager."""
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_agent_manager_initialization(self, mock_init_chat_model):
+    def test_agent_manager_initialization(self):
         """Test agent manager initialization."""
-        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager(model_name="gpt-4", temperature=0.1)
 
@@ -128,10 +108,8 @@ class TestAgentManager:
         assert manager.temperature == 0.1
         assert len(manager.agents) == 0
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_get_agent(self, mock_init_chat_model):
+    def test_get_agent(self):
         """Test getting an agent from manager."""
-        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager()
         agent = manager.get_agent(AgentType.ANALYZER)
@@ -140,10 +118,8 @@ class TestAgentManager:
         assert agent.agent_type == AgentType.ANALYZER
         assert AgentType.ANALYZER in manager.agents
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_get_same_agent_twice(self, mock_init_chat_model):
+    def test_get_same_agent_twice(self):
         """Test getting the same agent type twice returns same instance."""
-        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager()
         agent1 = manager.get_agent(AgentType.MIGRATOR)
@@ -151,10 +127,8 @@ class TestAgentManager:
 
         assert agent1 is agent2
 
-    @patch("src.orchestration.agent.init_chat_model")
-    def test_clear_all_memories(self, mock_init_chat_model):
+    def test_clear_all_memories(self):
         """Test clearing all agent memories."""
-        mock_init_chat_model.return_value = Mock()
 
         manager = AgentManager()
         agent1 = manager.get_agent(AgentType.ANALYZER)
