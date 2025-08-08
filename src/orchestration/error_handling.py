@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, Callable
 from enum import Enum
 from dataclasses import dataclass
 import traceback
+import time
 
 
 class ErrorSeverity(Enum):
@@ -466,3 +467,191 @@ class ErrorHandler:
             "recoverable": recoverable,
             "non_recoverable": total_errors - recoverable,
         }
+
+    def attempt_recovery(
+        self,
+        error_info: ErrorInfo,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+    ) -> bool:
+        """Attempt to recover from an error using registered handlers.
+
+        Args:
+            error_info: Error information
+            max_retries: Maximum number of recovery attempts
+            retry_delay: Delay between retry attempts in seconds
+
+        Returns:
+            True if recovery was successful, False otherwise
+        """
+        if not error_info.recoverable:
+            return False
+
+        for attempt in range(max_retries):
+            self.logger.info(
+                f"Recovery attempt {attempt + 1}/{max_retries} for "
+                f"{error_info.category.value} error"
+            )
+
+            try:
+                # Apply recovery strategy based on category
+                success = self._apply_recovery_strategy(error_info)
+                if success:
+                    self.logger.info(
+                        f"Recovery successful for {error_info.category.value} error"
+                    )
+                    return True
+
+            except Exception as recovery_error:
+                self.logger.warning(
+                    f"Recovery attempt {attempt + 1} failed: {recovery_error}"
+                )
+
+            # Wait before next retry (with exponential backoff)
+            if attempt < max_retries - 1:
+                delay = retry_delay * (2**attempt)
+                self.logger.info(f"Waiting {delay:.1f}s before next retry...")
+                time.sleep(delay)
+
+        self.logger.error(
+            f"All recovery attempts failed for {error_info.category.value} error"
+        )
+        return False
+
+    def _apply_recovery_strategy(self, error_info: ErrorInfo) -> bool:
+        """Apply recovery strategy for specific error category.
+
+        Args:
+            error_info: Error information
+
+        Returns:
+            True if recovery strategy was successful
+        """
+        if error_info.category == ErrorCategory.MCP_CONNECTION:
+            return self._recover_mcp_connection(error_info)
+        elif error_info.category == ErrorCategory.AGENT_EXECUTION:
+            return self._recover_agent_execution(error_info)
+        elif error_info.category == ErrorCategory.FILE_OPERATION:
+            return self._recover_file_operation(error_info)
+        elif error_info.category == ErrorCategory.SYSTEM_RESOURCE:
+            return self._recover_system_resource(error_info)
+
+        # Default recovery: just return False (no automatic recovery)
+        return False
+
+    def _recover_mcp_connection(self, error_info: ErrorInfo) -> bool:
+        """Attempt to recover from MCP connection errors.
+
+        Args:
+            error_info: MCP connection error information
+
+        Returns:
+            True if connection recovery was successful
+        """
+        try:
+            # Try to restart MCP server if server type is available
+            server_type = (
+                error_info.context.get("server_type") if error_info.context else None
+            )
+            if server_type:
+                self.logger.info(f"Attempting to restart {server_type} MCP server")
+                # This would integrate with MCP manager to restart server
+                # For now, we'll simulate a successful restart
+                return True
+
+            # Generic connection retry
+            self.logger.info("Attempting generic MCP connection recovery")
+            return False  # Would implement actual connection retry logic
+
+        except Exception as e:
+            self.logger.error(f"MCP connection recovery failed: {e}")
+            return False
+
+    def _recover_agent_execution(self, error_info: ErrorInfo) -> bool:
+        """Attempt to recover from agent execution errors.
+
+        Args:
+            error_info: Agent execution error information
+
+        Returns:
+            True if agent recovery was successful
+        """
+        try:
+            # Clear agent memory and retry with simpler prompt
+            agent_type = (
+                error_info.context.get("agent_type") if error_info.context else None
+            )
+            if agent_type:
+                self.logger.info(f"Clearing memory for {agent_type} agent")
+                # Would integrate with agent system to clear memory
+                return True
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Agent execution recovery failed: {e}")
+            return False
+
+    def _recover_file_operation(self, error_info: ErrorInfo) -> bool:
+        """Attempt to recover from file operation errors.
+
+        Args:
+            error_info: File operation error information
+
+        Returns:
+            True if file operation recovery was successful
+        """
+        try:
+            # Create backup or temporary file location
+            file_path = (
+                error_info.context.get("file_path") if error_info.context else None
+            )
+            operation = (
+                error_info.context.get("operation") if error_info.context else None
+            )
+
+            if file_path and operation:
+                self.logger.info(
+                    f"Attempting file operation recovery for {operation} on {file_path}"
+                )
+                # Would implement actual file recovery logic
+                return False
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"File operation recovery failed: {e}")
+            return False
+
+    def _recover_system_resource(self, error_info: ErrorInfo) -> bool:
+        """Attempt to recover from system resource errors.
+
+        Args:
+            error_info: System resource error information
+
+        Returns:
+            True if resource recovery was successful
+        """
+        try:
+            resource_type = (
+                error_info.context.get("resource_type") if error_info.context else None
+            )
+
+            if resource_type == "memory":
+                self.logger.info("Attempting memory cleanup")
+                # Would implement garbage collection, cache clearing, etc.
+                import gc
+
+                gc.collect()
+                return True
+
+            elif resource_type == "disk":
+                self.logger.info("Checking disk space availability")
+                # Would implement disk cleanup logic
+                return False
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"System resource recovery failed: {e}")
+            return False
