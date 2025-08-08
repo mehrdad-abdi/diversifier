@@ -597,8 +597,11 @@ class TestLoggingConfig:
 
     def test_setup_logging(self):
         """Test logging setup."""
+        from src.orchestration.config import LoggingConfig
+
         # This is mainly to ensure no exceptions are raised
-        setup_logging(level="DEBUG", console=True)
+        config = LoggingConfig(level="DEBUG", console=True)
+        setup_logging(config)
 
         logger = get_logger("test")
         assert logger is not None

@@ -9,6 +9,7 @@ from .validation import (
     validate_library_name,
 )
 from .orchestration.coordinator import DiversificationCoordinator
+from .orchestration.config import get_config, LoggingConfig
 from .orchestration.logging_config import setup_logging
 
 
@@ -80,10 +81,18 @@ async def run_diversification(args) -> int:
     """Run the diversification workflow."""
     # Setup logging
     log_level = "DEBUG" if args.verbose else args.log_level
-    setup_logging(level=log_level, log_file=args.log_file, console=True)
+    logging_config = LoggingConfig(
+        level=log_level, console=True, file_path=args.log_file
+    )
+    setup_logging(logging_config)
 
     try:
-        # Initialize coordinator
+        # Initialize coordinator with updated configuration
+        config = get_config()
+        # Override LLM settings from command line args
+        config.llm.model_name = args.model
+        config.llm.temperature = args.temperature
+
         coordinator = DiversificationCoordinator(
             project_path=str(args.project_path),
             source_library=args.remove_lib,
