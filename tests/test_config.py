@@ -10,6 +10,7 @@ import pytest
 from src.orchestration.config import (
     ConfigManager,
     DiversifierConfig,
+    LLMConfig,
     LoggingConfig,
     MCPConfig,
     MigrationConfig,
@@ -92,6 +93,59 @@ class TestPerformanceConfig:
         assert config.enable_memory_tracking is False
 
 
+class TestLLMConfig:
+    """Tests for LLMConfig dataclass."""
+
+    def test_default_values(self):
+        """Test default configuration values."""
+        config = LLMConfig()
+        assert config.provider == "anthropic"
+        assert config.model_name == "claude-3-5-sonnet-20241022"
+        assert config.temperature == 0.1
+        assert config.max_tokens == 4096
+        assert config.timeout == 120
+        assert config.retry_attempts == 3
+        assert config.api_key_env_var is None
+        assert config.base_url is None
+        assert config.additional_params == {}
+
+    def test_custom_values(self):
+        """Test custom configuration values."""
+        config = LLMConfig(
+            provider="openai",
+            model_name="gpt-4",
+            temperature=0.7,
+            max_tokens=2048,
+            timeout=60,
+            retry_attempts=5,
+            api_key_env_var="OPENAI_API_KEY",
+            base_url="https://api.openai.com/v1",
+            additional_params={"top_p": 0.9, "frequency_penalty": 0.1},
+        )
+        assert config.provider == "openai"
+        assert config.model_name == "gpt-4"
+        assert config.temperature == 0.7
+        assert config.max_tokens == 2048
+        assert config.timeout == 60
+        assert config.retry_attempts == 5
+        assert config.api_key_env_var == "OPENAI_API_KEY"
+        assert config.base_url == "https://api.openai.com/v1"
+        assert config.additional_params == {"top_p": 0.9, "frequency_penalty": 0.1}
+
+    def test_google_provider_config(self):
+        """Test configuration for Google/Gemini provider."""
+        config = LLMConfig(
+            provider="google",
+            model_name="gemini-pro",
+            temperature=0.5,
+            api_key_env_var="GOOGLE_API_KEY",
+        )
+        assert config.provider == "google"
+        assert config.model_name == "gemini-pro"
+        assert config.temperature == 0.5
+        assert config.api_key_env_var == "GOOGLE_API_KEY"
+
+
 class TestDiversifierConfig:
     """Tests for main DiversifierConfig dataclass."""
 
@@ -102,6 +156,7 @@ class TestDiversifierConfig:
         assert isinstance(config.mcp, MCPConfig)
         assert isinstance(config.migration, MigrationConfig)
         assert isinstance(config.performance, PerformanceConfig)
+        assert isinstance(config.llm, LLMConfig)
         assert config.project_root == "."
         assert config.temp_dir == "/tmp/diversifier"
         assert config.debug_mode is False
@@ -139,6 +194,8 @@ class TestConfigManager:
         assert config.mcp.timeout == 30
         assert config.migration.max_iterations == 5
         assert config.performance.enable_metrics is True
+        assert config.llm.provider == "anthropic"
+        assert config.llm.temperature == 0.1
 
     def test_load_config_from_file(self):
         """Test loading configuration from TOML file."""
@@ -160,6 +217,13 @@ max_iterations = 10
 
 [performance]
 enable_metrics = false
+
+[llm]
+provider = "openai"
+model_name = "gpt-4"
+temperature = 0.7
+max_tokens = 2048
+api_key_env_var = "OPENAI_API_KEY"
 """
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
@@ -176,6 +240,11 @@ enable_metrics = false
                 assert config.mcp.timeout == 60
                 assert config.migration.max_iterations == 10
                 assert config.performance.enable_metrics is False
+                assert config.llm.provider == "openai"
+                assert config.llm.model_name == "gpt-4"
+                assert config.llm.temperature == 0.7
+                assert config.llm.max_tokens == 2048
+                assert config.llm.api_key_env_var == "OPENAI_API_KEY"
                 assert config.project_root == "/test/path"
                 assert config.debug_mode is True
             finally:
@@ -204,6 +273,10 @@ enable_metrics = false
             "DIVERSIFIER_MCP_TIMEOUT": "120",
             "DIVERSIFIER_DEBUG": "true",
             "DIVERSIFIER_MIN_COVERAGE": "0.9",
+            "DIVERSIFIER_LLM_PROVIDER": "google",
+            "DIVERSIFIER_LLM_MODEL_NAME": "gemini-pro",
+            "DIVERSIFIER_LLM_TEMPERATURE": "0.8",
+            "DIVERSIFIER_LLM_MAX_TOKENS": "8192",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
@@ -215,6 +288,10 @@ enable_metrics = false
             assert config.mcp.timeout == 120
             assert config.debug_mode is True
             assert config.migration.min_test_coverage == 0.9
+            assert config.llm.provider == "google"
+            assert config.llm.model_name == "gemini-pro"
+            assert config.llm.temperature == 0.8
+            assert config.llm.max_tokens == 8192
 
     def test_convert_env_value_boolean(self):
         """Test environment value conversion for booleans."""
@@ -255,6 +332,8 @@ enable_metrics = false
             manager._convert_env_value("99.99", "migration", "min_test_coverage")
             == 99.99
         )
+        assert manager._convert_env_value("0.7", "llm", "temperature") == 0.7
+        assert manager._convert_env_value("1.0", "llm", "temperature") == 1.0
 
     def test_convert_env_value_string(self):
         """Test environment value conversion for strings."""

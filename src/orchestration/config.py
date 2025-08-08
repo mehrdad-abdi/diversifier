@@ -64,6 +64,23 @@ class PerformanceConfig:
 
 
 @dataclass
+class LLMConfig:
+    """LLM (Large Language Model) configuration settings."""
+
+    provider: str = "anthropic"  # anthropic, openai, google
+    model_name: str = "claude-3-5-sonnet-20241022"
+    temperature: float = 0.1
+    max_tokens: int = 4096
+    timeout: int = 120  # seconds
+    retry_attempts: int = 3
+    api_key_env_var: Optional[str] = None  # Environment variable name for API key
+    base_url: Optional[str] = None  # Custom API endpoint URL
+    additional_params: Dict[str, Union[str, int, float, bool]] = field(
+        default_factory=dict
+    )
+
+
+@dataclass
 class DiversifierConfig:
     """Complete configuration for the Diversifier tool."""
 
@@ -71,6 +88,7 @@ class DiversifierConfig:
     mcp: MCPConfig = field(default_factory=MCPConfig)
     migration: MigrationConfig = field(default_factory=MigrationConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
+    llm: LLMConfig = field(default_factory=LLMConfig)
     project_root: str = "."
     temp_dir: str = "/tmp/diversifier"
     debug_mode: bool = False
@@ -155,6 +173,15 @@ class ConfigManager:
             "DIVERSIFIER_ENABLE_METRICS": ("performance", "enable_metrics"),
             "DIVERSIFIER_METRICS_FILE": ("performance", "metrics_file"),
             "DIVERSIFIER_SLOW_THRESHOLD": ("performance", "slow_operation_threshold"),
+            # LLM configuration
+            "DIVERSIFIER_LLM_PROVIDER": ("llm", "provider"),
+            "DIVERSIFIER_LLM_MODEL_NAME": ("llm", "model_name"),
+            "DIVERSIFIER_LLM_TEMPERATURE": ("llm", "temperature"),
+            "DIVERSIFIER_LLM_MAX_TOKENS": ("llm", "max_tokens"),
+            "DIVERSIFIER_LLM_TIMEOUT": ("llm", "timeout"),
+            "DIVERSIFIER_LLM_RETRY_ATTEMPTS": ("llm", "retry_attempts"),
+            "DIVERSIFIER_LLM_API_KEY_ENV_VAR": ("llm", "api_key_env_var"),
+            "DIVERSIFIER_LLM_BASE_URL": ("llm", "base_url"),
             # General configuration
             "DIVERSIFIER_PROJECT_ROOT": (None, "project_root"),
             "DIVERSIFIER_TEMP_DIR": (None, "temp_dir"),
@@ -211,11 +238,12 @@ class ConfigManager:
             "retry_attempts",
             "max_iterations",
             "test_timeout",
+            "max_tokens",
         ]:
             return int(value)
 
         # Float values
-        if key in ["min_test_coverage", "slow_operation_threshold"]:
+        if key in ["min_test_coverage", "slow_operation_threshold", "temperature"]:
             return float(value)
 
         # String values (default)
@@ -235,22 +263,42 @@ class ConfigManager:
         mcp_data = config_data.get("mcp", {})
         migration_data = config_data.get("migration", {})
         performance_data = config_data.get("performance", {})
+        llm_data = config_data.get("llm", {})
 
         # Create nested config objects - filter out unknown keys
-        logging_config = LoggingConfig(**{k: v for k, v in logging_data.items()
-                                        if k in LoggingConfig.__dataclass_fields__})
-        mcp_config = MCPConfig(**{k: v for k, v in mcp_data.items()
-                                if k in MCPConfig.__dataclass_fields__})
-        migration_config = MigrationConfig(**{k: v for k, v in migration_data.items()
-                                            if k in MigrationConfig.__dataclass_fields__})
-        performance_config = PerformanceConfig(**{k: v for k, v in performance_data.items()
-                                                 if k in PerformanceConfig.__dataclass_fields__})
+        logging_config = LoggingConfig(
+            **{
+                k: v
+                for k, v in logging_data.items()
+                if k in LoggingConfig.__dataclass_fields__
+            }
+        )
+        mcp_config = MCPConfig(
+            **{k: v for k, v in mcp_data.items() if k in MCPConfig.__dataclass_fields__}
+        )
+        migration_config = MigrationConfig(
+            **{
+                k: v
+                for k, v in migration_data.items()
+                if k in MigrationConfig.__dataclass_fields__
+            }
+        )
+        performance_config = PerformanceConfig(
+            **{
+                k: v
+                for k, v in performance_data.items()
+                if k in PerformanceConfig.__dataclass_fields__
+            }
+        )
+        llm_config = LLMConfig(
+            **{k: v for k, v in llm_data.items() if k in LLMConfig.__dataclass_fields__}
+        )
 
         # Extract top-level configuration
         top_level_data = {
             k: v
             for k, v in config_data.items()
-            if k not in ["logging", "mcp", "migration", "performance"]
+            if k not in ["logging", "mcp", "migration", "performance", "llm"]
         }
 
         return DiversifierConfig(
@@ -258,6 +306,7 @@ class ConfigManager:
             mcp=mcp_config,
             migration=migration_config,
             performance=performance_config,
+            llm=llm_config,
             **top_level_data,
         )
 
@@ -318,6 +367,30 @@ metrics_file = "performance_metrics.json"
 log_slow_operations = true
 slow_operation_threshold = 1.0
 enable_memory_tracking = false
+
+[llm]
+# LLM Provider: "anthropic", "openai", "google"
+provider = "anthropic"
+model_name = "claude-3-5-sonnet-20241022"
+temperature = 0.1
+max_tokens = 4096
+timeout = 120
+retry_attempts = 3
+# Optional: Environment variable name for API key (defaults to provider-specific)
+# api_key_env_var = "ANTHROPIC_API_KEY"
+# Optional: Custom API endpoint URL
+# base_url = "https://api.anthropic.com"
+
+# Example configurations for different providers:
+# For OpenAI:
+# provider = "openai"
+# model_name = "gpt-4"
+# api_key_env_var = "OPENAI_API_KEY"
+
+# For Google/Gemini:
+# provider = "google"
+# model_name = "gemini-pro"
+# api_key_env_var = "GOOGLE_API_KEY"
 
 # General settings
 project_root = "."
