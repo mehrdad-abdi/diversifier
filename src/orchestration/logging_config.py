@@ -1,18 +1,36 @@
 """Logging configuration for the orchestration system."""
 
+import contextvars
 import logging
+import logging.handlers
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+from .config import LoggingConfig
+
+
+# Context variable for correlation IDs
+correlation_id: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "correlation_id", default=""
+)
 
 
 class DiversifierFormatter(logging.Formatter):
     """Custom formatter for diversifier logs."""
 
-    def __init__(self):
-        """Initialize the formatter."""
+    def __init__(self, use_colors: bool = True, enable_correlation_ids: bool = True):
+        """Initialize the formatter.
+
+        Args:
+            use_colors: Whether to use color formatting
+            enable_correlation_ids: Whether to include correlation IDs
+        """
         super().__init__()
+        self.use_colors = use_colors
+        self.enable_correlation_ids = enable_correlation_ids
 
         # Color codes for different log levels
         self.colors = {
@@ -29,12 +47,22 @@ class DiversifierFormatter(logging.Formatter):
         # Add timestamp
         timestamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
 
+        # Get correlation ID if enabled
+        corr_id = ""
+        if self.enable_correlation_ids:
+            current_corr_id = correlation_id.get()
+            if current_corr_id:
+                corr_id = f"[{current_corr_id[:8]}] "
+
         # Get color for log level
-        color = self.colors.get(record.levelname, "")
-        end_color = self.colors["ENDC"]
+        color = ""
+        end_color = ""
+        if self.use_colors:
+            color = self.colors.get(record.levelname, "")
+            end_color = self.colors["ENDC"]
 
         # Format the message
-        formatted = f"{color}[{timestamp}] {record.levelname:8} {record.name:25} | {record.getMessage()}{end_color}"
+        formatted = f"{color}[{timestamp}] {corr_id}{record.levelname:8} {record.name:25} | {record.getMessage()}{end_color}"
 
         # Add exception info if present
         if record.exc_info:
@@ -43,18 +71,19 @@ class DiversifierFormatter(logging.Formatter):
         return formatted
 
 
-def setup_logging(
-    level: str = "INFO", log_file: Optional[str] = None, console: bool = True
-) -> None:
+def setup_logging(config: Optional[LoggingConfig] = None) -> None:
     """Set up logging configuration for diversifier.
 
     Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_file: Optional path to log file
-        console: Whether to log to console
+        config: Logging configuration object. If None, uses default configuration.
     """
+    if config is None:
+        from .config import get_config
+
+        config = get_config().logging
+
     # Convert string level to logging constant
-    numeric_level = getattr(logging, level.upper(), logging.INFO)
+    numeric_level = getattr(logging, config.level.upper(), logging.INFO)
 
     # Create root logger
     root_logger = logging.getLogger("diversifier")
@@ -64,23 +93,31 @@ def setup_logging(
     root_logger.handlers.clear()
 
     # Console handler
-    if console:
+    if config.console:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(numeric_level)
-        console_handler.setFormatter(DiversifierFormatter())
+        console_formatter = DiversifierFormatter(
+            use_colors=True, enable_correlation_ids=config.enable_correlation_ids
+        )
+        console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
 
-    # File handler
-    if log_file:
-        log_path = Path(log_file)
+    # File handler with rotation
+    if config.file_path:
+        log_path = Path(config.file_path)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.FileHandler(log_file)
+        # Use rotating file handler for automatic log rotation
+        file_handler = logging.handlers.RotatingFileHandler(
+            config.file_path,
+            maxBytes=config.max_file_size,
+            backupCount=config.backup_count,
+        )
         file_handler.setLevel(numeric_level)
 
-        # Use plain formatter for file (no colors)
-        file_formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
+        # Use plain formatter for file (no colors) with correlation IDs
+        file_formatter = DiversifierFormatter(
+            use_colors=False, enable_correlation_ids=config.enable_correlation_ids
         )
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
@@ -90,8 +127,39 @@ def setup_logging(
 
     # Log setup completion
     root_logger.info(
-        f"Logging initialized - Level: {level}, Console: {console}, File: {log_file}"
+        f"Logging initialized - Level: {config.level}, Console: {config.console}, "
+        f"File: {config.file_path}, Correlation IDs: {config.enable_correlation_ids}"
     )
+
+
+def set_correlation_id(corr_id: Optional[str] = None) -> str:
+    """Set correlation ID for current context.
+
+    Args:
+        corr_id: Correlation ID to set. If None, generates a new UUID.
+
+    Returns:
+        The correlation ID that was set
+    """
+    if corr_id is None:
+        corr_id = str(uuid.uuid4())
+
+    correlation_id.set(corr_id)
+    return corr_id
+
+
+def get_correlation_id() -> str:
+    """Get current correlation ID.
+
+    Returns:
+        Current correlation ID or empty string if not set
+    """
+    return correlation_id.get()
+
+
+def clear_correlation_id() -> None:
+    """Clear current correlation ID."""
+    correlation_id.set("")
 
 
 def get_logger(name: str) -> logging.Logger:
