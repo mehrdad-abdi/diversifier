@@ -1,0 +1,117 @@
+[
+  {
+    "workflow_id": "test-workflow",
+    "start_time": 1754673060.6259048,
+    "end_time": 1754673060.637873,
+    "total_duration": 0.011968135833740234,
+    "operations": [
+      {
+        "operation_name": "test_op",
+        "start_time": 1754673060.6260228,
+        "end_time": 1754673060.637804,
+        "duration": 0.01178121566772461,
+        "success": true,
+        "error_message": null,
+        "metadata": {},
+        "correlation_id": ""
+      }
+    ],
+    "success": true,
+    "files_processed": 0,
+    "lines_modified": 0,
+    "tests_run": 0,
+    "tests_passed": 0
+  },
+  {
+    "workflow_id": "test-workflow",
+    "start_time": 1754673103.293283,
+    "end_time": 1754673103.305313,
+    "total_duration": 0.01203012466430664,
+    "operations": [
+      {
+        "operation_name": "test_op",
+        "start_time": 1754673103.29341,
+        "end_time": 1754673103.3051798,
+        "duration": 0.011769771575927734,
+        "success": true,
+        "error_message": null,
+        "metadata": {},
+        "correlation_id": ""
+      }
+    ],
+    "success": true,
+    "files_processed": 0,
+    "lines_modified": 0,
+    "tests_run": 0,
+    "tests_passed": 0
+  },
+  {
+    "workflow_id": "test-workflow",
+    "start_time": 1754673160.4146318,
+    "end_time": 1754673160.425695,
+    "total_duration": 0.011063098907470703,
+    "operations": [
+      {
+        "operation_name": "test_op",
+        "start_time": 1754673160.414805,
+        "end_time": 1754673160.425571,
+        "duration": 0.010766029357910156,
+        "success": true,
+        "error_message": null,
+        "metadata": {},
+        "correlation_id": ""
+      }
+    ],
+    "success": true,
+    "files_processed": 0,
+    "lines_modified": 0,
+    "tests_run": 0,
+    "tests_passed": 0
+  },
+  {
+    "workflow_id": "test-workflow",
+    "start_time": 1754674275.579156,
+    "end_time": 1754674275.59113,
+    "total_duration": 0.011974096298217773,
+    "operations": [
+      {
+        "operation_name": "test_op",
+        "start_time": 1754674275.579319,
+        "end_time": 1754674275.5910761,
+        "duration": 0.011757135391235352,
+        "success": true,
+        "error_message": null,
+        "metadata": {},
+        "correlation_id": ""
+      }
+    ],
+    "success": true,
+    "files_processed": 0,
+    "lines_modified": 0,
+    "tests_run": 0,
+    "tests_passed": 0
+  },
+  {
+    "workflow_id": "test-workflow",
+    "start_time": 1754674931.743756,
+    "end_time": 1754674931.756636,
+    "total_duration": 0.01287984848022461,
+    "operations": [
+      {
+        "operation_name": "test_op",
+        "start_time": 1754674931.743953,
+        "end_time": 1754674931.756544,
+        "duration": 0.012591123580932617,
+        "success": true,
+        "error_message": null,
+        "metadata": {},
+        "correlation_id": ""
+      }
+    ],
+    "success": true,
+    "files_processed": 0,
+    "lines_modified": 0,
+    "tests_run": 0,
+    "tests_passed": 0
+  }
+]

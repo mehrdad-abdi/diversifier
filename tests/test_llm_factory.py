@@ -135,7 +135,10 @@ class TestLLMFactory:
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
             with patch("langchain_openai.ChatOpenAI", mock_openai):
                 config = LLMConfig(
-                    provider="openai", model_name="gpt-4", temperature=0.7, max_tokens=2048
+                    provider="openai",
+                    model_name="gpt-4",
+                    temperature=0.7,
+                    max_tokens=2048,
                 )
 
                 result = create_llm_from_config(config)
@@ -215,7 +218,9 @@ class TestLLMFactory:
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch("langchain_anthropic.ChatAnthropic", mock_anthropic):
-                config = LLMConfig(provider="anthropic", base_url="https://custom.api.com")
+                config = LLMConfig(
+                    provider="anthropic", base_url="https://custom.api.com"
+                )
 
                 result = create_llm_from_config(config)
 
@@ -263,9 +268,7 @@ class TestLLMFactory:
         config = LLMConfig(provider="anthropic")
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-            with patch(
-                "langchain_anthropic.ChatAnthropic", side_effect=ImportError
-            ):
+            with patch("langchain_anthropic.ChatAnthropic", side_effect=ImportError):
                 with pytest.raises(
                     ImportError, match="langchain_anthropic package is required"
                 ):
@@ -276,9 +279,7 @@ class TestLLMFactory:
         config = LLMConfig(provider="openai")
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-            with patch(
-                "langchain_openai.ChatOpenAI", side_effect=ImportError
-            ):
+            with patch("langchain_openai.ChatOpenAI", side_effect=ImportError):
                 with pytest.raises(
                     ImportError, match="langchain_openai package is required"
                 ):
