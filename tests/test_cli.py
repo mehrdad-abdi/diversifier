@@ -141,7 +141,12 @@ class TestMainFunction:
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
     def test_main_verbose_output(
-        self, mock_print, mock_validate_python, mock_validate_path, mock_validate_lib, mock_coordinator_class
+        self,
+        mock_print,
+        mock_validate_python,
+        mock_validate_path,
+        mock_validate_lib,
+        mock_coordinator_class,
     ):
         mock_validate_python.return_value = (True, [])
         mock_validate_path.return_value = "/fake/path"
