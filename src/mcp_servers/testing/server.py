@@ -321,11 +321,16 @@ class TestingMCPServer:
                             test_list.append(line)
                             test_file = line.split("::")[0]
                             test_files_list = discovered_tests["test_files"]
-                            if isinstance(test_files_list, list) and test_file not in test_files_list:
+                            if (
+                                isinstance(test_files_list, list)
+                                and test_file not in test_files_list
+                            ):
                                 test_files_list.append(test_file)
 
                 test_count = discovered_tests["tests"]
-                discovered_tests["total_tests"] = len(test_count) if isinstance(test_count, list) else 0
+                discovered_tests["total_tests"] = (
+                    len(test_count) if isinstance(test_count, list) else 0
+                )
             else:
                 error_list = discovered_tests["errors"]
                 if isinstance(error_list, list):
@@ -590,7 +595,9 @@ class TestingMCPServer:
         except Exception as e:
             return [TextContent(type="text", text=f"Error analyzing results: {str(e)}")]
 
-    def _parse_failures_and_errors(self, output: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def _parse_failures_and_errors(
+        self, output: str
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Parse failures and errors from pytest output."""
         failures: List[Dict[str, Any]] = []
         errors: List[Dict[str, Any]] = []
@@ -678,7 +685,9 @@ class TestingMCPServer:
                 )
 
             differences = comparison["differences"]
-            comparison["equivalent"] = len(differences) == 0 if isinstance(differences, list) else False
+            comparison["equivalent"] = (
+                len(differences) == 0 if isinstance(differences, list) else False
+            )
 
             return [TextContent(type="text", text=json.dumps(comparison, indent=2))]
 
@@ -797,7 +806,7 @@ class TestingMCPServer:
             comparison_data = json.loads(comparison[0].text)
             validation["comparison"] = comparison_data
             validation["equivalent"] = comparison_data.get("equivalent", False)
-            
+
             validation_steps = validation["validation_steps"]
             if isinstance(validation_steps, list):
                 validation_steps.append("Completed comparison")

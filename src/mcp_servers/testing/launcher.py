@@ -185,7 +185,10 @@ class TestingMCPClient:
         Returns:
             Test and coverage results
         """
-        args: Dict[str, Any] = {"source_path": source_path, "coverage_format": coverage_format}
+        args: Dict[str, Any] = {
+            "source_path": source_path,
+            "coverage_format": coverage_format,
+        }
         if test_path:
             args["test_path"] = test_path
         if min_coverage:
