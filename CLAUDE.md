@@ -91,10 +91,10 @@ The project is in early development phase with GitHub project management:
 - **ALWAYS write unit tests** for every code change, new function, or feature
 - **MANDATORY pre-push checks**: Run these commands before every push to the repository:
   ```bash
-  uv run black src/ tests/ main.py     # Code formatting
   uv run flake8 --select F src/ tests/ main.py    # Linting
   uv run mypy src/ tests/ main.py      # Type checking
   uv run pytest                       # Unit tests
+  uv run black src/ tests/ main.py     # Code formatting -- Important: Run as last check
   ```
 - All checks must pass before pushing code to any branch
 - Test coverage should be comprehensive, including edge cases and error conditions

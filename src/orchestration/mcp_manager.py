@@ -7,6 +7,7 @@ from enum import Enum
 from pathlib import Path
 
 from src.mcp_servers.filesystem.launcher import FileSystemMCPClient
+from src.mcp_servers.testing.launcher import TestingMCPClient
 from src.mcp_servers.git.launcher import GitMCPClient
 from src.mcp_servers.docker.launcher import DockerMCPLauncher
 
@@ -188,14 +189,23 @@ class MCPManager:
     async def initialize_testing_server(self) -> bool:
         """Initialize the testing MCP server.
 
-        Note: This is a placeholder - testing server not yet implemented.
-
         Returns:
             True if successful, False otherwise
         """
-        self.logger.info("Testing MCP server initialization - placeholder")
-        # TODO: Implement when testing server is available
-        return True
+        try:
+            client = TestingMCPClient(project_root=self.project_root)
+            connection = MCPConnection(MCPServerType.TESTING, client)
+
+            success = await connection.connect()
+            if success:
+                self.connections[MCPServerType.TESTING] = connection
+                self.logger.info("Testing MCP server initialized")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize testing server: {e}")
+            return False
 
     async def initialize_git_server(self) -> bool:
         """Initialize the git MCP server.
