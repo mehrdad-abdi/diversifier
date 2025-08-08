@@ -478,7 +478,9 @@ class DiversificationCoordinator:
 
                         if commit_result and commit_result.get("status") == "success":
                             commit_hash = commit_result.get("commit_hash") or ""
-                            self.logger.info(f"Migration committed: {commit_hash[:8] if commit_hash else 'unknown'}")
+                            self.logger.info(
+                                f"Migration committed: {commit_hash[:8] if commit_hash else 'unknown'}"
+                            )
 
                             return {
                                 "success": True,
