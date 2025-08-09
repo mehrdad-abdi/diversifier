@@ -214,10 +214,8 @@ class TestAcceptanceTestGenerator:
         """Test generator initialization."""
         assert generator.project_root == Path("/test/project")
         assert generator.mcp_manager is not None
-        assert "flask" in generator.supported_frameworks
-        assert "django" in generator.supported_frameworks
-        assert "fastapi" in generator.supported_frameworks
-        assert "test_dockerfile" in generator.docker_templates
+        assert generator._framework_config_cache is None
+        assert generator._docker_config_cache is None
 
     def test_create_file_system_tools(self, generator):
         """Test creating file system tools."""
@@ -340,8 +338,14 @@ class TestAcceptanceTestGenerator:
             )
         ]
 
+        framework_config = {
+            "default_port": 5000,
+            "health_endpoint": "/health",
+            "python_version": "3.11",
+        }
+
         content = generator._generate_test_file_content(
-            "http_api", scenarios, sample_source_analysis
+            "http_api", scenarios, sample_source_analysis, framework_config
         )
 
         # Verify content structure
@@ -351,17 +355,52 @@ class TestAcceptanceTestGenerator:
         assert "def test_users_endpoint(self):" in content
         assert "Test user endpoint functionality" in content
         assert "BASE_URL" in content
+        assert "http://app:5000" in content  # Check dynamic port
         assert "get_app_container_name()" in content
+        assert "return 5000" in content  # Check dynamic port in helper function
 
-    def test_generate_docker_compose_content(self, generator, sample_source_analysis):
+    @pytest.mark.asyncio
+    async def test_generate_docker_compose_content(
+        self, generator, sample_source_analysis, sample_doc_analysis
+    ):
         """Test generating Docker Compose content."""
-        content = generator._generate_docker_compose_content(sample_source_analysis)
+        with patch(
+            "src.orchestration.acceptance_test_generator.DiversificationAgent"
+        ) as mock_agent_class:
+            mock_agent = Mock()
+            mock_agent.invoke.return_value = {
+                "output": """version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+  test:
+    build:
+      dockerfile: Dockerfile.test"""
+            }
+            mock_agent_class.return_value = mock_agent
 
-        assert "version:" in content
-        assert "services:" in content
-        assert "app:" in content
-        assert "test:" in content
-        assert "5000:5000" in content  # Flask default port
+            framework_config = {
+                "default_port": 5000,
+                "health_endpoint": "/health",
+                "python_version": "3.11",
+                "base_docker_image": "python:3.11-slim",
+            }
+
+            content = await generator._generate_docker_compose_content(
+                mock_agent,
+                sample_doc_analysis,
+                sample_source_analysis,
+                framework_config,
+            )
+
+            assert "version:" in content
+            assert "services:" in content
+            assert "app:" in content
+            assert "5000:5000" in content  # Flask default port
 
     def test_generate_requirements_content(self, generator):
         """Test generating requirements.txt content."""
@@ -382,23 +421,45 @@ class TestAcceptanceTestGenerator:
         assert "docker" in dependencies
         assert "pytest-asyncio" in dependencies
 
-    def test_generate_docker_configuration(
+    @pytest.mark.asyncio
+    async def test_generate_docker_configuration(
         self, generator, sample_doc_analysis, sample_source_analysis
     ):
         """Test generating Docker configuration."""
-        config = generator._generate_docker_configuration(
-            sample_doc_analysis, sample_source_analysis
-        )
+        with patch(
+            "src.orchestration.acceptance_test_generator.DiversificationAgent"
+        ) as mock_agent_class:
+            mock_agent = Mock()
+            # Mock framework discovery response
+            mock_agent.invoke.side_effect = [
+                {
+                    "output": json.dumps(
+                        {
+                            "default_port": 5000,
+                            "health_endpoint": "/health",
+                            "python_version": "3.11",
+                            "base_docker_image": "python:3.11-slim",
+                        }
+                    )
+                },
+                {"output": "version: '3.8'\nservices:\n  app:\n    build: ."},
+            ]
+            mock_agent_class.return_value = mock_agent
 
-        assert "test_dockerfile" in config
-        assert "docker_compose" in config
-        assert "network_config" in config
-        assert "environment_variables" in config
+            config = await generator._generate_docker_configuration(
+                mock_agent, sample_doc_analysis, sample_source_analysis
+            )
 
-        # Verify structure
-        assert config["network_config"]["app_service"] == "app"
-        assert config["network_config"]["test_service"] == "test"
-        assert "BASE_URL" in config["environment_variables"]
+            assert "test_dockerfile" in config
+            assert "docker_compose" in config
+            assert "network_config" in config
+            assert "environment_variables" in config
+
+            # Verify structure
+            assert config["network_config"]["app_service"] == "app"
+            assert config["network_config"]["test_service"] == "test"
+            assert "BASE_URL" in config["environment_variables"]
+            assert "http://app:5000" in config["environment_variables"]["BASE_URL"]
 
     def test_analyze_test_coverage(self, generator, sample_source_analysis):
         """Test analyzing test coverage."""
@@ -517,7 +578,16 @@ class TestAcceptanceTestGenerator:
             ),
         ]
 
-        test_suites = generator._create_test_suites(scenarios, sample_source_analysis)
+        framework_config = {
+            "default_port": 5000,
+            "health_endpoint": "/health",
+            "python_version": "3.11",
+            "base_docker_image": "python:3.11-slim",
+        }
+
+        test_suites = generator._create_test_suites(
+            scenarios, sample_source_analysis, framework_config
+        )
 
         # Should have suites for each category plus Docker config
         suite_names = [suite.name for suite in test_suites]
@@ -533,12 +603,16 @@ class TestAcceptanceTestGenerator:
         )
         assert "test1" in http_suite.test_file_content
         assert "test2" in http_suite.test_file_content
+        assert "http://app:5000" in http_suite.test_file_content  # Check dynamic port
 
         # Check Docker configuration suite
         docker_suite = next(s for s in test_suites if s.name == "docker_configuration")
-        assert docker_suite.docker_compose_content is not None
+        # Docker compose content will be empty initially, set by caller
         assert docker_suite.dockerfile_content is not None
         assert docker_suite.requirements_content is not None
+        assert (
+            "python:3.11-slim" in docker_suite.dockerfile_content
+        )  # Check dynamic base image
 
     @patch("src.orchestration.acceptance_test_generator.DiversificationAgent")
     @pytest.mark.asyncio
@@ -640,7 +714,7 @@ class TestAcceptanceTestGenerator:
             # Mock agent responses for all test generation methods
             mock_agent = Mock()
 
-            # Return different responses for each category
+            # Return different responses for each category + framework discovery + docker generation
             mock_agent.invoke.side_effect = [
                 {"output": json.dumps({"test_scenarios": []})},  # HTTP tests
                 {"output": json.dumps({"test_scenarios": []})},  # Lifecycle tests
@@ -648,6 +722,19 @@ class TestAcceptanceTestGenerator:
                 {"output": json.dumps({"test_scenarios": []})},  # Config tests
                 {"output": json.dumps({"test_scenarios": []})},  # Error tests
                 {"output": json.dumps({"test_scenarios": []})},  # Docker tests
+                {
+                    "output": json.dumps(
+                        {  # Framework discovery
+                            "default_port": 5000,
+                            "health_endpoint": "/health",
+                            "python_version": "3.11",
+                            "base_docker_image": "python:3.11-slim",
+                        }
+                    )
+                },
+                {
+                    "output": "version: '3.8'\nservices:\n  app:\n    build: ."
+                },  # Docker compose generation
             ]
 
             mock_agent_class.return_value = mock_agent
@@ -666,8 +753,8 @@ class TestAcceptanceTestGenerator:
             assert isinstance(result.coverage_analysis, dict)
             assert 0.0 <= result.generation_confidence <= 1.0
 
-            # Verify agent was called multiple times for different test categories
-            assert mock_agent.invoke.call_count == 6
+            # Verify agent was called multiple times for different test categories + framework discovery + docker
+            assert mock_agent.invoke.call_count == 8
 
     @pytest.mark.asyncio
     async def test_export_test_suites(self, generator, mock_mcp_manager):
@@ -703,7 +790,9 @@ class TestAcceptanceTestGenerator:
         output_dir = await generator.export_test_suites(result, "/test/output")
 
         # Verify MCP calls were made for each file
-        expected_calls = 5  # test file + compose + dockerfile + requirements + metadata
+        expected_calls = (
+            5  # http_api_tests + compose + dockerfile + requirements + metadata
+        )
         assert mock_mcp_manager.call_tool.call_count == expected_calls
 
         # Verify output directory
@@ -737,6 +826,124 @@ class TestAcceptanceTestGenerator:
         assert output_dir == "/test/fallback"
         # MCP should not have been called
         assert mock_mcp_manager.call_tool.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_discover_framework_configuration(
+        self, generator, sample_doc_analysis, sample_source_analysis
+    ):
+        """Test dynamic framework configuration discovery."""
+        with patch(
+            "src.orchestration.acceptance_test_generator.DiversificationAgent"
+        ) as mock_agent_class:
+            mock_agent = Mock()
+            mock_agent.invoke.return_value = {
+                "output": json.dumps(
+                    {
+                        "default_port": 5000,
+                        "health_endpoint": "/health",
+                        "api_prefix": "/api",
+                        "test_patterns": ["test_*.py"],
+                        "python_version": "3.11",
+                        "base_docker_image": "python:3.11-slim",
+                        "framework_specific": {"wsgi_server": "flask"},
+                    }
+                )
+            }
+            mock_agent_class.return_value = mock_agent
+
+            config = await generator._discover_framework_configuration(
+                mock_agent, sample_doc_analysis, sample_source_analysis
+            )
+
+            # Verify configuration structure
+            assert config["default_port"] == 5000
+            assert config["health_endpoint"] == "/health"
+            assert config["python_version"] == "3.11"
+            assert "framework_specific" in config
+
+            # Verify caching
+            assert generator._framework_config_cache == config
+
+            # Second call should use cache
+            config2 = await generator._discover_framework_configuration(
+                mock_agent, sample_doc_analysis, sample_source_analysis
+            )
+            assert config2 == config
+            # Agent should only be called once due to caching
+            assert mock_agent.invoke.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_discover_framework_configuration_fallback(
+        self, generator, sample_doc_analysis, sample_source_analysis
+    ):
+        """Test framework configuration discovery with fallback."""
+        with patch(
+            "src.orchestration.acceptance_test_generator.DiversificationAgent"
+        ) as mock_agent_class:
+            mock_agent = Mock()
+            # Simulate JSON decode error
+            mock_agent.invoke.return_value = {"output": "Invalid JSON response"}
+            mock_agent_class.return_value = mock_agent
+
+            config = await generator._discover_framework_configuration(
+                mock_agent, sample_doc_analysis, sample_source_analysis
+            )
+
+            # Should fall back to Flask configuration (from sample_source_analysis)
+            assert config["default_port"] == 5000
+            assert config["health_endpoint"] == "/health"
+            assert config["framework_specific"]["wsgi_server"] == "flask"
+
+    def test_get_fallback_framework_config(self, generator):
+        """Test fallback framework configuration generation."""
+        # Test Flask fallback
+        flask_config = generator._get_fallback_framework_config("flask")
+        assert flask_config["default_port"] == 5000
+        assert flask_config["framework_specific"]["wsgi_server"] == "flask"
+
+        # Test Django fallback
+        django_config = generator._get_fallback_framework_config("django")
+        assert django_config["default_port"] == 8000
+        assert django_config["framework_specific"]["wsgi_server"] == "django"
+
+        # Test FastAPI fallback
+        fastapi_config = generator._get_fallback_framework_config("fastapi")
+        assert fastapi_config["default_port"] == 8000
+        assert fastapi_config["framework_specific"]["asgi_server"] == "fastapi"
+
+        # Test unknown framework fallback
+        unknown_config = generator._get_fallback_framework_config("unknown")
+        assert unknown_config["default_port"] == 8000
+        assert unknown_config["framework_specific"]["generic"] is True
+
+    def test_generate_dockerfile_content(self, generator):
+        """Test Dockerfile content generation."""
+        framework_config = {
+            "python_version": "3.11",
+            "base_docker_image": "python:3.11-slim",
+        }
+
+        dockerfile = generator._generate_dockerfile_content(framework_config)
+
+        assert "FROM python:3.11-slim" in dockerfile
+        assert "WORKDIR /app" in dockerfile
+        assert "pip install -r requirements.txt" in dockerfile
+        assert 'CMD ["python", "-m", "pytest"' in dockerfile
+
+    def test_get_fallback_docker_compose(self, generator):
+        """Test fallback Docker Compose configuration generation."""
+        framework_config = {
+            "default_port": 5000,
+            "health_endpoint": "/health",
+            "python_version": "3.11",
+        }
+
+        compose_content = generator._get_fallback_docker_compose(framework_config)
+
+        assert "version: '3.8'" in compose_content
+        assert "5000:5000" in compose_content  # Dynamic port
+        assert "http://localhost:5000/health" in compose_content  # Dynamic health check
+        assert "BASE_URL=http://app:5000" in compose_content  # Dynamic base URL
 
 
 @pytest.mark.integration

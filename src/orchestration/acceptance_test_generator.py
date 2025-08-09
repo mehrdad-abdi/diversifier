@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -68,86 +69,9 @@ class AcceptanceTestGenerator:
         self.mcp_manager = mcp_manager
         self.logger = logging.getLogger("diversifier.acceptance_test_generator")
 
-        # Test framework configurations
-        self.supported_frameworks = {
-            "flask": {
-                "default_port": 5000,
-                "health_endpoint": "/health",
-                "api_prefix": "/api",
-                "test_patterns": ["test_*.py", "*_test.py"],
-            },
-            "django": {
-                "default_port": 8000,
-                "health_endpoint": "/health/",
-                "api_prefix": "/api/",
-                "test_patterns": ["test_*.py", "*_test.py"],
-            },
-            "fastapi": {
-                "default_port": 8000,
-                "health_endpoint": "/health",
-                "api_prefix": "/api",
-                "test_patterns": ["test_*.py", "*_test.py"],
-            },
-        }
-
-        # Docker configuration templates
-        self.docker_templates = {
-            "test_dockerfile": """FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY tests/ ./tests/
-COPY conftest.py .
-
-CMD ["python", "-m", "pytest", "tests/", "-v"]
-""",
-            "docker_compose_template": """version: '3.8'
-
-services:
-  app:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - DEBUG=false
-      - DATABASE_URL=postgresql://postgres:password@db:5432/testdb
-    depends_on:
-      - db
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  test:
-    build:
-      context: .
-      dockerfile: Dockerfile.test
-    depends_on:
-      - app
-    environment:
-      - BASE_URL=http://app:8000
-    volumes:
-      - ./test-results:/app/test-results
-
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_DB=testdb
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-""",
-        }
+        # Dynamic configuration cache
+        self._framework_config_cache: Optional[Dict[str, Any]] = None
+        self._docker_config_cache: Optional[Dict[str, Any]] = None
 
     async def generate_acceptance_tests(
         self,
@@ -205,13 +129,26 @@ services:
         all_scenarios.extend(error_tests.get("scenarios", []))
         all_scenarios.extend(docker_tests.get("scenarios", []))
 
+        # Discover framework configuration dynamically
+        framework_config = await self._discover_framework_configuration(
+            generator_agent, doc_analysis, source_analysis
+        )
+
         # Generate consolidated test suites
-        test_suites = self._create_test_suites(all_scenarios, source_analysis)
+        test_suites = self._create_test_suites(
+            all_scenarios, source_analysis, framework_config
+        )
 
         # Generate Docker configuration
-        docker_config = self._generate_docker_configuration(
-            doc_analysis, source_analysis
+        docker_config = await self._generate_docker_configuration(
+            generator_agent, doc_analysis, source_analysis
         )
+
+        # Update test suites with Docker Compose content
+        for suite in test_suites:
+            if suite.name == "docker_configuration":
+                suite.docker_compose_content = docker_config["docker_compose"]
+                break
 
         # Analyze test coverage
         coverage_analysis = self._analyze_test_coverage(all_scenarios, source_analysis)
@@ -289,6 +226,144 @@ services:
                 return f"Error reading test file {file_path}: {str(e)}"
 
         return [write_test_file, read_existing_test]
+
+    async def _discover_framework_configuration(
+        self,
+        agent: DiversificationAgent,
+        doc_analysis: DocumentationAnalysisResult,
+        source_analysis: SourceCodeAnalysisResult,
+    ) -> Dict[str, Any]:
+        """Dynamically discover framework configuration from project analysis.
+
+        Args:
+            agent: LLM agent for configuration discovery
+            doc_analysis: Documentation analysis results
+            source_analysis: Source code analysis results
+
+        Returns:
+            Framework configuration dictionary
+        """
+        if self._framework_config_cache:
+            return self._framework_config_cache
+
+        prompt = f"""
+        Analyze the following project information and determine the optimal framework configuration for acceptance testing:
+        
+        ## Framework Analysis:
+        Detected Framework: {source_analysis.framework_detected}
+        API Endpoints: {len(source_analysis.api_endpoints)}
+        Network Interfaces: {source_analysis.network_interfaces}
+        
+        ## Docker Analysis:
+        Docker Services: {len(doc_analysis.docker_services)}
+        External Interfaces: {len(doc_analysis.external_interfaces)}
+        
+        ## Project Structure Analysis:
+        Configuration Usage: {len(source_analysis.configuration_usage)}
+        External Integrations: {len(source_analysis.external_service_integrations)}
+        
+        Based on this analysis, determine:
+        1. The default port the application likely uses (check network interfaces and common framework defaults)
+        2. The most likely health check endpoint path (analyze existing endpoints or common patterns)
+        3. The API prefix pattern used (analyze endpoint paths)
+        4. Common test file patterns for this project type
+        5. Python version to use for testing (based on project requirements)
+        6. Base Docker image recommendations
+        
+        Provide results as JSON with the following structure:
+        {{
+            "default_port": <port_number>,
+            "health_endpoint": "<health_endpoint_path>",
+            "api_prefix": "<api_prefix>",
+            "test_patterns": ["<pattern1>", "<pattern2>"],
+            "python_version": "<version>",
+            "base_docker_image": "<image_name>",
+            "framework_specific": {{
+                "<key>": "<value>"
+            }}
+        }}
+        """
+
+        try:
+            result = agent.invoke(prompt)
+            response_text = self._extract_response_text(result)
+
+            # Parse JSON response
+            import re
+
+            json_match = re.search(r"```json\n(.*?)\n```", response_text, re.DOTALL)
+            if json_match:
+                config_data = json.loads(json_match.group(1))
+            else:
+                config_data = json.loads(response_text)
+
+            # Cache the configuration
+            self._framework_config_cache = config_data
+            self.logger.info(f"Discovered framework configuration: {config_data}")
+
+            return config_data
+
+        except (json.JSONDecodeError, KeyError, Exception) as e:
+            self.logger.warning(f"Failed to discover framework configuration: {e}")
+            # Fallback to basic configuration based on detected framework
+            fallback_config = self._get_fallback_framework_config(
+                source_analysis.framework_detected
+            )
+            self._framework_config_cache = fallback_config
+            return fallback_config
+
+    def _get_fallback_framework_config(self, framework: str) -> Dict[str, Any]:
+        """Get fallback configuration when dynamic discovery fails.
+
+        Args:
+            framework: Detected framework name
+
+        Returns:
+            Fallback configuration dictionary
+        """
+        framework_lower = framework.lower()
+
+        if "flask" in framework_lower:
+            return {
+                "default_port": 5000,
+                "health_endpoint": "/health",
+                "api_prefix": "/api",
+                "test_patterns": ["test_*.py", "*_test.py"],
+                "python_version": "3.11",
+                "base_docker_image": "python:3.11-slim",
+                "framework_specific": {"wsgi_server": "flask"},
+            }
+        elif "django" in framework_lower:
+            return {
+                "default_port": 8000,
+                "health_endpoint": "/health/",
+                "api_prefix": "/api/",
+                "test_patterns": ["test_*.py", "*_test.py"],
+                "python_version": "3.11",
+                "base_docker_image": "python:3.11-slim",
+                "framework_specific": {"wsgi_server": "django"},
+            }
+        elif "fastapi" in framework_lower:
+            return {
+                "default_port": 8000,
+                "health_endpoint": "/health",
+                "api_prefix": "/api",
+                "test_patterns": ["test_*.py", "*_test.py"],
+                "python_version": "3.11",
+                "base_docker_image": "python:3.11-slim",
+                "framework_specific": {"asgi_server": "fastapi"},
+            }
+        else:
+            # Generic Python web application
+            return {
+                "default_port": 8000,
+                "health_endpoint": "/health",
+                "api_prefix": "/api",
+                "test_patterns": ["test_*.py", "*_test.py"],
+                "python_version": "3.11",
+                "base_docker_image": "python:3.11-slim",
+                "framework_specific": {"generic": True},
+            }
 
     async def _generate_http_api_tests(
         self, agent: DiversificationAgent, source_analysis: SourceCodeAnalysisResult
@@ -590,6 +665,7 @@ services:
         self,
         scenarios: List[AcceptanceTestScenario],
         source_analysis: SourceCodeAnalysisResult,
+        framework_config: Dict[str, Any],
     ) -> List[AcceptanceTestSuite]:
         """Create organized test suites from scenarios."""
         # Group scenarios by category
@@ -604,7 +680,7 @@ services:
         for category, category_scenarios in categories.items():
             # Generate test file content
             test_content = self._generate_test_file_content(
-                category, category_scenarios, source_analysis
+                category, category_scenarios, source_analysis, framework_config
             )
 
             # Create test suite
@@ -615,15 +691,13 @@ services:
             )
             test_suites.append(suite)
 
-        # Add Docker configuration files
+        # Add Docker configuration files (will be populated by caller)
         main_suite = AcceptanceTestSuite(
             name="docker_configuration",
             description="Docker configuration for acceptance testing",
             test_file_content="",  # No test code, just config
-            docker_compose_content=self._generate_docker_compose_content(
-                source_analysis
-            ),
-            dockerfile_content=self.docker_templates["test_dockerfile"],
+            docker_compose_content="",  # Will be set by caller
+            dockerfile_content=self._generate_dockerfile_content(framework_config),
             requirements_content=self._generate_requirements_content(),
         )
         test_suites.append(main_suite)
@@ -635,11 +709,13 @@ services:
         category: str,
         scenarios: List[AcceptanceTestScenario],
         source_analysis: SourceCodeAnalysisResult,
+        framework_config: Dict[str, Any],
     ) -> str:
         """Generate complete test file content for a category."""
         class_name = f"Test{category.title().replace('_', '')}"
+        default_port = framework_config.get("default_port", 8000)
 
-        imports = """import pytest
+        imports = f"""import pytest
 import requests
 import json
 import time
@@ -649,7 +725,7 @@ import concurrent.futures
 from typing import Dict, Any
 
 # Test configuration
-BASE_URL = "http://app:8000"
+BASE_URL = "http://app:{default_port}"
 TEST_TIMEOUT = 30
 """
 
@@ -663,7 +739,7 @@ TEST_TIMEOUT = 30
 """
             )
 
-        helper_functions = """
+        helper_functions = f"""
 # Helper functions
 def get_app_container_name() -> str:
     return "app_container"
@@ -672,7 +748,7 @@ def get_app_host() -> str:
     return "localhost"
 
 def get_app_port() -> int:
-    return 8000
+    return {default_port}
 
 def wait_for_service_ready(url: str, timeout: int = 30) -> None:
     start_time = time.time()
@@ -685,7 +761,7 @@ def wait_for_service_ready(url: str, timeout: int = 30) -> None:
             pass
         time.sleep(2)
     
-    pytest.fail(f"Service at {url} failed to become ready within {timeout} seconds")
+    pytest.fail(f"Service at {{url}} failed to become ready within {{timeout}} seconds")
 """
 
         return f'''"""
@@ -705,29 +781,142 @@ class {class_name}:
 {helper_functions}
 '''
 
-    def _generate_docker_compose_content(
-        self, source_analysis: SourceCodeAnalysisResult
+    async def _generate_docker_compose_content(
+        self,
+        agent: DiversificationAgent,
+        doc_analysis: DocumentationAnalysisResult,
+        source_analysis: SourceCodeAnalysisResult,
+        framework_config: Dict[str, Any],
     ) -> str:
-        """Generate Docker Compose configuration for testing."""
-        # Customize based on analysis
-        framework = source_analysis.framework_detected.lower()
-        default_port = self.supported_frameworks.get(framework, {}).get(
-            "default_port", 8000
-        )
+        """Generate Docker Compose configuration for testing using LLM analysis.
 
-        # Basic template with customizations
-        compose_content = self.docker_templates["docker_compose_template"]
+        Args:
+            agent: LLM agent for Docker configuration generation
+            doc_analysis: Documentation analysis results
+            source_analysis: Source code analysis results
+            framework_config: Framework configuration discovered dynamically
 
-        # Replace port if different
-        if default_port != 8000:
-            compose_content = compose_content.replace(
-                "8000:8000", f"{default_port}:{default_port}"
-            )
-            compose_content = compose_content.replace(
-                "http://app:8000", f"http://app:{default_port}"
-            )
+        Returns:
+            Docker Compose YAML content
+        """
+        prompt = f"""
+        Generate a Docker Compose configuration for acceptance testing based on the project analysis:
+        
+        ## Framework Configuration:
+        Framework: {source_analysis.framework_detected}
+        Default Port: {framework_config.get('default_port', 8000)}
+        Health Endpoint: {framework_config.get('health_endpoint', '/health')}
+        Python Version: {framework_config.get('python_version', '3.11')}
+        Base Image: {framework_config.get('base_docker_image', 'python:3.11-slim')}
+        
+        ## Project Dependencies:
+        External Services: {json.dumps([{
+            'type': integration.service_type,
+            'purpose': integration.purpose
+        } for integration in source_analysis.external_service_integrations], indent=2)}
+        
+        ## Configuration Requirements:
+        Environment Variables: {json.dumps([{
+            'name': config.name,
+            'required': config.required,
+            'purpose': config.purpose
+        } for config in source_analysis.configuration_usage], indent=2)}
+        
+        ## Docker Services (if any):
+        {json.dumps([{
+            'name': service.name,
+            'ports': service.exposed_ports,
+            'dependencies': service.dependencies
+        } for service in doc_analysis.docker_services], indent=2)}
+        
+        Generate a complete docker-compose.yml file that includes:
+        1. Application service with appropriate port mapping
+        2. Test service for running acceptance tests
+        3. Required dependencies (database, cache, etc.) based on external integrations
+        4. Proper health checks for all services
+        5. Environment variables based on configuration requirements
+        6. Volume mounts for test results
+        
+        Provide the result as a complete YAML file content (no markdown formatting).
+        """
 
-        return compose_content
+        try:
+            result = agent.invoke(prompt)
+            response_text = self._extract_response_text(result)
+
+            # Clean up any markdown formatting
+            if "```yaml" in response_text:
+                yaml_match = re.search(r"```yaml\n(.*?)\n```", response_text, re.DOTALL)
+                if yaml_match:
+                    response_text = yaml_match.group(1)
+            elif "```" in response_text:
+                yaml_match = re.search(r"```\n(.*?)\n```", response_text, re.DOTALL)
+                if yaml_match:
+                    response_text = yaml_match.group(1)
+
+            self.logger.info("Generated Docker Compose configuration using LLM")
+            return response_text.strip()
+
+        except Exception as e:
+            self.logger.warning(f"Failed to generate Docker Compose with LLM: {e}")
+            # Fallback to basic template
+            return self._get_fallback_docker_compose(framework_config)
+
+    def _get_fallback_docker_compose(self, framework_config: Dict[str, Any]) -> str:
+        """Generate fallback Docker Compose configuration.
+
+        Args:
+            framework_config: Framework configuration
+
+        Returns:
+            Basic Docker Compose YAML content
+        """
+        default_port = framework_config.get("default_port", 8000)
+        health_endpoint = framework_config.get("health_endpoint", "/health")
+
+        return f"""version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "{default_port}:{default_port}"
+    environment:
+      - DEBUG=false
+      - DATABASE_URL=postgresql://postgres:password@db:5432/testdb
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:{default_port}{health_endpoint}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      - app
+    environment:
+      - BASE_URL=http://app:{default_port}
+    volumes:
+      - ./test-results:/app/test-results
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=testdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+"""
 
     def _generate_requirements_content(self) -> str:
         """Generate test requirements.txt content."""
@@ -752,26 +941,66 @@ pytest-xdist>=3.0.0
             "pytest-xdist",
         ]
 
-    def _generate_docker_configuration(
+    async def _generate_docker_configuration(
         self,
+        agent: DiversificationAgent,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
     ) -> Dict[str, Any]:
         """Generate Docker configuration for testing."""
+        # Get framework configuration if not already cached
+        if not self._framework_config_cache:
+            framework_config = await self._discover_framework_configuration(
+                agent, doc_analysis, source_analysis
+            )
+        else:
+            framework_config = self._framework_config_cache
+
+        # Generate Docker Compose content
+        docker_compose_content = await self._generate_docker_compose_content(
+            agent, doc_analysis, source_analysis, framework_config
+        )
+
+        default_port = framework_config.get("default_port", 8000)
+
         return {
-            "test_dockerfile": self.docker_templates["test_dockerfile"],
-            "docker_compose": self._generate_docker_compose_content(source_analysis),
+            "test_dockerfile": self._generate_dockerfile_content(framework_config),
+            "docker_compose": docker_compose_content,
             "network_config": {
                 "test_network": "diversifier_test_network",
                 "app_service": "app",
                 "test_service": "test",
             },
             "environment_variables": {
-                "BASE_URL": "http://app:8000",
+                "BASE_URL": f"http://app:{default_port}",
                 "TEST_TIMEOUT": "30",
                 "PYTHONPATH": "/app",
             },
         }
+
+    def _generate_dockerfile_content(self, framework_config: Dict[str, Any]) -> str:
+        """Generate Dockerfile content for testing.
+
+        Args:
+            framework_config: Framework configuration
+
+        Returns:
+            Dockerfile content
+        """
+        base_image = framework_config.get("base_docker_image", "python:3.11-slim")
+
+        return f"""FROM {base_image}
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY tests/ ./tests/
+COPY conftest.py .
+
+CMD ["python", "-m", "pytest", "tests/", "-v"]
+"""
 
     def _analyze_test_coverage(
         self,
