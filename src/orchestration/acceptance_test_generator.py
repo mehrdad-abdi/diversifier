@@ -1,5 +1,6 @@
 """Acceptance test generation for black-box Docker-based testing."""
 
+import asyncio
 import json
 import logging
 import re
@@ -55,6 +56,21 @@ class AcceptanceTestGenerationResult:
     generation_confidence: float  # 0.0 to 1.0
 
 
+@dataclass
+class WorkflowExecutionResult:
+    """Results of complete workflow execution."""
+
+    workflow_id: str
+    success: bool
+    generation_result: Optional[AcceptanceTestGenerationResult]
+    docker_compose_path: Optional[str]
+    test_image_id: Optional[str]
+    execution_logs: List[str]
+    error_messages: List[str]
+    execution_time_seconds: float
+    timestamp: str
+
+
 class AcceptanceTestGenerator:
     """Generator for comprehensive black-box acceptance tests."""
 
@@ -72,6 +88,11 @@ class AcceptanceTestGenerator:
         # Dynamic configuration cache
         self._framework_config_cache: Optional[Dict[str, Any]] = None
         self._docker_config_cache: Optional[Dict[str, Any]] = None
+
+        # Workflow state management
+        self.workflow_id = f"workflow_{datetime.now(timezone.utc).isoformat()}"
+        self.execution_logs: List[str] = []
+        self.error_messages: List[str] = []
 
     async def generate_acceptance_tests(
         self,
@@ -1183,3 +1204,386 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
             Path(file_path).parent.mkdir(parents=True, exist_ok=True)
             with open(file_path, "w") as f:
                 f.write(content)
+
+    # Workflow Orchestration Methods
+
+    def _log(self, message: str) -> None:
+        """Log a workflow message."""
+        self.logger.info(message)
+        self.execution_logs.append(
+            f"[{datetime.now(timezone.utc).isoformat()}] {message}"
+        )
+
+    def _log_error(self, message: str) -> None:
+        """Log a workflow error message."""
+        self.logger.error(message)
+        self.error_messages.append(
+            f"[{datetime.now(timezone.utc).isoformat()}] {message}"
+        )
+
+    async def initialize_mcp_servers(self) -> Dict[MCPServerType, bool]:
+        """Initialize required MCP servers for the workflow.
+
+        Returns:
+            Dictionary mapping server types to initialization success
+        """
+        self._log("Initializing MCP servers for workflow")
+
+        # Initialize all servers
+        results = await self.mcp_manager.initialize_all_servers()
+
+        # Check which servers are required and available
+        required_servers = [
+            MCPServerType.FILESYSTEM,
+            MCPServerType.DOCKER,
+        ]
+
+        optional_servers = [
+            MCPServerType.TESTING,
+            MCPServerType.GIT,
+        ]
+
+        missing_required = []
+        for server_type in required_servers:
+            if not results.get(server_type, False):
+                missing_required.append(server_type)
+
+        if missing_required:
+            error_msg = f"Required MCP servers failed to initialize: {[s.value for s in missing_required]}"
+            self._log_error(error_msg)
+            raise RuntimeError(error_msg)
+
+        # Log status of optional servers
+        for server_type in optional_servers:
+            if results.get(server_type, False):
+                self._log(
+                    f"Optional server {server_type.value} initialized successfully"
+                )
+            else:
+                self._log(f"Optional server {server_type.value} not available")
+
+        self._log(
+            f"MCP server initialization completed: {sum(results.values())}/{len(results)} servers active"
+        )
+        return results
+
+    async def build_test_container(
+        self,
+        generation_result: AcceptanceTestGenerationResult,
+        output_dir: str,
+        image_name: str = "diversifier-tests",
+        image_tag: str = "latest",
+    ) -> Optional[str]:
+        """Build Docker container with generated tests.
+
+        Args:
+            generation_result: Test generation results
+            output_dir: Directory containing test files
+            image_name: Name for the test image
+            image_tag: Tag for the test image
+
+        Returns:
+            Docker image ID if successful, None otherwise
+        """
+        self._log("Building test container")
+
+        if not self.mcp_manager.is_server_available(MCPServerType.DOCKER):
+            self._log_error("Docker MCP server not available")
+            return None
+
+        try:
+            # Build test container
+            build_result = await self.mcp_manager.call_tool(
+                MCPServerType.DOCKER,
+                "build_image",
+                {
+                    "build_context": output_dir,
+                    "dockerfile": "Dockerfile.test",
+                    "image_name": image_name,
+                    "image_tag": image_tag,
+                },
+            )
+
+            if build_result and build_result.get("success"):
+                image_id = build_result.get("image_id")
+                self._log(f"Test container built successfully: {image_id}")
+                return image_id
+            else:
+                self._log_error(f"Test container build failed: {build_result}")
+                return None
+
+        except Exception as e:
+            self._log_error(f"Test container build error: {e}")
+            return None
+
+    async def execute_test_workflow(
+        self,
+        docker_compose_path: str,
+        app_service_name: str = "app",
+        test_service_name: str = "test",
+        app_container_name: str = "diversifier_app",
+        cleanup_containers: bool = True,
+    ) -> Dict[str, Any]:
+        """Execute the complete test workflow using Docker Compose.
+
+        Args:
+            docker_compose_path: Path to Docker Compose file
+            app_service_name: Name of the application service
+            test_service_name: Name of the test service
+            app_container_name: Name of the application container
+            cleanup_containers: Whether to cleanup containers after execution
+
+        Returns:
+            Execution results
+        """
+        self._log("Executing test workflow")
+
+        if not self.mcp_manager.is_server_available(MCPServerType.DOCKER):
+            raise RuntimeError("Docker MCP server not available")
+
+        try:
+            # Start application services
+            start_result = await self.mcp_manager.call_tool(
+                MCPServerType.DOCKER,
+                "compose_up",
+                {
+                    "compose_file": docker_compose_path,
+                    "services": [app_service_name],
+                    "detached": True,
+                },
+            )
+
+            if not start_result or not start_result.get("success"):
+                raise RuntimeError(
+                    f"Failed to start application services: {start_result}"
+                )
+
+            self._log("Application services started successfully")
+
+            # Wait for application to be healthy
+            await self._wait_for_service_health(app_container_name, timeout_seconds=120)
+
+            # Run tests
+            test_result = await self.mcp_manager.call_tool(
+                MCPServerType.DOCKER,
+                "compose_run",
+                {
+                    "compose_file": docker_compose_path,
+                    "service": test_service_name,
+                    "command": [
+                        "python",
+                        "-m",
+                        "pytest",
+                        "/tests",
+                        "--tb=short",
+                        "-v",
+                        "--json-report",
+                        "--json-report-file=/tests/test-report.json",
+                    ],
+                    "remove": True,
+                },
+            )
+
+            # Collect test results
+            results = {
+                "test_execution_success": (
+                    test_result.get("success", False) if test_result else False
+                ),
+                "test_output": test_result.get("output", "") if test_result else "",
+                "test_exit_code": (
+                    test_result.get("exit_code", -1) if test_result else -1
+                ),
+                "start_result": start_result,
+                "container_logs": await self._collect_container_logs(
+                    [app_container_name, f"{test_service_name}_container"]
+                ),
+            }
+
+            self._log(
+                f"Test execution completed with exit code: {results['test_exit_code']}"
+            )
+            return results
+
+        except Exception as e:
+            self._log_error(f"Test workflow execution failed: {e}")
+            raise
+        finally:
+            # Cleanup containers if configured
+            if cleanup_containers:
+                await self._cleanup_containers(docker_compose_path)
+
+    async def run_complete_workflow(
+        self,
+        doc_analysis: DocumentationAnalysisResult,
+        source_analysis: SourceCodeAnalysisResult,
+        output_dir: Optional[str] = None,
+        model_name: str = "gpt-4",
+        execute_tests: bool = False,
+    ) -> WorkflowExecutionResult:
+        """Run the complete test generation and execution workflow.
+
+        Args:
+            doc_analysis: Documentation analysis results
+            source_analysis: Source code analysis results
+            output_dir: Directory for test output
+            model_name: LLM model to use
+            execute_tests: Whether to execute tests after generation
+
+        Returns:
+            Complete workflow execution results
+        """
+        start_time = datetime.now(timezone.utc)
+        self._log(f"Starting complete workflow: {self.workflow_id}")
+
+        try:
+            # Initialize MCP servers
+            await self.initialize_mcp_servers()
+
+            # Generate acceptance tests
+            self._log("Generating acceptance tests")
+            generation_result = await self.generate_acceptance_tests(
+                doc_analysis, source_analysis, model_name
+            )
+
+            # Export test suites
+            self._log("Exporting test suites")
+            if output_dir is None:
+                output_dir = str(self.project_root / "acceptance_tests")
+            final_output_dir = await self.export_test_suites(
+                generation_result, output_dir
+            )
+
+            # Build test container
+            test_image_id = None
+            if execute_tests:
+                self._log("Building test container")
+                test_image_id = await self.build_test_container(
+                    generation_result, final_output_dir
+                )
+
+            # Find generated docker-compose file
+            docker_compose_path = None
+            for suite in generation_result.test_suites:
+                if suite.docker_compose_content:
+                    docker_compose_path = str(
+                        Path(final_output_dir) / "docker-compose.test.yml"
+                    )
+                    break
+
+            # Execute tests if requested and Docker Compose is available
+            if execute_tests and docker_compose_path and test_image_id:
+                self._log("Executing test workflow")
+                await self.execute_test_workflow(docker_compose_path)
+
+            end_time = datetime.now(timezone.utc)
+            execution_time = (end_time - start_time).total_seconds()
+
+            result = WorkflowExecutionResult(
+                workflow_id=self.workflow_id,
+                success=True,
+                generation_result=generation_result,
+                docker_compose_path=docker_compose_path,
+                test_image_id=test_image_id,
+                execution_logs=self.execution_logs.copy(),
+                error_messages=self.error_messages.copy(),
+                execution_time_seconds=execution_time,
+                timestamp=end_time.isoformat(),
+            )
+
+            self._log(
+                f"Workflow completed successfully in {execution_time:.2f} seconds"
+            )
+            return result
+
+        except Exception as e:
+            end_time = datetime.now(timezone.utc)
+            execution_time = (end_time - start_time).total_seconds()
+
+            self._log_error(f"Workflow failed: {e}")
+
+            return WorkflowExecutionResult(
+                workflow_id=self.workflow_id,
+                success=False,
+                generation_result=None,
+                docker_compose_path=None,
+                test_image_id=None,
+                execution_logs=self.execution_logs.copy(),
+                error_messages=self.error_messages.copy(),
+                execution_time_seconds=execution_time,
+                timestamp=end_time.isoformat(),
+            )
+
+    async def _wait_for_service_health(
+        self,
+        container_name: str,
+        timeout_seconds: int = 120,
+    ) -> None:
+        """Wait for a service to become healthy."""
+        self._log(f"Waiting for {container_name} to become healthy")
+
+        start_time = datetime.now()
+        while (datetime.now() - start_time).total_seconds() < timeout_seconds:
+            try:
+                health_result = await self.mcp_manager.call_tool(
+                    MCPServerType.DOCKER,
+                    "inspect_container",
+                    {"container_name": container_name},
+                )
+
+                if health_result and health_result.get("health_status") == "healthy":
+                    self._log(f"{container_name} is healthy")
+                    return
+
+            except Exception as e:
+                self._log(f"Health check error: {e}")
+
+            await asyncio.sleep(5)
+
+        raise TimeoutError(
+            f"{container_name} did not become healthy within {timeout_seconds} seconds"
+        )
+
+    async def _collect_container_logs(
+        self, container_names: List[str]
+    ) -> Dict[str, str]:
+        """Collect logs from containers."""
+        logs = {}
+
+        for container_name in container_names:
+            try:
+                log_result = await self.mcp_manager.call_tool(
+                    MCPServerType.DOCKER,
+                    "get_container_logs",
+                    {"container_name": container_name},
+                )
+
+                if log_result:
+                    logs[container_name] = log_result.get("logs", "")
+
+            except Exception as e:
+                logs[container_name] = f"Failed to collect logs: {e}"
+
+        return logs
+
+    async def _cleanup_containers(self, docker_compose_path: str) -> None:
+        """Cleanup containers and resources."""
+        self._log("Cleaning up containers")
+
+        try:
+            cleanup_result = await self.mcp_manager.call_tool(
+                MCPServerType.DOCKER,
+                "compose_down",
+                {
+                    "compose_file": docker_compose_path,
+                    "remove_volumes": True,
+                    "remove_images": "local",
+                },
+            )
+
+            if cleanup_result and cleanup_result.get("success"):
+                self._log("Container cleanup completed successfully")
+            else:
+                self._log_error(f"Container cleanup failed: {cleanup_result}")
+
+        except Exception as e:
+            self._log_error(f"Container cleanup error: {e}")
