@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
@@ -581,7 +582,7 @@ class DocumentationAnalyzer:
             "testing_requirements": result.testing_requirements,
             "deployment_patterns": result.deployment_patterns,
             "analysis_confidence": result.analysis_confidence,
-            "generated_at": "2024-01-01T00:00:00Z",  # Would use actual timestamp
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Write to file using MCP server if available

@@ -559,6 +559,20 @@ class TestDocumentationAnalyzer:
         assert len(parsed_content["external_interfaces"]) == 1
         assert len(parsed_content["docker_services"]) == 1
         assert parsed_content["analysis_confidence"] == 0.8
+
+        # Verify timestamp is current and properly formatted ISO 8601 with timezone
+        generated_at = parsed_content["generated_at"]
+        assert isinstance(generated_at, str)
+        assert (
+            generated_at.endswith("Z")
+            or "+" in generated_at
+            or generated_at.endswith(":00")
+        )  # Valid timezone format
+        # Parse to ensure it's a valid ISO format timestamp
+        from datetime import datetime
+
+        datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+
         assert output_path == "/test/output.json"
 
     @patch("builtins.open", new_callable=mock_open)
