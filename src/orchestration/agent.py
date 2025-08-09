@@ -21,6 +21,7 @@ class AgentType(Enum):
     REPAIRER = "repairer"
     DOC_ANALYZER = "doc_analyzer"
     SOURCE_CODE_ANALYZER = "source_code_analyzer"
+    ACCEPTANCE_TEST_GENERATOR = "acceptance_test_generator"
 
 
 class DiversificationAgent:
@@ -105,6 +106,7 @@ class DiversificationAgent:
             AgentType.REPAIRER: "repairer.txt",
             AgentType.DOC_ANALYZER: "doc_analyzer.txt",
             AgentType.SOURCE_CODE_ANALYZER: "source_code_analyzer.txt",
+            AgentType.ACCEPTANCE_TEST_GENERATOR: "acceptance_test_generator.txt",
         }
 
         prompt_file = prompt_files.get(self.agent_type)
