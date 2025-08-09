@@ -272,6 +272,9 @@ class DocumentationAnalyzer:
         else:
             doc_prompt = "Analyze the following documentation to identify external interfaces and APIs."
 
+        # Limit to first 10 files for analysis to avoid overwhelming the LLM
+        files_to_analyze = doc_files[:10]
+
         analysis_prompt = f"""
         {doc_prompt}
         
@@ -287,7 +290,7 @@ class DocumentationAnalyzer:
         6. Authentication and security requirements
         
         ## Documentation Files to Analyze
-        {[str(f) for f in doc_files[:10]]}  # Limit to first 10 files
+        {[str(f) for f in files_to_analyze]}
         
         Use the read_documentation_file tool to examine each file and extract external interface information.
         
