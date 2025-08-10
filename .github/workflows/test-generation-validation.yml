@@ -2,39 +2,28 @@ name: Test Generation Validation
 
 on:
   workflow_dispatch:
-    inputs:
-      project_path:
-        description: 'Path to the pilot project (FastAPI Full-Stack Template)'
-        required: true
-        default: 'pilot-project'
-      source_library:
-        description: 'Source library to migrate from'
-        required: true
-        default: 'emails'
-      target_library:
-        description: 'Target library to migrate to'
-        required: true
-        default: 'redmail'
-  push:
-    branches:
-      - 'feature/issue-58-*'
-      - 'feature/*test-generation*'
+  issue_comment:
+    types: [created]
 
 env:
-  DIVERSIFIER_LLM_PROVIDER: openai
-  DIVERSIFIER_LLM_MODEL_NAME: gpt-4
+  DIVERSIFIER_LLM_PROVIDER: google_genai
+  DIVERSIFIER_LLM_MODEL_NAME: gemini-2.5-pro
   DIVERSIFIER_LLM_TEMPERATURE: 0.2
-  DIVERSIFIER_LLM_MAX_TOKENS: 4096
-  DIVERSIFIER_LLM_API_KEY_ENV_VAR: OPENAI_API_KEY
+  DIVERSIFIER_LLM_MAX_TOKENS: 250000
+  DIVERSIFIER_LLM_API_KEY_ENV_VAR: GEMINI_API_KEY
 
 jobs:
   test-generation-validation:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, 'run test generation'))
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # For PR comments, checkout the PR branch
+        ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/head', github.event.issue.number) || github.ref }}
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -57,70 +46,40 @@ jobs:
         echo "LLM Provider: $DIVERSIFIER_LLM_PROVIDER"
         echo "Model: $DIVERSIFIER_LLM_MODEL_NAME"
         echo "Temperature: $DIVERSIFIER_LLM_TEMPERATURE"
+        echo "Max Tokens: $DIVERSIFIER_LLM_MAX_TOKENS"
         
         # Check if API key is available (without exposing it)
-        if [ -z "$OPENAI_API_KEY" ]; then
-          echo "❌ OPENAI_API_KEY not found in environment"
+        if [ -z "$GEMINI_API_KEY" ]; then
+          echo "❌ GEMINI_API_KEY not found in environment"
           exit 1
         else
-          echo "✅ API key is available"
+          echo "✅ Gemini API key is available"
         fi
       env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-    - name: Prepare pilot project
+    - name: Clone FastAPI Full-Stack Template pilot project
       run: |
-        echo "📁 Setting up pilot project directory..."
-        mkdir -p pilot-project
+        echo "📁 Cloning FastAPI Full-Stack Template pilot project..."
+        git clone https://github.com/fastapi/full-stack-fastapi-template.git pilot-project
         
-        # Create a minimal FastAPI project structure for testing
-        cat > pilot-project/main.py << 'EOF'
-        from fastapi import FastAPI
-        from emails import html
-        import json
+        echo "✅ Pilot project cloned successfully"
+        echo "Project structure:"
+        ls -la pilot-project/
         
-        app = FastAPI(title="Diversifier Test Project")
-        
-        @app.get("/")
-        async def root():
-            return {"message": "FastAPI test project for diversifier"}
-        
-        @app.post("/send-email")
-        async def send_email(recipient: str, subject: str):
-            # Using emails library that should be replaced with redmail
-            message = html(
-                html="<p>Test email from diversifier validation</p>",
-                subject=subject
-            )
-            return {"status": "email prepared", "recipient": recipient}
-        EOF
-        
-        cat > pilot-project/requirements.txt << 'EOF'
-        fastapi>=0.104.0
-        emails>=0.6,<1.0
-        uvicorn>=0.24.0
-        EOF
-        
-        cat > pilot-project/README.md << 'EOF'
-        # Diversifier Test Project
-        
-        This is a minimal FastAPI project used for testing the diversifier tool's
-        acceptance test generation capabilities.
-        
-        ## Features
-        - FastAPI web framework
-        - Email functionality using the emails library
-        - Basic REST API endpoints
-        EOF
-        
-        echo "✅ Pilot project structure created"
+        echo "Checking for emails library dependency..."
+        if find pilot-project -name "*.txt" -o -name "*.toml" -o -name "*.lock" | xargs grep -l "emails" 2>/dev/null; then
+          echo "✅ Found emails library in project dependencies"
+        else
+          echo "⚠️  emails library not found in dependencies - this is expected as dependencies may have changed"
+        fi
 
     - name: Run acceptance test generation
       run: |
         echo "🧪 Running diversifier for acceptance test generation only..."
         
         # Set up environment for test generation
-        export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+        export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
         
         # Use a custom approach to trigger only test generation
         # This runs the diversifier but we'll only capture the test generation phase
@@ -159,7 +118,7 @@ jobs:
         # Continue even if diversifier had issues - we want to capture artifacts
         echo "Continuing with artifact collection..."
       env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     - name: Analyze generated tests
       run: |
@@ -196,7 +155,7 @@ jobs:
         # Create a summary report
         echo "=== Test Generation Summary ===" > test_generation_summary.txt
         echo "Timestamp: $(date)" >> test_generation_summary.txt
-        echo "Project: pilot-project (emails -> redmail)" >> test_generation_summary.txt
+        echo "Project: FastAPI Full-Stack Template (emails -> redmail)" >> test_generation_summary.txt
         echo "Tests found: $TESTS_FOUND" >> test_generation_summary.txt
         echo "Locations checked:" >> test_generation_summary.txt
         for location in "${TEST_LOCATIONS[@]}"; do
