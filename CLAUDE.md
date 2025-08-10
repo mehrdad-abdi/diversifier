@@ -23,13 +23,19 @@ uv sync --group dev
 uv run diversifier <project_path> <remove_lib> <inject_lib>
 
 # Code formatting
-uv run black src/ main.py
+uv run black src/ tests/ main.py
 
-# Linting
-uv run flake8 --select F src/ main.py
+# Linting (legacy)
+uv run flake8 --select F src/ tests/ main.py
+
+# Modern linting with Ruff (recommended)
+uv run ruff check src/ tests/ main.py
+
+# Format checking with Ruff
+uv run ruff format --check src/ tests/ main.py
 
 # Type checking
-uv run mypy src/ main.py
+uv run mypy src/ tests/ main.py
 
 # Run tests
 uv run pytest
@@ -91,10 +97,12 @@ The project is in early development phase with GitHub project management:
 - **ALWAYS write unit tests** for every code change, new function, or feature
 - **MANDATORY pre-push checks**: Run these commands before every push to the repository:
   ```bash
-  uv run flake8 --select F src/ tests/ main.py    # Linting
-  uv run mypy src/ tests/ main.py      # Type checking
-  uv run pytest                       # Unit tests
-  uv run black src/ tests/ main.py     # Code formatting -- Important: Run as last check
+  uv run flake8 --select F src/ tests/ main.py    # Linting (legacy)
+  uv run ruff check src/ tests/ main.py           # Modern linting with Ruff
+  uv run mypy src/ tests/ main.py                 # Type checking
+  uv run pytest                                   # Unit tests
+  uv run black src/ tests/ main.py                # Code formatting (Black)
+  uv run ruff format --check src/ tests/ main.py  # Format checking (Ruff) -- Important: Run as final check
   ```
 - All checks must pass before pushing code to any branch
 - Test coverage should be comprehensive, including edge cases and error conditions
