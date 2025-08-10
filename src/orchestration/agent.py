@@ -75,18 +75,14 @@ class DiversificationAgent:
             model_id = f"{provider}:{self.llm_config.model_name}"
 
             # Initialize the LLM using init_chat_model with configuration
-            # Note: Only pass parameters that are commonly supported across all providers
-            init_params = {
+            from typing import Any
+            kwargs: dict[str, Any] = {
                 "temperature": self.llm_config.temperature,
                 "max_tokens": self.llm_config.max_tokens,
             }
-
-            # Add additional params but filter out potentially unsupported ones
-            for key, value in self.llm_config.additional_params.items():
-                if key not in ["timeout"]:  # Skip timeout as it may not be supported
-                    init_params[key] = value  # type: ignore[assignment]
-
-            self.llm = init_chat_model(model=model_id, **init_params)
+            kwargs.update(self.llm_config.additional_params)
+            
+            self.llm = init_chat_model(model=model_id, **kwargs)
 
             self.logger.info(
                 f"Initialized {self.llm_config.provider}:{self.llm_config.model_name} "
