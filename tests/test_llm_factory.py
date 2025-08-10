@@ -20,7 +20,7 @@ class TestLLMFactory:
         assert isinstance(providers, list)
         assert "anthropic" in providers
         assert "openai" in providers
-        assert "google" in providers
+        assert "google_genai" in providers  # Updated to match new provider naming
 
     def test_get_default_api_key_env_var(self):
         """Test getting default API key environment variables."""
@@ -47,7 +47,8 @@ class TestLLMFactory:
         """Test validation with invalid provider."""
         config = LLMConfig(provider="invalid_provider")
         issues = validate_llm_config(config)
-        assert any("Unsupported provider" in issue for issue in issues)
+        # Now it's just an informational note, not an error - but should still generate an issue
+        assert any("not in the list of commonly used providers" in issue for issue in issues)
 
     def test_validate_llm_config_invalid_temperature(self):
         """Test validation with invalid temperature."""
