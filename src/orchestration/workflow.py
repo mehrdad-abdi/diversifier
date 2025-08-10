@@ -318,18 +318,34 @@ class WorkflowState:
         if step.error:
             error_lower = step.error.lower()
             # Don't retry authentication/API key errors
-            if any(term in error_lower for term in [
-                'authentication failed', 'api key', 'authorization', 
-                'unauthorized', 'forbidden', 'invalid api key'
-            ]):
-                self.logger.info(f"Not retrying {step_name} - permanent authentication error")
+            if any(
+                term in error_lower
+                for term in [
+                    "authentication failed",
+                    "api key",
+                    "authorization",
+                    "unauthorized",
+                    "forbidden",
+                    "invalid api key",
+                ]
+            ):
+                self.logger.info(
+                    f"Not retrying {step_name} - permanent authentication error"
+                )
                 return False
-            
+
             # Don't retry configuration errors
-            if any(term in error_lower for term in [
-                'configuration error', 'config error', 'missing configuration'
-            ]):
-                self.logger.info(f"Not retrying {step_name} - permanent configuration error")
+            if any(
+                term in error_lower
+                for term in [
+                    "configuration error",
+                    "config error",
+                    "missing configuration",
+                ]
+            ):
+                self.logger.info(
+                    f"Not retrying {step_name} - permanent configuration error"
+                )
                 return False
 
         # Repair step can be retried up to max attempts
@@ -338,7 +354,7 @@ class WorkflowState:
 
         # Other failed steps can generally be retried once (but only if not already retried)
         # Add a simple retry counter check
-        if not hasattr(step, '_retry_count'):
+        if not hasattr(step, "_retry_count"):
             step._retry_count = 0
         return step._retry_count < 1
 
@@ -365,11 +381,13 @@ class WorkflowState:
             self.context.repair_attempts += 1
 
         # Increment retry counter
-        if not hasattr(step, '_retry_count'):
+        if not hasattr(step, "_retry_count"):
             step._retry_count = 0
         step._retry_count += 1
 
-        self.logger.info(f"Reset step for retry: {step_name} (attempt {step._retry_count})")
+        self.logger.info(
+            f"Reset step for retry: {step_name} (attempt {step._retry_count})"
+        )
         return True
 
     def is_workflow_complete(self) -> bool:

@@ -168,76 +168,8 @@ class DiversificationAgent:
 
         return prompt
 
-    async def ainvoke(self, input_text: str) -> Dict[str, Any]:
-        """Async version of invoke.
-
-        Args:
-            input_text: Input text for the agent
-
-        Returns:
-            Agent response dictionary
-        """
-        import asyncio
-        
-        try:
-            if self.agent_executor:
-                config = {
-                    "configurable": {"thread_id": f"agent_{self.agent_type.value}"}
-                }
-                result = await self.agent_executor.ainvoke(
-                    {"messages": [{"role": "user", "content": input_text}]}, config
-                )
-            else:
-                # For agents without tools, use LLM directly with timeout
-                prompt = self._get_agent_prompt()
-                messages = prompt.format_messages(input=input_text)
-                
-                self.logger.info(f"Invoking LLM for {self.agent_type.value} agent...")
-                
-                # Add timeout protection
-                try:
-                    # Use asyncio.wait_for to add timeout protection
-                    async def _llm_call():
-                        return await self.llm.ainvoke(messages)
-                    
-                    # Run with timeout
-                    response = await asyncio.wait_for(
-                        _llm_call(), timeout=self.llm_config.timeout
-                    )
-                    result = {"output": response.content}
-                    
-                except asyncio.TimeoutError:
-                    error_msg = f"LLM call timed out after {self.llm_config.timeout} seconds"
-                    self.logger.error(error_msg)
-                    raise RuntimeError(error_msg)
-                except Exception as llm_error:
-                    # Check for common API credential issues
-                    error_str = str(llm_error).lower()
-                    if any(term in error_str for term in ['api key', 'authentication', 'unauthorized', 'forbidden']):
-                        error_msg = (
-                            f"LLM API authentication failed: {llm_error}\n"
-                            f"Please ensure your API key is properly configured.\n"
-                            f"For {self.llm_config.provider}, set the appropriate environment variable:\n"
-                            f"- Anthropic: ANTHROPIC_API_KEY\n"
-                            f"- OpenAI: OPENAI_API_KEY\n"
-                            f"- Google: GOOGLE_API_KEY"
-                        )
-                        self.logger.error(error_msg)
-                        raise RuntimeError(error_msg) from llm_error
-                    else:
-                        raise
-
-            self.logger.info(
-                f"Agent {self.agent_type.value} completed task successfully"
-            )
-            return result
-
-        except Exception as e:
-            self.logger.error(f"Agent execution failed: {e}")
-            raise
-
     def invoke(self, input_text: str) -> Dict[str, Any]:
-        """Synchronous invoke - for now just calls the LLM directly without async complexity.
+        """Invoke the agent with input text.
 
         Args:
             input_text: Input text for the agent
@@ -254,20 +186,28 @@ class DiversificationAgent:
                     {"messages": [{"role": "user", "content": input_text}]}, config
                 )
             else:
-                # For agents without tools, use LLM directly 
+                # For agents without tools, use LLM directly
                 prompt = self._get_agent_prompt()
                 messages = prompt.format_messages(input=input_text)
-                
+
                 self.logger.info(f"Invoking LLM for {self.agent_type.value} agent...")
-                
+
                 try:
                     response = self.llm.invoke(messages)
                     result = {"output": response.content}
-                    
+
                 except Exception as llm_error:
                     # Check for common API credential issues
                     error_str = str(llm_error).lower()
-                    if any(term in error_str for term in ['api key', 'authentication', 'unauthorized', 'forbidden']):
+                    if any(
+                        term in error_str
+                        for term in [
+                            "api key",
+                            "authentication",
+                            "unauthorized",
+                            "forbidden",
+                        ]
+                    ):
                         error_msg = (
                             f"LLM API authentication failed: {llm_error}\n"
                             f"Please ensure your API key is properly configured.\n"
