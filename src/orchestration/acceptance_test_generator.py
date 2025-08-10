@@ -15,7 +15,7 @@ from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .doc_analyzer import DocumentationAnalysisResult
 from .source_code_analyzer import SourceCodeAnalysisResult
-from .config import get_config
+from .config import get_config, LLMConfig
 
 
 @dataclass
@@ -99,14 +99,14 @@ class AcceptanceTestGenerator:
         self,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
-        model_name: str = "gpt-4",
+        llm_config: Optional[LLMConfig] = None,
     ) -> AcceptanceTestGenerationResult:
         """Generate comprehensive acceptance tests based on analysis results.
 
         Args:
             doc_analysis: Documentation analysis results
             source_analysis: Source code analysis results
-            model_name: LLM model to use for test generation
+            llm_config: LLM configuration to use for test generation
 
         Returns:
             Acceptance test generation results
@@ -116,13 +116,9 @@ class AcceptanceTestGenerator:
         # Create test generator agent with file system tools
         file_tools = self._create_file_system_tools()
 
-        # Get base LLM config and override model if specified
-        llm_config = get_config().llm
-        if model_name != llm_config.model_name:
-            # Create a copy with the specified model name
-            from dataclasses import replace
-
-            llm_config = replace(llm_config, model_name=model_name)
+        # Use provided LLM config or get default from configuration
+        if llm_config is None:
+            llm_config = get_config().llm
 
         generator_agent = DiversificationAgent(
             agent_type=AgentType.ACCEPTANCE_TEST_GENERATOR,
@@ -1450,8 +1446,15 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
 
             # Generate acceptance tests
             self._log("Generating acceptance tests")
+            # Create LLM config from model_name if specified
+            test_llm_config = get_config().llm
+            if model_name != test_llm_config.model_name:
+                from dataclasses import replace
+
+                test_llm_config = replace(test_llm_config, model_name=model_name)
+
             generation_result = await self.generate_acceptance_tests(
-                doc_analysis, source_analysis, model_name
+                doc_analysis, source_analysis, test_llm_config
             )
 
             # Export test suites
