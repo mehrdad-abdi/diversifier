@@ -28,19 +28,6 @@ def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
 
     provider = config.provider.lower()
 
-    # Map provider names to init_chat_model format
-    provider_map = {
-        "anthropic": "anthropic",
-        "openai": "openai",
-        "google": "google_genai",
-    }
-
-    mapped_provider = provider_map.get(provider)
-    if not mapped_provider:
-        raise ValueError(
-            f"Unsupported LLM provider: {provider}. Supported providers: {', '.join(provider_map.keys())}"
-        )
-
     # Check API key is available
     api_key_env_var = config.api_key_env_var or get_default_api_key_env_var(provider)
     api_key = os.getenv(api_key_env_var)
@@ -50,7 +37,8 @@ def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
         )
 
     # Create the model identifier for init_chat_model
-    model_id = f"{mapped_provider}:{config.model_name}"
+    # Users should provide correct provider names as per LangChain documentation
+    model_id = f"{provider}:{config.model_name}"
 
     logger.info(
         f"Creating LLM instance: provider={provider}, model={config.model_name}"
@@ -69,8 +57,17 @@ def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
         return init_chat_model(model=model_id, **kwargs)
 
     except Exception as e:
-        logger.error(f"Failed to create LLM instance: {e}")
-        raise
+        error_msg = (
+            f"Failed to create LLM instance with provider '{provider}' and model '{config.model_name}': {e}\n"
+            f"Please ensure:\n"
+            f"1. The provider name '{provider}' is correct for LangChain init_chat_model\n"
+            f"2. The model name '{config.model_name}' is supported by the provider\n"
+            f"3. Required LangChain integration packages are installed\n"
+            f"4. API key is set in environment variable: {api_key_env_var}\n"
+            f"For supported provider formats, see: https://python.langchain.com/docs/integrations/chat/"
+        )
+        logger.error(error_msg)
+        raise ValueError(error_msg) from e
 
 
 def get_default_api_key_env_var(provider: str) -> str:
@@ -92,12 +89,15 @@ def get_default_api_key_env_var(provider: str) -> str:
 
 
 def get_supported_providers() -> list[str]:
-    """Get list of supported LLM providers.
+    """Get list of commonly used LLM providers.
+
+    Note: This is not exhaustive - LangChain init_chat_model supports many providers.
+    For the complete list, see: https://python.langchain.com/docs/integrations/chat/
 
     Returns:
-        List of supported provider names
+        List of commonly used provider names
     """
-    return ["anthropic", "openai", "google"]
+    return ["anthropic", "openai", "google_genai", "azure_openai", "ollama", "cohere"]
 
 
 def validate_llm_config(config: LLMConfig) -> list[str]:
@@ -111,11 +111,13 @@ def validate_llm_config(config: LLMConfig) -> list[str]:
     """
     issues = []
 
-    # Check provider
-    if config.provider.lower() not in get_supported_providers():
+    # Check provider (informational warning, not an error)
+    common_providers = get_supported_providers()
+    if config.provider.lower() not in common_providers:
         issues.append(
-            f"Unsupported provider: {config.provider}. "
-            f"Supported providers: {', '.join(get_supported_providers())}"
+            f"Note: Provider '{config.provider}' is not in the list of commonly used providers: {', '.join(common_providers)}. "
+            f"If this is a valid LangChain provider, this is not an error. "
+            f"For all supported providers, see: https://python.langchain.com/docs/integrations/chat/"
         )
 
     # Check temperature range

@@ -148,14 +148,20 @@ class SourceCodeAnalyzer:
         config_files = await self._collect_config_files()
 
         # Create analyzer agent with file system tools
-        from .config import LLMConfig
+        from .config import get_config
 
         file_tools = self._create_file_system_tools()
-        llm_config = LLMConfig(
-            provider="openai", model_name=model_name, temperature=0.1
-        )
+
+        # Get base LLM config and override model if specified
+        llm_config = get_config().llm
+        if model_name != llm_config.model_name:
+            # Create a copy with the specified model name
+            from dataclasses import replace
+
+            llm_config = replace(llm_config, model_name=model_name)
+
         analyzer_agent = DiversificationAgent(
-            agent_type=AgentType.ANALYZER,
+            agent_type=AgentType.SOURCE_CODE_ANALYZER,
             llm_config=llm_config,
             tools=file_tools,
         )

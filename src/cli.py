@@ -88,14 +88,17 @@ async def run_diversification(args) -> int:
 
     try:
         # Initialize coordinator with updated configuration
-        from .orchestration.config import LLMConfig
+        from .orchestration.config import get_config
 
-        # Create custom LLM config with command line overrides
-        llm_config = LLMConfig(
-            provider="openai",  # Default to OpenAI for now, can be made configurable later
-            model_name=args.model,
-            temperature=args.temperature,
-        )
+        # Get base configuration from file/environment
+        config = get_config()
+
+        # Override LLM settings from command line args if provided
+        llm_config = config.llm
+        if args.model:
+            llm_config.model_name = args.model
+        if args.temperature is not None:
+            llm_config.temperature = args.temperature
 
         coordinator = DiversificationCoordinator(
             project_path=str(args.project_path),

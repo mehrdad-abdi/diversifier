@@ -59,26 +59,23 @@ class DiversificationAgent:
     def _initialize_llm(self) -> None:
         """Initialize the LLM with configuration."""
         try:
-            # Map provider names to init_chat_model format
-            provider_map = {
-                "anthropic": "anthropic",
-                "openai": "openai",
-                "google": "google_genai",  # Use google_genai for LangChain Google GenAI
-            }
-
-            provider = provider_map.get(self.llm_config.provider.lower())
-            if not provider:
-                # Fall back to original provider name if not in map
-                provider = self.llm_config.provider.lower()
+            # Use provider name as specified in config - users should provide correct LangChain values
+            provider = self.llm_config.provider.lower()
 
             # Create the model identifier for init_chat_model
             model_id = f"{provider}:{self.llm_config.model_name}"
 
             # Initialize the LLM using init_chat_model with configuration
             from typing import Any
+            from .config import get_task_temperature
+
+            # Get task-specific temperature
+            task_temperature = get_task_temperature(
+                self.agent_type.value, self.llm_config
+            )
 
             kwargs: dict[str, Any] = {
-                "temperature": self.llm_config.temperature,
+                "temperature": task_temperature,
                 "max_tokens": self.llm_config.max_tokens,
             }
             kwargs.update(self.llm_config.additional_params)
@@ -87,12 +84,22 @@ class DiversificationAgent:
 
             self.logger.info(
                 f"Initialized {self.llm_config.provider}:{self.llm_config.model_name} "
-                f"LLM for {self.agent_type.value} agent"
+                f"LLM for {self.agent_type.value} agent with temperature {task_temperature}"
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize LLM: {e}")
-            raise
+            error_msg = (
+                f"Failed to initialize LLM for {self.agent_type.value} agent "
+                f"with provider '{self.llm_config.provider}' and model '{self.llm_config.model_name}': {e}\n"
+                f"Please ensure:\n"
+                f"1. The provider name '{self.llm_config.provider}' is correct for LangChain init_chat_model\n"
+                f"2. The model name '{self.llm_config.model_name}' is supported by the provider\n"
+                f"3. Required LangChain integration packages are installed\n"
+                f"4. API keys are properly configured in environment variables\n"
+                f"For supported provider formats, see: https://python.langchain.com/docs/integrations/chat/"
+            )
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
 
     def _initialize_agent(self) -> None:
         """Initialize the LangChain agent with tools and prompt."""
