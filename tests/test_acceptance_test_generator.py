@@ -710,7 +710,16 @@ services:
         """Test full acceptance test generation integration."""
         with patch(
             "src.orchestration.acceptance_test_generator.DiversificationAgent"
-        ) as mock_agent_class:
+        ) as mock_agent_class, patch(
+            "src.orchestration.acceptance_test_generator.get_config"
+        ) as mock_get_config:
+            # Mock configuration
+            from src.orchestration.config import DiversifierConfig, LLMConfig
+            mock_llm_config = Mock(spec=LLMConfig)
+            mock_config = Mock(spec=DiversifierConfig)
+            mock_config.llm = mock_llm_config
+            mock_get_config.return_value = mock_config
+            
             # Mock agent responses for all test generation methods
             mock_agent = Mock()
 

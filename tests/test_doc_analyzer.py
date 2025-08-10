@@ -467,60 +467,76 @@ class TestDocumentationAnalyzer:
         )
         assert confidence_low == 0.0
 
+    @patch("src.orchestration.doc_analyzer.get_config")
     @patch("src.orchestration.doc_analyzer.DiversificationAgent")
     @pytest.mark.asyncio
     async def test_analyze_project_documentation_integration(
-        self, mock_agent_class, analyzer, mock_mcp_manager
+        self, mock_agent_class, mock_get_config, analyzer, mock_mcp_manager
     ):
         """Test full project documentation analysis integration."""
-        # Mock file collection
-        structure_response = {
-            "result": [{"text": json.dumps({"config_files": [], "total_files": 0})}]
-        }
-        file_list_response = {
-            "result": [{"text": json.dumps({"files": ["README.md"], "count": 1})}]
-        }
-        mock_mcp_manager.call_tool.side_effect = [
-            structure_response,  # get_project_structure
-            file_list_response,  # list_files calls for doc patterns
-            file_list_response,
-            file_list_response,  # list_files calls for config patterns
-        ]
+        # Mock configuration
+        from src.orchestration.config import DiversifierConfig, LLMConfig
+        mock_llm_config = Mock(spec=LLMConfig)
+        mock_llm_config.model_name = "test-model"
+        mock_config = Mock(spec=DiversifierConfig)
+        mock_config.llm = mock_llm_config
+        mock_get_config.return_value = mock_config
+        
+        # Patch dataclasses.replace to handle mock objects
+        def mock_replace(obj, **changes):
+            for key, value in changes.items():
+                setattr(obj, key, value)
+            return obj
+        
+        with patch('dataclasses.replace', side_effect=mock_replace):
+            # Mock file collection
+            structure_response = {
+                "result": [{"text": json.dumps({"config_files": [], "total_files": 0})}]
+            }
+            file_list_response = {
+                "result": [{"text": json.dumps({"files": ["README.md"], "count": 1})}]
+            }
+            mock_mcp_manager.call_tool.side_effect = [
+                structure_response,  # get_project_structure
+                file_list_response,  # list_files calls for doc patterns
+                file_list_response,
+                file_list_response,  # list_files calls for config patterns
+            ]
 
-        # Mock agent responses
-        mock_agent = Mock()
-        mock_agent.invoke.side_effect = [
-            {  # Documentation analysis response
-                "output": json.dumps(
-                    {
-                        "external_interfaces": {
-                            "http_endpoints": [{"path": "/api", "port": 8000}]
-                        },
-                        "network_configuration": {"exposed_ports": [8000]},
-                    }
-                )
-            },
-            {  # Docker analysis response
-                "output": json.dumps(
-                    {
-                        "service_architecture": {
-                            "primary_service": {"name": "web", "exposed_ports": [8000]}
-                        },
-                        "network_configuration": {"networks": []},
-                    }
-                )
-            },
-        ]
-        mock_agent_class.return_value = mock_agent
+            # Mock agent responses
+            mock_agent = Mock()
+            mock_agent.invoke.side_effect = [
+                {  # Documentation analysis response
+                    "output": json.dumps(
+                        {
+                            "external_interfaces": {
+                                "http_endpoints": [{"path": "/api", "port": 8000}]
+                            },
+                            "network_configuration": {"exposed_ports": [8000]},
+                        }
+                    )
+                },
+                {  # Docker analysis response
+                    "output": json.dumps(
+                        {
+                            "service_architecture": {
+                                "primary_service": {"name": "web", "exposed_ports": [8000]}
+                            },
+                            "network_configuration": {"networks": []},
+                        }
+                    )
+                },
+            ]
+            mock_agent_class.return_value = mock_agent
 
-        # Run analysis
-        result = await analyzer.analyze_project_documentation()
+            # Run analysis
+            result = await analyzer.analyze_project_documentation()
 
-        # Verify result
-        assert isinstance(result, DocumentationAnalysisResult)
-        assert len(result.external_interfaces) > 0
-        assert len(result.docker_services) > 0
-        assert result.analysis_confidence > 0.0
+            # Verify result
+            assert isinstance(result, DocumentationAnalysisResult)
+            assert len(result.external_interfaces) > 0
+            assert len(result.docker_services) > 0
+            assert result.analysis_confidence > 0.0
 
     @pytest.mark.asyncio
     async def test_export_analysis_results(self, analyzer, mock_mcp_manager):
