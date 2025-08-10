@@ -60,20 +60,6 @@ Examples:
 
     parser.add_argument("--log-file", type=str, help="Write logs to file")
 
-    parser.add_argument(
-        "--model",
-        type=str,
-        default=os.getenv("DIVERSIFIER_MODEL", "gpt-4"),
-        help="LLM model to use (default: gpt-4, can be set via DIVERSIFIER_MODEL env var)",
-    )
-
-    parser.add_argument(
-        "--temperature",
-        type=float,
-        default=float(os.getenv("DIVERSIFIER_TEMPERATURE", "0.1")),
-        help="LLM temperature (default: 0.1, can be set via DIVERSIFIER_TEMPERATURE env var)",
-    )
-
     return parser
 
 
@@ -87,22 +73,14 @@ async def run_diversification(args) -> int:
     setup_logging(logging_config)
 
     try:
-        # Initialize coordinator with updated configuration
-        # Get base configuration from file/environment
+        # Initialize coordinator with configuration from config files/environment
         config = get_config()
-
-        # Override LLM settings from command line args if provided
-        llm_config = config.llm
-        if args.model:
-            llm_config.model_name = args.model
-        if args.temperature is not None:
-            llm_config.temperature = args.temperature
 
         coordinator = DiversificationCoordinator(
             project_path=str(args.project_path),
             source_library=args.remove_lib,
             target_library=args.inject_lib,
-            llm_config=llm_config,
+            llm_config=config.llm,
         )
 
         # Execute workflow
