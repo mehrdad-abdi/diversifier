@@ -48,7 +48,9 @@ class TestLLMFactory:
         config = LLMConfig(provider="invalid_provider")
         issues = validate_llm_config(config)
         # Now it's just an informational note, not an error - but should still generate an issue
-        assert any("not in the list of commonly used providers" in issue for issue in issues)
+        assert any(
+            "not in the list of commonly used providers" in issue for issue in issues
+        )
 
     def test_validate_llm_config_invalid_temperature(self):
         """Test validation with invalid temperature."""
