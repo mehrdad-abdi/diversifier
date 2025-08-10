@@ -3,12 +3,13 @@
 import json
 import subprocess
 import tempfile
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from src.mcp_servers.filesystem.server import FileSystemMCPServer
+import pytest
+
 from src.mcp_servers.filesystem.launcher import FileSystemMCPClient
+from src.mcp_servers.filesystem.server import FileSystemMCPServer
 
 
 class TestFileSystemMCPServer:
@@ -296,7 +297,6 @@ class TestFileSystemMCPClient:
             ) as mock_start,
             patch.object(FileSystemMCPClient, "stop_server") as mock_stop,
         ):
-
             with FileSystemMCPClient(self.project_root) as client:
                 assert client is not None
 

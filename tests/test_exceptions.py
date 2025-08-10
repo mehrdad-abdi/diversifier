@@ -1,16 +1,16 @@
 """Tests for custom exceptions."""
 
-from src.orchestration.exceptions import (
-    DiversifierError,
-    MCPServerError,
-    AgentExecutionError,
-    FileOperationError,
-    MigrationError,
-    ValidationError,
-    ConfigurationError,
-    SystemResourceError,
-)
 from src.orchestration.error_handling import ErrorCategory, ErrorSeverity
+from src.orchestration.exceptions import (
+    AgentExecutionError,
+    ConfigurationError,
+    DiversifierError,
+    FileOperationError,
+    MCPServerError,
+    MigrationError,
+    SystemResourceError,
+    ValidationError,
+)
 
 
 class TestDiversifierError:

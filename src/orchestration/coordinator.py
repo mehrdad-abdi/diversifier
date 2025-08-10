@@ -1,16 +1,16 @@
 """High-level workflow orchestration coordinator."""
 
 import logging
-from typing import Dict, Any, Optional
 from pathlib import Path
+from typing import Any
 
-from .agent import AgentManager, AgentType
-from .mcp_manager import MCPManager, MCPServerType
-from .workflow import WorkflowState, MigrationContext
 from .acceptance_test_generator import AcceptanceTestGenerator
-from .doc_analyzer import DocumentationAnalyzer
-from .source_code_analyzer import SourceCodeAnalyzer
+from .agent import AgentManager, AgentType
 from .config import LLMConfig, get_config
+from .doc_analyzer import DocumentationAnalyzer
+from .mcp_manager import MCPManager, MCPServerType
+from .source_code_analyzer import SourceCodeAnalyzer
+from .workflow import MigrationContext, WorkflowState
 
 
 class DiversificationCoordinator:
@@ -21,7 +21,7 @@ class DiversificationCoordinator:
         project_path: str,
         source_library: str,
         target_library: str,
-        llm_config: Optional[LLMConfig] = None,
+        llm_config: LLMConfig | None = None,
     ):
         """Initialize the diversification coordinator.
 
@@ -172,7 +172,7 @@ class DiversificationCoordinator:
             self.logger.error(f"Step {step_name} raised exception: {e}")
             return False
 
-    async def _initialize_environment(self) -> Dict[str, Any]:
+    async def _initialize_environment(self) -> dict[str, Any]:
         """Initialize MCP servers and agents."""
         try:
             # Initialize MCP servers
@@ -200,7 +200,7 @@ class DiversificationCoordinator:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _analyze_project(self) -> Dict[str, Any]:
+    async def _analyze_project(self) -> dict[str, Any]:
         """Analyze project structure and library usage."""
         try:
             # Get analyzer agent
@@ -209,13 +209,13 @@ class DiversificationCoordinator:
             # Analyze project structure
             analysis_prompt = f"""
             Please analyze the Python project at {self.project_path} for migration from {self.source_library} to {self.target_library}.
-            
+
             I need you to:
             1. Identify all Python files that use {self.source_library}
             2. Analyze the API usage patterns
             3. Assess the complexity of the migration
             4. Identify potential compatibility issues
-            
+
             Provide a detailed analysis report.
             """
 
@@ -240,7 +240,7 @@ class DiversificationCoordinator:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _create_backup(self) -> Dict[str, Any]:
+    async def _create_backup(self) -> dict[str, Any]:
         """Create backup of project before migration."""
         try:
             if self.dry_run:
@@ -296,7 +296,7 @@ class DiversificationCoordinator:
             self.logger.error(f"Backup creation failed: {e}")
             return {"success": False, "error": str(e)}
 
-    def _fallback_backup(self) -> Dict[str, Any]:
+    def _fallback_backup(self) -> dict[str, Any]:
         """Fallback backup method when git is not available."""
         self.logger.info("Using fallback backup method (copy-based)")
         return {
@@ -305,7 +305,7 @@ class DiversificationCoordinator:
             "backup_method": "copy",
         }
 
-    async def _generate_tests(self) -> Dict[str, Any]:
+    async def _generate_tests(self) -> dict[str, Any]:
         """Generate library-independent Docker-based acceptance tests."""
         try:
             self.logger.info("Starting Docker-based test generation workflow")
@@ -400,7 +400,7 @@ class DiversificationCoordinator:
             self.logger.error(f"Docker-based test generation failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _run_baseline_tests(self) -> Dict[str, Any]:
+    async def _run_baseline_tests(self) -> dict[str, Any]:
         """Run baseline Docker-based acceptance tests before migration."""
         try:
             self.logger.info("Running baseline Docker-based acceptance tests")
@@ -488,7 +488,7 @@ class DiversificationCoordinator:
             self.logger.error(f"Baseline test execution failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _migrate_code(self) -> Dict[str, Any]:
+    async def _migrate_code(self) -> dict[str, Any]:
         """Migrate from source to target library."""
         try:
             # Get migrator agent
@@ -496,14 +496,14 @@ class DiversificationCoordinator:
 
             migration_prompt = f"""
             Please migrate the Python code from {self.source_library} to {self.target_library}.
-            
+
             Migration requirements:
             1. Update all import statements
             2. Convert API calls to the new library
             3. Handle parameter mapping and structural changes
             4. Maintain functional equivalence
             5. Follow best practices for the target library
-            
+
             Perform the migration while preserving all functionality.
             """
 
@@ -522,7 +522,7 @@ class DiversificationCoordinator:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _validate_migration(self) -> Dict[str, Any]:
+    async def _validate_migration(self) -> dict[str, Any]:
         """Run Docker-based tests to validate migration."""
         try:
             self.logger.info("Validating migration with Docker-based tests")
@@ -654,7 +654,7 @@ class DiversificationCoordinator:
             self.logger.error(f"Migration validation failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _repair_issues(self) -> Dict[str, Any]:
+    async def _repair_issues(self) -> dict[str, Any]:
         """Repair any issues found during validation."""
         try:
             # Check if repair is needed based on validation results
@@ -669,12 +669,12 @@ class DiversificationCoordinator:
 
             repair_prompt = """
             Please analyze and repair the issues found during migration validation.
-            
+
             Issues to address:
             1. Failed tests from validation step
             2. API compatibility problems
             3. Behavioral differences
-            
+
             Apply targeted fixes to resolve the issues while maintaining functional equivalence.
             """
 
@@ -694,7 +694,7 @@ class DiversificationCoordinator:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _finalize_migration(self) -> Dict[str, Any]:
+    async def _finalize_migration(self) -> dict[str, Any]:
         """Clean up and finalize migration."""
         try:
             self.logger.info("Finalizing migration")
@@ -777,7 +777,7 @@ class DiversificationCoordinator:
         except Exception as e:
             self.logger.error(f"Cleanup failed: {e}")
 
-    def get_workflow_status(self) -> Dict[str, Any]:
+    def get_workflow_status(self) -> dict[str, Any]:
         """Get current workflow status.
 
         Returns:

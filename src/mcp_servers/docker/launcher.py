@@ -3,13 +3,12 @@
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 
 class DockerMCPLauncher:
     """Launcher for Docker MCP Server with stdio communication."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the Docker MCP Server launcher.
 
         Args:
@@ -17,7 +16,7 @@ class DockerMCPLauncher:
                          If None, uses current working directory.
         """
         self.project_root = project_root or str(Path.cwd())
-        self.process: Optional[subprocess.Popen] = None
+        self.process: subprocess.Popen | None = None
 
     def start(self) -> subprocess.Popen:
         """Start the Docker MCP Server as a subprocess.

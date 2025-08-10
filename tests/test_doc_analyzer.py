@@ -1,15 +1,16 @@
 """Tests for documentation analyzer functionality."""
 
 import json
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, mock_open, patch
+
+import pytest
 
 from src.orchestration.doc_analyzer import (
-    DocumentationAnalyzer,
-    ExternalInterface,
     DockerServiceInfo,
     DocumentationAnalysisResult,
+    DocumentationAnalyzer,
+    ExternalInterface,
 )
 from src.orchestration.mcp_manager import MCPManager, MCPServerType
 
@@ -564,9 +565,7 @@ class TestDocumentationAnalyzer:
         generated_at = parsed_content["generated_at"]
         assert isinstance(generated_at, str)
         assert (
-            generated_at.endswith("Z")
-            or "+" in generated_at
-            or generated_at.endswith(":00")
+            generated_at.endswith(("Z", ":00")) or "+" in generated_at
         )  # Valid timezone format
         # Parse to ensure it's a valid ISO format timestamp
         from datetime import datetime

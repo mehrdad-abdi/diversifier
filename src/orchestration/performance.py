@@ -5,7 +5,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .config import PerformanceConfig
 from .logging_config import get_logger
@@ -20,9 +20,9 @@ class OperationMetrics:
     end_time: float
     duration: float
     success: bool
-    error_message: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    correlation_id: Optional[str] = None
+    error_message: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    correlation_id: str | None = None
 
     @property
     def duration_ms(self) -> float:
@@ -36,9 +36,9 @@ class WorkflowMetrics:
 
     workflow_id: str
     start_time: float
-    end_time: Optional[float] = None
-    total_duration: Optional[float] = None
-    operations: List[OperationMetrics] = field(default_factory=list)
+    end_time: float | None = None
+    total_duration: float | None = None
+    operations: list[OperationMetrics] = field(default_factory=list)
     success: bool = True
     files_processed: int = 0
     lines_modified: int = 0
@@ -46,7 +46,7 @@ class WorkflowMetrics:
     tests_passed: int = 0
 
     @property
-    def total_duration_ms(self) -> Optional[float]:
+    def total_duration_ms(self) -> float | None:
         """Total duration in milliseconds."""
         return self.total_duration * 1000 if self.total_duration else None
 
@@ -77,8 +77,8 @@ class PerformanceMonitor:
         """
         self.config = config
         self.logger = get_logger("performance")
-        self.current_workflow: Optional[WorkflowMetrics] = None
-        self._operation_stack: List[str] = []
+        self.current_workflow: WorkflowMetrics | None = None
+        self._operation_stack: list[str] = []
 
     def start_workflow(self, workflow_id: str) -> None:
         """Start monitoring a workflow.
@@ -98,7 +98,7 @@ class PerformanceMonitor:
         if self.config.enable_metrics:
             self.logger.info(f"🚀 Started workflow: {workflow_id}")
 
-    def end_workflow(self, success: bool = True) -> Optional[WorkflowMetrics]:
+    def end_workflow(self, success: bool = True) -> WorkflowMetrics | None:
         """End current workflow monitoring.
 
         Args:
@@ -137,7 +137,7 @@ class PerformanceMonitor:
 
     @contextmanager
     def monitor_operation(
-        self, operation_name: str, metadata: Optional[Dict[str, Any]] = None
+        self, operation_name: str, metadata: dict[str, Any] | None = None
     ):
         """Context manager to monitor an operation.
 
@@ -204,7 +204,7 @@ class PerformanceMonitor:
             # Log completion
             if self.config.enable_metrics and success:
                 self.logger.debug(
-                    f"✅ Completed operation: {operation_name} ({duration*1000:.1f}ms)"
+                    f"✅ Completed operation: {operation_name} ({duration * 1000:.1f}ms)"
                 )
 
             self._operation_stack.pop()
@@ -242,7 +242,7 @@ class PerformanceMonitor:
                 f"🧪 Test results: {passed_tests}/{total_tests} passed ({success_rate:.1f}%)"
             )
 
-    def get_current_workflow_metrics(self) -> Optional[WorkflowMetrics]:
+    def get_current_workflow_metrics(self) -> WorkflowMetrics | None:
         """Get current workflow metrics.
 
         Returns:
@@ -268,13 +268,13 @@ class PerformanceMonitor:
 
         if workflow.operations:
             summary_lines.append(
-                f"   Avg Operation Time: {workflow.average_operation_duration*1000:.1f}ms"
+                f"   Avg Operation Time: {workflow.average_operation_duration * 1000:.1f}ms"
             )
 
             # Find slowest operation
             slowest = max(workflow.operations, key=lambda op: op.duration)
             summary_lines.append(
-                f"   Slowest Operation: {slowest.operation_name} ({slowest.duration*1000:.1f}ms)"
+                f"   Slowest Operation: {slowest.operation_name} ({slowest.duration * 1000:.1f}ms)"
             )
 
         for line in summary_lines:
@@ -298,7 +298,7 @@ class PerformanceMonitor:
                 try:
                     with open(metrics_path) as f:
                         metrics_data = json.load(f)
-                except (json.JSONDecodeError, IOError):
+                except (OSError, json.JSONDecodeError):
                     self.logger.warning(
                         f"Could not load existing metrics from {metrics_path}"
                     )
@@ -318,11 +318,11 @@ class PerformanceMonitor:
 
 
 # Global performance monitor instance
-_performance_monitor: Optional[PerformanceMonitor] = None
+_performance_monitor: PerformanceMonitor | None = None
 
 
 def get_performance_monitor(
-    config: Optional[PerformanceConfig] = None,
+    config: PerformanceConfig | None = None,
 ) -> PerformanceMonitor:
     """Get global performance monitor instance.
 
@@ -342,7 +342,7 @@ def get_performance_monitor(
     return _performance_monitor
 
 
-def monitor_operation(operation_name: str, metadata: Optional[Dict[str, Any]] = None):
+def monitor_operation(operation_name: str, metadata: dict[str, Any] | None = None):
     """Decorator/context manager to monitor an operation.
 
     Args:
@@ -364,7 +364,7 @@ def start_workflow(workflow_id: str) -> None:
     get_performance_monitor().start_workflow(workflow_id)
 
 
-def end_workflow(success: bool = True) -> Optional[WorkflowMetrics]:
+def end_workflow(success: bool = True) -> WorkflowMetrics | None:
     """End current workflow monitoring.
 
     Args:

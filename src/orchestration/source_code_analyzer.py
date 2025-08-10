@@ -2,16 +2,16 @@
 
 import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 from langchain_core.tools import BaseTool, tool
 
-from .agent import DiversificationAgent, AgentType
-from .mcp_manager import MCPManager, MCPServerType
+from .agent import AgentType, DiversificationAgent
 from .config import get_config
+from .mcp_manager import MCPManager, MCPServerType
 
 
 @dataclass
@@ -19,12 +19,12 @@ class APIEndpoint:
     """Represents an API endpoint discovered in source code."""
 
     path: str
-    methods: List[str]
+    methods: list[str]
     handler: str
     authentication_required: bool
     file_location: str
-    request_body_schema: Optional[Dict[str, Any]] = None
-    response_schema: Optional[Dict[str, Any]] = None
+    request_body_schema: dict[str, Any] | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 @dataclass
@@ -36,7 +36,7 @@ class ExternalServiceIntegration:
     connection_pattern: str
     configuration_source: str
     file_location: str
-    endpoints_or_operations: Optional[List[str]] = None
+    endpoints_or_operations: list[str] | None = None
 
 
 @dataclass
@@ -46,8 +46,8 @@ class ConfigurationUsage:
     name: str
     purpose: str
     required: bool
-    default_value: Optional[str]
-    usage_locations: List[str]
+    default_value: str | None
+    usage_locations: list[str]
     config_type: str  # "environment_variable", "config_file", "hardcoded"
 
 
@@ -59,21 +59,21 @@ class ExistingTestPattern:
     test_type: str  # "unit", "integration", "api"
     endpoint_or_feature_tested: str
     file_location: str
-    assertions: Optional[List[str]] = None
-    mock_usage: Optional[List[str]] = None
+    assertions: list[str] | None = None
+    mock_usage: list[str] | None = None
 
 
 @dataclass
 class SourceCodeAnalysisResult:
     """Results of source code analysis."""
 
-    api_endpoints: List[APIEndpoint]
-    external_service_integrations: List[ExternalServiceIntegration]
-    configuration_usage: List[ConfigurationUsage]
-    existing_test_patterns: List[ExistingTestPattern]
-    network_interfaces: Dict[str, Any]
-    security_patterns: Dict[str, Any]
-    testing_requirements: Dict[str, Any]
+    api_endpoints: list[APIEndpoint]
+    external_service_integrations: list[ExternalServiceIntegration]
+    configuration_usage: list[ConfigurationUsage]
+    existing_test_patterns: list[ExistingTestPattern]
+    network_interfaces: dict[str, Any]
+    security_patterns: dict[str, Any]
+    testing_requirements: dict[str, Any]
     framework_detected: str
     analysis_confidence: float  # 0.0 to 1.0
 
@@ -182,7 +182,7 @@ class SourceCodeAnalyzer:
 
         return result
 
-    async def _collect_python_files(self) -> List[Path]:
+    async def _collect_python_files(self) -> list[Path]:
         """Collect Python source files matching patterns."""
         python_files = []
 
@@ -221,7 +221,7 @@ class SourceCodeAnalyzer:
 
         return list(set(filtered_files))
 
-    async def _collect_test_files(self) -> List[Path]:
+    async def _collect_test_files(self) -> list[Path]:
         """Collect test files matching patterns."""
         test_files = []
 
@@ -250,7 +250,7 @@ class SourceCodeAnalyzer:
 
         return list(set(test_files))
 
-    async def _collect_config_files(self) -> List[Path]:
+    async def _collect_config_files(self) -> list[Path]:
         """Collect configuration files for analysis."""
         config_files = []
 
@@ -279,7 +279,7 @@ class SourceCodeAnalyzer:
 
         return list(set(config_files))
 
-    def _create_file_system_tools(self) -> List[BaseTool]:
+    def _create_file_system_tools(self) -> list[BaseTool]:
         """Create file system tools for the analyzer agent."""
 
         @tool
@@ -374,9 +374,9 @@ class SourceCodeAnalyzer:
     def _analyze_source_code_files(
         self,
         agent: DiversificationAgent,
-        python_files: List[Path],
-        config_files: List[Path],
-    ) -> Dict[str, Any]:
+        python_files: list[Path],
+        config_files: list[Path],
+    ) -> dict[str, Any]:
         """Analyze source code files using the LLM agent."""
 
         # Load source code analyzer prompt
@@ -392,7 +392,7 @@ class SourceCodeAnalyzer:
 
         analysis_prompt = f"""
         {source_prompt}
-        
+
         ## Task
         Analyze the following Python source code files and configuration files to identify:
         1. API endpoints and HTTP handlers
@@ -400,18 +400,18 @@ class SourceCodeAnalyzer:
         3. Configuration usage patterns and environment variables
         4. Network interfaces and communication protocols
         5. Security and authentication patterns
-        
+
         ## Source Code Files to Analyze
         {[str(f) for f in files_to_analyze]}
-        
-        ## Configuration Files to Analyze  
+
+        ## Configuration Files to Analyze
         {[str(f) for f in config_to_analyze]}
-        
+
         Use the read_source_file tool to examine each file and extract external interface information.
         Use the search_code_patterns tool to find specific patterns across multiple files.
-        
+
         Focus on externally observable behavior and interfaces that acceptance tests can validate.
-        
+
         Provide your analysis in the specified JSON format.
         """
 
@@ -459,8 +459,8 @@ class SourceCodeAnalyzer:
             }
 
     def _analyze_test_files(
-        self, agent: DiversificationAgent, test_files: List[Path]
-    ) -> Dict[str, Any]:
+        self, agent: DiversificationAgent, test_files: list[Path]
+    ) -> dict[str, Any]:
         """Analyze existing test files to understand testing patterns."""
 
         if not test_files:
@@ -468,19 +468,19 @@ class SourceCodeAnalyzer:
 
         test_analysis_prompt = f"""
         Analyze the following test files to understand existing testing patterns, coverage, and approaches:
-        
+
         ## Test Files to Analyze
-        {[str(f) for f in test_files[:10]]}  
-        
+        {[str(f) for f in test_files[:10]]}
+
         Focus on:
         1. API endpoint testing patterns
         2. External service mocking strategies
         3. Test data setup and fixtures
         4. Integration test approaches
         5. Test coverage gaps
-        
+
         Use the read_source_file tool to examine test files.
-        
+
         Provide analysis of existing test patterns in JSON format.
         """
 
@@ -520,7 +520,7 @@ class SourceCodeAnalyzer:
             return {"error": str(e), "existing_test_patterns": {}}
 
     def _combine_analysis_results(
-        self, source_analysis: Dict[str, Any], test_analysis: Dict[str, Any]
+        self, source_analysis: dict[str, Any], test_analysis: dict[str, Any]
     ) -> SourceCodeAnalysisResult:
         """Combine source code and test analysis results."""
 
@@ -616,7 +616,7 @@ class SourceCodeAnalyzer:
         )
 
     def _calculate_analysis_confidence(
-        self, source_analysis: Dict[str, Any], test_analysis: Dict[str, Any]
+        self, source_analysis: dict[str, Any], test_analysis: dict[str, Any]
     ) -> float:
         """Calculate confidence score for the analysis results."""
         confidence_factors = []
@@ -653,7 +653,7 @@ class SourceCodeAnalyzer:
         return sum(confidence_factors)
 
     async def export_analysis_results(
-        self, result: SourceCodeAnalysisResult, output_path: Optional[str] = None
+        self, result: SourceCodeAnalysisResult, output_path: str | None = None
     ) -> str:
         """Export analysis results to JSON file.
 
@@ -719,7 +719,7 @@ class SourceCodeAnalyzer:
             "testing_requirements": result.testing_requirements,
             "framework_detected": result.framework_detected,
             "analysis_confidence": result.analysis_confidence,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
 
         # Write to file using MCP server if available

@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from src.orchestration.config import LoggingConfig
 from src.orchestration.logging_config import (
     DiversifierFormatter,

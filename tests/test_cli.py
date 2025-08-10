@@ -1,11 +1,12 @@
-import pytest
 import sys
-from unittest.mock import patch, Mock, AsyncMock
 from io import StringIO
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from src.cli import (
-    main,
     create_parser,
+    main,
 )
 
 

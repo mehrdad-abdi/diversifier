@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 """Testing MCP Server with stdio transport."""
 
+import contextlib
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
-from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
 from mcp.types import (
-    Tool,
     TextContent,
+    Tool,
 )
 
 
 class TestingMCPServer:
     """MCP Server for test execution and analysis with security constraints."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the Testing MCP Server.
 
         Args:
@@ -347,8 +348,8 @@ class TestingMCPServer:
 
     async def _run_tests(
         self,
-        test_path: Optional[str],
-        test_filter: Optional[str],
+        test_path: str | None,
+        test_filter: str | None,
         verbose: bool,
         capture: str,
     ) -> list[TextContent]:
@@ -393,7 +394,7 @@ class TestingMCPServer:
 
             # Try to read JSON report if available
             try:
-                with open(json_output_file, "r") as f:
+                with open(json_output_file) as f:
                     json_report = json.load(f)
                 test_results["json_report"] = json_report
                 test_results["summary"] = {
@@ -408,10 +409,8 @@ class TestingMCPServer:
                 test_results["summary"] = self._parse_pytest_summary(result.stdout)
 
             # Cleanup temp file
-            try:
+            with contextlib.suppress(Exception):
                 Path(json_output_file).unlink()
-            except Exception:
-                pass
 
             return [TextContent(type="text", text=json.dumps(test_results, indent=2))]
 
@@ -422,10 +421,10 @@ class TestingMCPServer:
 
     async def _run_tests_with_coverage(
         self,
-        test_path: Optional[str],
+        test_path: str | None,
         source_path: str,
         coverage_format: str,
-        min_coverage: Optional[float],
+        min_coverage: float | None,
     ) -> list[TextContent]:
         """Execute tests with coverage analysis."""
         source = self._validate_path(source_path)
@@ -474,17 +473,15 @@ class TestingMCPServer:
 
             # Try to read JSON report
             try:
-                with open(json_output_file, "r") as f:
+                with open(json_output_file) as f:
                     json_report = json.load(f)
                 coverage_results["json_report"] = json_report
             except Exception:
                 pass
 
             # Cleanup temp file
-            try:
+            with contextlib.suppress(Exception):
                 Path(json_output_file).unlink()
-            except Exception:
-                pass
 
             return [
                 TextContent(type="text", text=json.dumps(coverage_results, indent=2))
@@ -495,7 +492,7 @@ class TestingMCPServer:
         except Exception as e:
             return [TextContent(type="text", text=f"Error running coverage: {str(e)}")]
 
-    def _parse_pytest_summary(self, output: str) -> Dict[str, int]:
+    def _parse_pytest_summary(self, output: str) -> dict[str, int]:
         """Parse pytest summary from text output."""
         summary = {"total": 0, "passed": 0, "failed": 0, "skipped": 0, "error": 0}
 
@@ -519,9 +516,9 @@ class TestingMCPServer:
 
         return summary
 
-    def _parse_coverage_output(self, output: str) -> Dict[str, Any]:
+    def _parse_coverage_output(self, output: str) -> dict[str, Any]:
         """Parse coverage information from output."""
-        coverage_info: Dict[str, Any] = {"files": [], "total_coverage": None}
+        coverage_info: dict[str, Any] = {"files": [], "total_coverage": None}
 
         lines = output.split("\n")
         in_coverage_section = False
@@ -556,10 +553,10 @@ class TestingMCPServer:
         return coverage_info
 
     async def _analyze_test_results(
-        self, output_file: Optional[str], output_text: Optional[str]
+        self, output_file: str | None, output_text: str | None
     ) -> list[TextContent]:
         """Parse and analyze pytest output for structured reporting."""
-        analysis: Dict[str, Any] = {
+        analysis: dict[str, Any] = {
             "analysis_source": None,
             "test_results": {},
             "failures": [],
@@ -573,11 +570,11 @@ class TestingMCPServer:
                 analysis["analysis_source"] = f"file: {path}"
 
                 if path.suffix == ".json":
-                    with open(path, "r") as f:
+                    with open(path) as f:
                         json_data = json.load(f)
                     analysis["test_results"] = json_data
                 else:
-                    with open(path, "r") as f:
+                    with open(path) as f:
                         output_text = f.read()
 
             if output_text:
@@ -597,14 +594,14 @@ class TestingMCPServer:
 
     def _parse_failures_and_errors(
         self, output: str
-    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Parse failures and errors from pytest output."""
-        failures: List[Dict[str, Any]] = []
-        errors: List[Dict[str, Any]] = []
+        failures: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
 
         lines = output.split("\n")
-        current_failure: Optional[Dict[str, Any]] = None
-        current_error: Optional[Dict[str, Any]] = None
+        current_failure: dict[str, Any] | None = None
+        current_error: dict[str, Any] | None = None
         in_failure_section = False
         in_error_section = False
 
@@ -694,7 +691,7 @@ class TestingMCPServer:
         except Exception as e:
             return [TextContent(type="text", text=f"Error comparing results: {str(e)}")]
 
-    def _load_test_results(self, results_input: str) -> Dict[str, Any]:
+    def _load_test_results(self, results_input: str) -> dict[str, Any]:
         """Load test results from file path or JSON string."""
         try:
             # Try to parse as JSON first
@@ -703,7 +700,7 @@ class TestingMCPServer:
             # Try to load as file path
             try:
                 path = self._validate_path(results_input)
-                with open(path, "r") as f:
+                with open(path) as f:
                     return json.load(f)
             except Exception:
                 # Parse as text output
@@ -712,7 +709,7 @@ class TestingMCPServer:
                     "text_output": results_input,
                 }
 
-    def _compare_pass_fail(self, baseline: Dict, migration: Dict) -> List[str]:
+    def _compare_pass_fail(self, baseline: dict, migration: dict) -> list[str]:
         """Compare pass/fail results between baseline and migration."""
         differences = []
 
@@ -730,7 +727,7 @@ class TestingMCPServer:
 
         return differences
 
-    def _compare_coverage(self, baseline: Dict, migration: Dict) -> List[str]:
+    def _compare_coverage(self, baseline: dict, migration: dict) -> list[str]:
         """Compare coverage results between baseline and migration."""
         differences = []
 
@@ -744,14 +741,14 @@ class TestingMCPServer:
 
         return differences
 
-    def _compare_performance(self, baseline: Dict, migration: Dict) -> List[str]:
+    def _compare_performance(self, baseline: dict, migration: dict) -> list[str]:
         """Compare performance metrics between baseline and migration."""
         # This is a placeholder for performance comparison logic
         # In a real implementation, you would compare test execution times
         return []
 
     async def _create_test_environment(
-        self, requirements: List[str], env_name: str
+        self, requirements: list[str], env_name: str
     ) -> list[TextContent]:
         """Set up isolated test environment with specific dependencies."""
         # For now, this is a placeholder that documents the approach
@@ -817,7 +814,7 @@ class TestingMCPServer:
             validation["error"] = str(e)
             return [TextContent(type="text", text=json.dumps(validation, indent=2))]
 
-    async def _run_tests_in_directory(self, directory: Path) -> Dict[str, Any]:
+    async def _run_tests_in_directory(self, directory: Path) -> dict[str, Any]:
         """Run tests in a specific directory and return results."""
         cmd = [sys.executable, "-m", "pytest", str(directory), "-v"]
 

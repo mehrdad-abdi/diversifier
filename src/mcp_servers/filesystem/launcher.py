@@ -1,24 +1,24 @@
 """File System MCP Server launcher and lifecycle management."""
 
 import asyncio
+import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
-import json
+from typing import Any
 
 
 class FileSystemMCPClient:
     """Client for managing File System MCP Server lifecycle and communication."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the MCP client.
 
         Args:
             project_root: Root directory to constrain file operations to.
         """
         self.project_root = project_root or str(Path.cwd())
-        self.process: Optional[subprocess.Popen] = None
+        self.process: subprocess.Popen | None = None
 
     def start_server(self) -> bool:
         """Start the File System MCP Server process.
@@ -57,8 +57,8 @@ class FileSystemMCPClient:
             self.process = None
 
     def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         """Send a JSON-RPC request to the server.
 
         Args:
@@ -91,13 +91,11 @@ class FileSystemMCPClient:
 
         return None
 
-    def list_tools(self) -> Optional[Dict[str, Any]]:
+    def list_tools(self) -> dict[str, Any] | None:
         """List available tools."""
         return self.send_request("tools/list")
 
-    def call_tool(
-        self, name: str, arguments: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
         """Call a specific tool.
 
         Args:
@@ -109,7 +107,7 @@ class FileSystemMCPClient:
         """
         return self.send_request("tools/call", {"name": name, "arguments": arguments})
 
-    def read_file(self, file_path: str) -> Optional[str]:
+    def read_file(self, file_path: str) -> str | None:
         """Read a file using the MCP server.
 
         Args:
@@ -146,7 +144,7 @@ class FileSystemMCPClient:
         )
         return result is not None and "error" not in result
 
-    def analyze_python_imports(self, file_path: str) -> Optional[Dict[str, Any]]:
+    def analyze_python_imports(self, file_path: str) -> dict[str, Any] | None:
         """Analyze Python imports in a file.
 
         Args:
@@ -166,8 +164,8 @@ class FileSystemMCPClient:
         return None
 
     def find_python_files(
-        self, library_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, library_name: str | None = None
+    ) -> dict[str, Any] | None:
         """Find Python files in the project.
 
         Args:

@@ -5,20 +5,20 @@ import ast
 import json
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
 
-from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
 from mcp.types import (
-    Tool,
     TextContent,
+    Tool,
 )
 
 
 class FileSystemMCPServer:
     """MCP Server for file system operations with security constraints."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the File System MCP Server.
 
         Args:
@@ -286,7 +286,7 @@ class FileSystemMCPServer:
             content = path.read_text(encoding="utf-8")
             tree = ast.parse(content, filename=str(path))
 
-            imports: Dict[str, Any] = {
+            imports: dict[str, Any] = {
                 "direct_imports": [],
                 "from_imports": [],
                 "all_modules": set(),
@@ -321,7 +321,7 @@ class FileSystemMCPServer:
                             imports["all_modules"].add(module_name.split(".")[0])
 
             # Convert set to sorted list for JSON serialization
-            imports["all_modules"] = sorted(list(imports["all_modules"]))
+            imports["all_modules"] = sorted(imports["all_modules"])
 
             return [TextContent(type="text", text=json.dumps(imports, indent=2))]
 
@@ -331,12 +331,12 @@ class FileSystemMCPServer:
             return [TextContent(type="text", text=f"Error analyzing imports: {str(e)}")]
 
     async def _find_python_files(
-        self, library_name: Optional[str] = None
+        self, library_name: str | None = None
     ) -> list[TextContent]:
         """Find Python files in project with optional import filtering."""
         python_files = list(self.project_root.rglob("*.py"))
 
-        results: Dict[str, Any] = {
+        results: dict[str, Any] = {
             "project_root": str(self.project_root),
             "total_python_files": len(python_files),
             "files": [],
@@ -389,7 +389,7 @@ class FileSystemMCPServer:
 
     async def _get_project_structure(self) -> list[TextContent]:
         """Get high-level project structure analysis."""
-        structure: Dict[str, Any] = {
+        structure: dict[str, Any] = {
             "project_root": str(self.project_root),
             "python_files": [],
             "directories": [],

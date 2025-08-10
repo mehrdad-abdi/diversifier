@@ -1,7 +1,8 @@
 """Exit codes for Diversifier tool."""
 
 from enum import IntEnum
-from typing import Dict, Any, Optional
+from typing import Any
+
 from src.orchestration.error_handling import ErrorCategory, ErrorSeverity
 
 
@@ -62,7 +63,7 @@ class ExitCodeManager:
 
     def __init__(self):
         """Initialize exit code manager."""
-        self._error_to_exit_code: Dict[ErrorCategory, ExitCode] = {
+        self._error_to_exit_code: dict[ErrorCategory, ExitCode] = {
             ErrorCategory.CONFIGURATION: ExitCode.CONFIGURATION_ERROR,
             ErrorCategory.FILE_OPERATION: ExitCode.FILE_OPERATION_ERROR,
             ErrorCategory.MCP_CONNECTION: ExitCode.MCP_CONNECTION_FAILED,
@@ -72,7 +73,7 @@ class ExitCodeManager:
             ErrorCategory.SYSTEM_RESOURCE: ExitCode.SYSTEM_RESOURCE_ERROR,
         }
 
-        self._severity_modifiers: Dict[ErrorSeverity, int] = {
+        self._severity_modifiers: dict[ErrorSeverity, int] = {
             ErrorSeverity.LOW: 0,
             ErrorSeverity.MEDIUM: 0,
             ErrorSeverity.HIGH: 0,
@@ -84,7 +85,7 @@ class ExitCodeManager:
         category: ErrorCategory,
         severity: ErrorSeverity,
         error_message: str = "",
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> ExitCode:
         """Get appropriate exit code for an error.
 

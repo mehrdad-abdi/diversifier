@@ -1,11 +1,11 @@
 """Workflow state management and orchestration logic."""
 
-import logging
-from datetime import datetime
-from typing import Dict, Any, List, Optional
-from enum import Enum
-from dataclasses import dataclass, field
 import json
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
 
 class WorkflowStage(Enum):
@@ -39,14 +39,14 @@ class WorkflowStep:
     stage: WorkflowStage
     description: str
     status: WorkflowStatus = WorkflowStatus.PENDING
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    dependencies: List[str] = field(default_factory=list)
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    dependencies: list[str] = field(default_factory=list)
 
     @property
-    def duration(self) -> Optional[float]:
+    def duration(self) -> float | None:
         """Get step execution duration in seconds."""
         if self.start_time and self.end_time:
             return (self.end_time - self.start_time).total_seconds()
@@ -57,7 +57,7 @@ class WorkflowStep:
         self.status = WorkflowStatus.RUNNING
         self.start_time = datetime.now()
 
-    def complete(self, result: Optional[Dict[str, Any]] = None) -> None:
+    def complete(self, result: dict[str, Any] | None = None) -> None:
         """Mark step as completed."""
         self.status = WorkflowStatus.COMPLETED
         self.end_time = datetime.now()
@@ -80,13 +80,13 @@ class MigrationContext:
     target_library: str
     start_time: datetime = field(default_factory=datetime.now)
     backup_created: bool = False
-    git_branch: Optional[str] = None
-    test_results: Optional[Dict[str, Any]] = None
-    migration_files: List[str] = field(default_factory=list)
+    git_branch: str | None = None
+    test_results: dict[str, Any] | None = None
+    migration_files: list[str] = field(default_factory=list)
     repair_attempts: int = 0
     max_repair_attempts: int = 3
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert context to dictionary."""
         return {
             "project_path": self.project_path,
@@ -113,8 +113,8 @@ class WorkflowState:
         """
         self.context = context
         self.current_stage = WorkflowStage.INITIALIZATION
-        self.steps: Dict[str, WorkflowStep] = {}
-        self.step_order: List[str] = []
+        self.steps: dict[str, WorkflowStep] = {}
+        self.step_order: list[str] = []
 
         self.logger = logging.getLogger("diversifier.workflow")
 
@@ -183,7 +183,7 @@ class WorkflowState:
             self.steps[step.name] = step
             self.step_order.append(step.name)
 
-    def get_current_step(self) -> Optional[WorkflowStep]:
+    def get_current_step(self) -> WorkflowStep | None:
         """Get the current active step.
 
         Returns:
@@ -195,7 +195,7 @@ class WorkflowState:
                 return step
         return None
 
-    def get_next_step(self) -> Optional[WorkflowStep]:
+    def get_next_step(self) -> WorkflowStep | None:
         """Get the next step that should be executed.
 
         Returns:
@@ -250,7 +250,7 @@ class WorkflowState:
         return True
 
     def complete_step(
-        self, step_name: str, result: Optional[Dict[str, Any]] = None
+        self, step_name: str, result: dict[str, Any] | None = None
     ) -> bool:
         """Complete a workflow step.
 
@@ -366,7 +366,7 @@ class WorkflowState:
                     return True
         return False
 
-    def get_workflow_summary(self) -> Dict[str, Any]:
+    def get_workflow_summary(self) -> dict[str, Any]:
         """Get a summary of the workflow state.
 
         Returns:

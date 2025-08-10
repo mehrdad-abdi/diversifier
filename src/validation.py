@@ -2,10 +2,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple, Optional
 
 
-def validate_python_project(project_path: Path) -> Tuple[bool, List[str]]:
+def validate_python_project(project_path: Path) -> tuple[bool, list[str]]:
     errors = []
 
     python_files = list(project_path.rglob("*.py"))
@@ -27,7 +26,7 @@ def validate_python_project(project_path: Path) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
-def validate_library_exists(library_name: str) -> Tuple[bool, str]:
+def validate_library_exists(library_name: str) -> tuple[bool, str]:
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "index", "versions", library_name],
@@ -47,7 +46,7 @@ def validate_library_exists(library_name: str) -> Tuple[bool, str]:
         return False, f"Error checking library '{library_name}': {str(e)}"
 
 
-def validate_library_name_format(lib_name: str) -> Tuple[bool, str]:
+def validate_library_name_format(lib_name: str) -> tuple[bool, str]:
     if not lib_name:
         return False, "Library name cannot be empty"
 
@@ -75,7 +74,7 @@ def validate_library_name_format(lib_name: str) -> Tuple[bool, str]:
     return True, f"Library name '{lib_name}' is valid"
 
 
-def find_library_usage(project_path: Path, library_name: str) -> Tuple[bool, List[str]]:
+def find_library_usage(project_path: Path, library_name: str) -> tuple[bool, list[str]]:
     usage_patterns = [
         rf"^import\s+{re.escape(library_name)}\b",
         rf"^from\s+{re.escape(library_name)}\b",
@@ -87,7 +86,7 @@ def find_library_usage(project_path: Path, library_name: str) -> Tuple[bool, Lis
 
     for py_file in project_path.rglob("*.py"):
         try:
-            with open(py_file, "r", encoding="utf-8") as f:
+            with open(py_file, encoding="utf-8") as f:
                 content = f.read()
 
             for pattern in usage_patterns:
@@ -103,7 +102,7 @@ def find_library_usage(project_path: Path, library_name: str) -> Tuple[bool, Lis
 
 def validate_migration_feasibility(
     project_path: Path, remove_lib: str, inject_lib: str
-) -> Tuple[bool, List[str]]:
+) -> tuple[bool, list[str]]:
     issues = []
 
     has_remove_lib, remove_files = find_library_usage(project_path, remove_lib)
@@ -122,7 +121,7 @@ def validate_migration_feasibility(
     return len(issues) == 0, issues
 
 
-def validate_project_path(path_str: str) -> Optional[Path]:
+def validate_project_path(path_str: str) -> Path | None:
     """Validate that the given path exists and is a directory."""
     try:
         path = Path(path_str).resolve()

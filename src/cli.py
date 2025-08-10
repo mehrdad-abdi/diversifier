@@ -2,14 +2,14 @@ import argparse
 import asyncio
 import sys
 
-from .validation import (
-    validate_python_project,
-    validate_project_path,
-    validate_library_name,
-)
-from .orchestration.coordinator import DiversificationCoordinator
 from .orchestration.config import LoggingConfig, get_config
+from .orchestration.coordinator import DiversificationCoordinator
 from .orchestration.logging_config import setup_logging
+from .validation import (
+    validate_library_name,
+    validate_project_path,
+    validate_python_project,
+)
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -84,7 +84,8 @@ async def run_diversification(args) -> int:
 
         # Execute workflow
         success = await coordinator.execute_workflow(
-            dry_run=args.dry_run, auto_proceed=True  # For now, auto-proceed in CLI mode
+            dry_run=args.dry_run,
+            auto_proceed=True,  # For now, auto-proceed in CLI mode
         )
 
         if success:

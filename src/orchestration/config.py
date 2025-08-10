@@ -4,7 +4,6 @@ import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 
 @dataclass
@@ -13,7 +12,7 @@ class LoggingConfig:
 
     level: str = "INFO"
     console: bool = True
-    file_path: Optional[str] = None
+    file_path: str | None = None
     max_file_size: int = 10 * 1024 * 1024  # 10MB
     backup_count: int = 5
     format_string: str = "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
@@ -42,7 +41,7 @@ class MigrationConfig:
     validate_syntax: bool = True
     require_test_coverage: bool = True
     min_test_coverage: float = 0.8
-    allowed_library_pairs: List[tuple] = field(
+    allowed_library_pairs: list[tuple] = field(
         default_factory=lambda: [
             ("requests", "httpx"),
             ("urllib", "requests"),
@@ -57,7 +56,7 @@ class PerformanceConfig:
     """Performance monitoring configuration."""
 
     enable_metrics: bool = True
-    metrics_file: Optional[str] = "performance_metrics.json"
+    metrics_file: str | None = "performance_metrics.json"
     log_slow_operations: bool = True
     slow_operation_threshold: float = 1.0  # seconds
     enable_memory_tracking: bool = False
@@ -86,14 +85,12 @@ class LLMConfig:
     max_tokens: int = 4096
     timeout: int = 120  # seconds
     retry_attempts: int = 3
-    api_key_env_var: Optional[str] = None  # Environment variable name for API key
-    base_url: Optional[str] = None  # Custom API endpoint URL
+    api_key_env_var: str | None = None  # Environment variable name for API key
+    base_url: str | None = None  # Custom API endpoint URL
     task_temperatures: TaskTemperatureConfig = field(
         default_factory=TaskTemperatureConfig
     )
-    additional_params: Dict[str, Union[str, int, float, bool]] = field(
-        default_factory=dict
-    )
+    additional_params: dict[str, str | int | float | bool] = field(default_factory=dict)
 
 
 @dataclass
@@ -113,14 +110,14 @@ class DiversifierConfig:
 class ConfigManager:
     """Manages configuration loading and environment variable overrides."""
 
-    def __init__(self, config_path: Optional[Union[str, Path]] = None):
+    def __init__(self, config_path: str | Path | None = None):
         """Initialize configuration manager.
 
         Args:
             config_path: Optional path to TOML configuration file
         """
         self.config_path = Path(config_path) if config_path else None
-        self._config: Optional[DiversifierConfig] = None
+        self._config: DiversifierConfig | None = None
 
     def load_config(self) -> DiversifierConfig:
         """Load configuration from file and environment variables.
@@ -146,7 +143,7 @@ class ConfigManager:
 
         return self._config
 
-    def _load_toml_config(self) -> Dict:
+    def _load_toml_config(self) -> dict:
         """Load configuration from TOML file.
 
         Returns:
@@ -160,7 +157,7 @@ class ConfigManager:
         except Exception as e:
             raise ValueError(f"Failed to load config file {self.config_path}: {e}")
 
-    def _apply_env_overrides(self, config_data: Dict) -> Dict:
+    def _apply_env_overrides(self, config_data: dict) -> dict:
         """Apply environment variable overrides to configuration.
 
         Args:
@@ -220,8 +217,8 @@ class ConfigManager:
         return config_data
 
     def _convert_env_value(
-        self, value: str, section: Optional[str], key: str
-    ) -> Union[str, int, float, bool]:
+        self, value: str, section: str | None, key: str
+    ) -> str | int | float | bool:
         """Convert environment variable string to appropriate type.
 
         Args:
@@ -265,7 +262,7 @@ class ConfigManager:
         # String values (default)
         return value
 
-    def _create_config_from_dict(self, config_data: Dict) -> DiversifierConfig:
+    def _create_config_from_dict(self, config_data: dict) -> DiversifierConfig:
         """Create configuration object from dictionary.
 
         Args:
@@ -360,7 +357,7 @@ class ConfigManager:
         self._config = None
         return self.load_config()
 
-    def save_config_template(self, output_path: Union[str, Path]) -> None:
+    def save_config_template(self, output_path: str | Path) -> None:
         """Save a template configuration file.
 
         Args:
@@ -452,10 +449,10 @@ debug_mode = false
 
 
 # Global configuration instance
-_config_manager: Optional[ConfigManager] = None
+_config_manager: ConfigManager | None = None
 
 
-def get_config_manager(config_path: Optional[Union[str, Path]] = None) -> ConfigManager:
+def get_config_manager(config_path: str | Path | None = None) -> ConfigManager:
     """Get global configuration manager instance.
 
     Args:
@@ -479,9 +476,7 @@ def get_config() -> DiversifierConfig:
     return get_config_manager().get_config()
 
 
-def get_task_temperature(
-    task_name: str, llm_config: Optional[LLMConfig] = None
-) -> float:
+def get_task_temperature(task_name: str, llm_config: LLMConfig | None = None) -> float:
     """Get temperature for a specific task.
 
     Args:

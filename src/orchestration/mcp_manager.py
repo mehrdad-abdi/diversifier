@@ -3,14 +3,14 @@
 import asyncio
 import logging
 import time
-from typing import Dict, Any, Optional, List, Union
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
-from src.mcp_servers.filesystem.launcher import FileSystemMCPClient
-from src.mcp_servers.testing.launcher import TestingMCPClient
-from src.mcp_servers.git.launcher import GitMCPClient
 from src.mcp_servers.docker.launcher import DockerMCPLauncher
+from src.mcp_servers.filesystem.launcher import FileSystemMCPClient
+from src.mcp_servers.git.launcher import GitMCPClient
+from src.mcp_servers.testing.launcher import TestingMCPClient
 
 
 class MCPServerType(Enum):
@@ -90,8 +90,8 @@ class MCPConnection:
             )
 
     def call_tool(
-        self, tool_name: str, arguments: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Call a tool on the MCP server.
 
         Args:
@@ -134,7 +134,7 @@ class MCPConnection:
             self.is_connected = False
             return None
 
-    def list_tools(self) -> Optional[List[str]]:
+    def list_tools(self) -> list[str] | None:
         """List available tools on the MCP server.
 
         Returns:
@@ -235,14 +235,14 @@ class MCPConnection:
 class MCPManager:
     """Manager for coordinating MCP server connections."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the MCP manager.
 
         Args:
             project_root: Root directory for file operations
         """
         self.project_root = project_root or str(Path.cwd())
-        self.connections: Dict[MCPServerType, MCPConnection] = {}
+        self.connections: dict[MCPServerType, MCPConnection] = {}
         self.logger = logging.getLogger("diversifier.mcp_manager")
 
     async def initialize_filesystem_server(self) -> bool:
@@ -329,7 +329,7 @@ class MCPManager:
             self.logger.error(f"Failed to initialize docker server: {e}")
             return False
 
-    async def initialize_all_servers(self) -> Dict[MCPServerType, bool]:
+    async def initialize_all_servers(self) -> dict[MCPServerType, bool]:
         """Initialize all MCP servers.
 
         Returns:
@@ -350,7 +350,7 @@ class MCPManager:
 
         return results
 
-    def get_connection(self, server_type: MCPServerType) -> Optional[MCPConnection]:
+    def get_connection(self, server_type: MCPServerType) -> MCPConnection | None:
         """Get MCP connection for a specific server type.
 
         Args:
@@ -378,7 +378,7 @@ class MCPManager:
         connection = self.connections.get(server_type)
         return connection is not None and connection.is_connected
 
-    def get_available_servers(self) -> List[MCPServerType]:
+    def get_available_servers(self) -> list[MCPServerType]:
         """Get list of available MCP servers.
 
         Returns:
@@ -391,8 +391,8 @@ class MCPManager:
         return available
 
     async def call_tool(
-        self, server_type: MCPServerType, tool_name: str, arguments: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, server_type: MCPServerType, tool_name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Call a tool on a specific MCP server.
 
         Args:
@@ -413,7 +413,7 @@ class MCPManager:
             return result
         return None
 
-    async def list_tools(self, server_type: MCPServerType) -> Optional[List[str]]:
+    async def list_tools(self, server_type: MCPServerType) -> list[str] | None:
         """List available tools on a specific MCP server.
 
         Args:
@@ -439,7 +439,7 @@ class MCPManager:
 
     async def health_check(
         self, detailed: bool = False
-    ) -> Dict[MCPServerType, Union[bool, Dict[str, Any]]]:
+    ) -> dict[MCPServerType, bool | dict[str, Any]]:
         """Perform health check on all MCP servers.
 
         Args:
@@ -448,7 +448,7 @@ class MCPManager:
         Returns:
             Dictionary mapping server types to health status or detailed info
         """
-        health_status: Dict[MCPServerType, Union[bool, Dict[str, Any]]] = {}
+        health_status: dict[MCPServerType, bool | dict[str, Any]] = {}
 
         for server_type in MCPServerType:
             connection = self.connections.get(server_type)
@@ -478,7 +478,7 @@ class MCPManager:
 
         return health_status
 
-    async def restart_failed_servers(self) -> Dict[MCPServerType, bool]:
+    async def restart_failed_servers(self) -> dict[MCPServerType, bool]:
         """Restart any failed servers.
 
         Returns:
@@ -527,14 +527,14 @@ class MCPManager:
                 await asyncio.sleep(interval)
                 iteration += 1
 
-    async def get_server_statistics(self) -> Dict[str, Any]:
+    async def get_server_statistics(self) -> dict[str, Any]:
         """Get statistics about server connections.
 
         Returns:
             Dictionary with server connection statistics
         """
         connected_count = len([c for c in self.connections.values() if c.is_connected])
-        stats: Dict[str, Any] = {
+        stats: dict[str, Any] = {
             "total_servers": len(MCPServerType),
             "connected_servers": connected_count,
             "healthy_servers": 0,

@@ -2,15 +2,15 @@
 
 import asyncio
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
-import subprocess
 
 import pytest
 
-from src.mcp_servers.testing.server import TestingMCPServer
 from src.mcp_servers.testing.launcher import TestingMCPClient
+from src.mcp_servers.testing.server import TestingMCPServer
 
 
 class TestTestingMCPServer:

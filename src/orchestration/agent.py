@@ -1,13 +1,13 @@
 """LangChain agent initialization and configuration."""
 
 import logging
-from typing import Dict, Any, Optional, List
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
+from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
-from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
@@ -32,8 +32,8 @@ class DiversificationAgent:
     def __init__(
         self,
         agent_type: AgentType,
-        llm_config: Optional[LLMConfig] = None,
-        tools: Optional[List[BaseTool]] = None,
+        llm_config: LLMConfig | None = None,
+        tools: list[BaseTool] | None = None,
     ):
         """Initialize the LangChain agent.
 
@@ -67,6 +67,7 @@ class DiversificationAgent:
 
             # Initialize the LLM using init_chat_model with configuration
             from typing import Any
+
             from .config import get_task_temperature
 
             # Get task-specific temperature
@@ -168,7 +169,7 @@ class DiversificationAgent:
 
         return prompt
 
-    def invoke(self, input_text: str) -> Dict[str, Any]:
+    def invoke(self, input_text: str) -> dict[str, Any]:
         """Invoke the agent with input text.
 
         Args:
@@ -224,19 +225,19 @@ class DiversificationAgent:
 class AgentManager:
     """Manager for coordinating multiple diversification agents."""
 
-    def __init__(self, llm_config: Optional[LLMConfig] = None):
+    def __init__(self, llm_config: LLMConfig | None = None):
         """Initialize the agent manager.
 
         Args:
             llm_config: LLM configuration to use for all agents. If None, uses global config.
         """
         self.llm_config = llm_config or get_config().llm
-        self.agents: Dict[AgentType, DiversificationAgent] = {}
+        self.agents: dict[AgentType, DiversificationAgent] = {}
 
         self.logger = logging.getLogger("diversifier.agent_manager")
 
     def get_agent(
-        self, agent_type: AgentType, tools: Optional[List[BaseTool]] = None
+        self, agent_type: AgentType, tools: list[BaseTool] | None = None
     ) -> DiversificationAgent:
         """Get or create an agent of the specified type.
 
@@ -268,7 +269,7 @@ class AgentManager:
             agent.clear_memory()
         self.logger.info("Cleared memory for all agents")
 
-    def get_available_agents(self) -> List[AgentType]:
+    def get_available_agents(self) -> list[AgentType]:
         """Get list of available agent types.
 
         Returns:

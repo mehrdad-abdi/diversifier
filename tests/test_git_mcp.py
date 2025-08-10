@@ -1,17 +1,17 @@
 """Tests for Git MCP Server."""
 
 import json
-import tempfile
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
-import pytest
 
 import git
+import pytest
 
-from src.mcp_servers.git.server import GitMCPServer
 from src.mcp_servers.git.launcher import GitMCPClient
+from src.mcp_servers.git.server import GitMCPServer
 
 
 @pytest.fixture

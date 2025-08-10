@@ -1,11 +1,12 @@
 """Error handling and recovery mechanisms for orchestration."""
 
 import logging
-from typing import Dict, Any, Optional, List, Callable
-from enum import Enum
-from dataclasses import dataclass
-import traceback
 import time
+import traceback
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 
 class ErrorSeverity(Enum):
@@ -36,11 +37,11 @@ class ErrorInfo:
     category: ErrorCategory
     severity: ErrorSeverity
     message: str
-    details: Optional[str] = None
-    traceback: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
+    details: str | None = None
+    traceback: str | None = None
+    context: dict[str, Any] | None = None
     recoverable: bool = True
-    recovery_suggestions: Optional[List[str]] = None
+    recovery_suggestions: list[str] | None = None
 
     def __post_init__(self):
         if self.recovery_suggestions is None:
@@ -53,8 +54,8 @@ class ErrorHandler:
     def __init__(self):
         """Initialize error handler."""
         self.logger = logging.getLogger("diversifier.error_handler")
-        self.error_history: List[ErrorInfo] = []
-        self.recovery_handlers: Dict[ErrorCategory, Callable] = {}
+        self.error_history: list[ErrorInfo] = []
+        self.recovery_handlers: dict[ErrorCategory, Callable] = {}
 
         # Register default recovery handlers
         self._register_default_handlers()
@@ -87,7 +88,7 @@ class ErrorHandler:
         self,
         exception: Exception,
         category: ErrorCategory,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> ErrorInfo:
         """Handle an error and determine recovery strategy.
 
@@ -221,7 +222,7 @@ class ErrorHandler:
                 f"Recovery suggestions: {', '.join(error_info.recovery_suggestions)}"
             )
 
-    def _handle_mcp_connection_error(self, error_info: ErrorInfo) -> List[str]:
+    def _handle_mcp_connection_error(self, error_info: ErrorInfo) -> list[str]:
         """Handle MCP connection errors.
 
         Args:
@@ -254,7 +255,7 @@ class ErrorHandler:
 
         return suggestions
 
-    def _handle_agent_execution_error(self, error_info: ErrorInfo) -> List[str]:
+    def _handle_agent_execution_error(self, error_info: ErrorInfo) -> list[str]:
         """Handle agent execution errors.
 
         Args:
@@ -296,7 +297,7 @@ class ErrorHandler:
 
         return suggestions
 
-    def _handle_file_operation_error(self, error_info: ErrorInfo) -> List[str]:
+    def _handle_file_operation_error(self, error_info: ErrorInfo) -> list[str]:
         """Handle file operation errors.
 
         Args:
@@ -335,7 +336,7 @@ class ErrorHandler:
 
         return suggestions
 
-    def _handle_migration_logic_error(self, error_info: ErrorInfo) -> List[str]:
+    def _handle_migration_logic_error(self, error_info: ErrorInfo) -> list[str]:
         """Handle migration logic errors.
 
         Args:
@@ -354,7 +355,7 @@ class ErrorHandler:
 
         return suggestions
 
-    def _handle_validation_failure(self, error_info: ErrorInfo) -> List[str]:
+    def _handle_validation_failure(self, error_info: ErrorInfo) -> list[str]:
         """Handle validation failures.
 
         Args:
@@ -373,7 +374,7 @@ class ErrorHandler:
 
         return suggestions
 
-    def _handle_configuration_error(self, error_info: ErrorInfo) -> List[str]:
+    def _handle_configuration_error(self, error_info: ErrorInfo) -> list[str]:
         """Handle configuration errors.
 
         Args:
@@ -403,7 +404,7 @@ class ErrorHandler:
 
         return suggestions
 
-    def _handle_system_resource_error(self, error_info: ErrorInfo) -> List[str]:
+    def _handle_system_resource_error(self, error_info: ErrorInfo) -> list[str]:
         """Handle system resource errors.
 
         Args:
@@ -434,7 +435,7 @@ class ErrorHandler:
 
         return suggestions
 
-    def get_error_summary(self) -> Dict[str, Any]:
+    def get_error_summary(self) -> dict[str, Any]:
         """Get summary of all errors encountered.
 
         Returns:
@@ -446,13 +447,13 @@ class ErrorHandler:
             return {"total_errors": 0, "categories": {}, "severities": {}}
 
         # Count by category
-        categories: Dict[str, int] = {}
+        categories: dict[str, int] = {}
         for error in self.error_history:
             category = error.category.value
             categories[category] = categories.get(category, 0) + 1
 
         # Count by severity
-        severities: Dict[str, int] = {}
+        severities: dict[str, int] = {}
         for error in self.error_history:
             severity = error.severity.value
             severities[severity] = severities.get(severity, 0) + 1

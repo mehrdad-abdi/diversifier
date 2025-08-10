@@ -4,18 +4,18 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 from langchain_core.tools import BaseTool, tool
 
-from .agent import DiversificationAgent, AgentType
-from .mcp_manager import MCPManager, MCPServerType
+from .agent import AgentType, DiversificationAgent
+from .config import LLMConfig, get_config
 from .doc_analyzer import DocumentationAnalysisResult
+from .mcp_manager import MCPManager, MCPServerType
 from .source_code_analyzer import SourceCodeAnalysisResult
-from .config import get_config, LLMConfig
 
 
 @dataclass
@@ -25,9 +25,9 @@ class AcceptanceTestSuite:
     name: str
     description: str
     test_file_content: str
-    docker_compose_content: Optional[str] = None
-    dockerfile_content: Optional[str] = None
-    requirements_content: Optional[str] = None
+    docker_compose_content: str | None = None
+    dockerfile_content: str | None = None
+    requirements_content: str | None = None
 
 
 @dataclass
@@ -41,19 +41,19 @@ class AcceptanceTestScenario:
     description: str
     test_method_name: str
     test_code: str
-    dependencies: List[str]
-    docker_services: List[str]
+    dependencies: list[str]
+    docker_services: list[str]
 
 
 @dataclass
 class AcceptanceTestGenerationResult:
     """Results of acceptance test generation."""
 
-    test_suites: List[AcceptanceTestSuite]
-    test_scenarios: List[AcceptanceTestScenario]
-    docker_configuration: Dict[str, Any]
-    test_dependencies: List[str]
-    coverage_analysis: Dict[str, Any]
+    test_suites: list[AcceptanceTestSuite]
+    test_scenarios: list[AcceptanceTestScenario]
+    docker_configuration: dict[str, Any]
+    test_dependencies: list[str]
+    coverage_analysis: dict[str, Any]
     generation_confidence: float  # 0.0 to 1.0
 
 
@@ -63,11 +63,11 @@ class WorkflowExecutionResult:
 
     workflow_id: str
     success: bool
-    generation_result: Optional[AcceptanceTestGenerationResult]
-    docker_compose_path: Optional[str]
-    test_image_id: Optional[str]
-    execution_logs: List[str]
-    error_messages: List[str]
+    generation_result: AcceptanceTestGenerationResult | None
+    docker_compose_path: str | None
+    test_image_id: str | None
+    execution_logs: list[str]
+    error_messages: list[str]
     execution_time_seconds: float
     timestamp: str
 
@@ -87,19 +87,19 @@ class AcceptanceTestGenerator:
         self.logger = logging.getLogger("diversifier.acceptance_test_generator")
 
         # Dynamic configuration cache
-        self._framework_config_cache: Optional[Dict[str, Any]] = None
-        self._docker_config_cache: Optional[Dict[str, Any]] = None
+        self._framework_config_cache: dict[str, Any] | None = None
+        self._docker_config_cache: dict[str, Any] | None = None
 
         # Workflow state management
-        self.workflow_id = f"workflow_{datetime.now(timezone.utc).isoformat()}"
-        self.execution_logs: List[str] = []
-        self.error_messages: List[str] = []
+        self.workflow_id = f"workflow_{datetime.now(UTC).isoformat()}"
+        self.execution_logs: list[str] = []
+        self.error_messages: list[str] = []
 
     async def generate_acceptance_tests(
         self,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
-        llm_config: Optional[LLMConfig] = None,
+        llm_config: LLMConfig | None = None,
     ) -> AcceptanceTestGenerationResult:
         """Generate comprehensive acceptance tests based on analysis results.
 
@@ -199,7 +199,7 @@ class AcceptanceTestGenerator:
 
         return result
 
-    def _create_file_system_tools(self) -> List[BaseTool]:
+    def _create_file_system_tools(self) -> list[BaseTool]:
         """Create file system tools for the generator agent."""
 
         @tool
@@ -258,7 +258,7 @@ class AcceptanceTestGenerator:
         agent: DiversificationAgent,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Dynamically discover framework configuration from project analysis.
 
         Args:
@@ -274,20 +274,20 @@ class AcceptanceTestGenerator:
 
         prompt = f"""
         Analyze the following project information and determine the optimal framework configuration for acceptance testing:
-        
+
         ## Framework Analysis:
         Detected Framework: {source_analysis.framework_detected}
         API Endpoints: {len(source_analysis.api_endpoints)}
         Network Interfaces: {source_analysis.network_interfaces}
-        
+
         ## Docker Analysis:
         Docker Services: {len(doc_analysis.docker_services)}
         External Interfaces: {len(doc_analysis.external_interfaces)}
-        
+
         ## Project Structure Analysis:
         Configuration Usage: {len(source_analysis.configuration_usage)}
         External Integrations: {len(source_analysis.external_service_integrations)}
-        
+
         Based on this analysis, determine:
         1. The default port the application likely uses (check network interfaces and common framework defaults)
         2. The most likely health check endpoint path (analyze existing endpoints or common patterns)
@@ -295,7 +295,7 @@ class AcceptanceTestGenerator:
         4. Common test file patterns for this project type
         5. Python version to use for testing (based on project requirements)
         6. Base Docker image recommendations
-        
+
         Provide results as JSON with the following structure:
         {{
             "default_port": <port_number>,
@@ -338,7 +338,7 @@ class AcceptanceTestGenerator:
             self._framework_config_cache = fallback_config
             return fallback_config
 
-    def _get_fallback_framework_config(self, framework: str) -> Dict[str, Any]:
+    def _get_fallback_framework_config(self, framework: str) -> dict[str, Any]:
         """Get fallback configuration when dynamic discovery fails.
 
         Args:
@@ -393,7 +393,7 @@ class AcceptanceTestGenerator:
 
     async def _generate_http_api_tests(
         self, agent: DiversificationAgent, source_analysis: SourceCodeAnalysisResult
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate HTTP/API endpoint tests."""
         endpoints = source_analysis.api_endpoints
         if not endpoints:
@@ -403,13 +403,21 @@ class AcceptanceTestGenerator:
         Generate comprehensive HTTP/API endpoint tests for the following discovered endpoints:
 
         ## API Endpoints Discovered:
-        {json.dumps([{
-            'path': ep.path,
-            'methods': ep.methods,
-            'handler': ep.handler,
-            'auth_required': ep.authentication_required,
-            'location': ep.file_location
-        } for ep in endpoints], indent=2)}
+        {
+            json.dumps(
+                [
+                    {
+                        "path": ep.path,
+                        "methods": ep.methods,
+                        "handler": ep.handler,
+                        "auth_required": ep.authentication_required,
+                        "location": ep.file_location,
+                    }
+                    for ep in endpoints
+                ],
+                indent=2,
+            )
+        }
 
         ## Framework Detected:
         {source_analysis.framework_detected}
@@ -441,7 +449,7 @@ class AcceptanceTestGenerator:
         agent: DiversificationAgent,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate service lifecycle and health check tests."""
         prompt = f"""
         Generate service lifecycle tests for application startup, health checks, and shutdown:
@@ -475,7 +483,7 @@ class AcceptanceTestGenerator:
 
     async def _generate_network_communication_tests(
         self, agent: DiversificationAgent, source_analysis: SourceCodeAnalysisResult
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate network communication and integration tests."""
         integrations = source_analysis.external_service_integrations
         if not integrations:
@@ -485,12 +493,20 @@ class AcceptanceTestGenerator:
         Generate network communication and integration tests:
 
         ## External Service Integrations:
-        {json.dumps([{
-            'service_type': integration.service_type,
-            'purpose': integration.purpose,
-            'connection_pattern': integration.connection_pattern,
-            'config_source': integration.configuration_source
-        } for integration in integrations], indent=2)}
+        {
+            json.dumps(
+                [
+                    {
+                        "service_type": integration.service_type,
+                        "purpose": integration.purpose,
+                        "connection_pattern": integration.connection_pattern,
+                        "config_source": integration.configuration_source,
+                    }
+                    for integration in integrations
+                ],
+                indent=2,
+            )
+        }
 
         Generate tests for:
         1. Database connectivity and data persistence
@@ -516,7 +532,7 @@ class AcceptanceTestGenerator:
 
     async def _generate_configuration_tests(
         self, agent: DiversificationAgent, source_analysis: SourceCodeAnalysisResult
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate configuration and environment variable tests."""
         config_usage = source_analysis.configuration_usage
         if not config_usage:
@@ -526,13 +542,21 @@ class AcceptanceTestGenerator:
         Generate configuration and environment variable tests:
 
         ## Configuration Usage:
-        {json.dumps([{
-            'name': config.name,
-            'purpose': config.purpose,
-            'required': config.required,
-            'default_value': config.default_value,
-            'config_type': config.config_type
-        } for config in config_usage], indent=2)}
+        {
+            json.dumps(
+                [
+                    {
+                        "name": config.name,
+                        "purpose": config.purpose,
+                        "required": config.required,
+                        "default_value": config.default_value,
+                        "config_type": config.config_type,
+                    }
+                    for config in config_usage
+                ],
+                indent=2,
+            )
+        }
 
         Generate tests for:
         1. Required environment variables validation
@@ -558,7 +582,7 @@ class AcceptanceTestGenerator:
 
     async def _generate_error_handling_tests(
         self, agent: DiversificationAgent, source_analysis: SourceCodeAnalysisResult
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate error handling and edge case tests."""
         endpoints = source_analysis.api_endpoints
         integrations = source_analysis.external_service_integrations
@@ -598,7 +622,7 @@ class AcceptanceTestGenerator:
         self,
         agent: DiversificationAgent,
         doc_analysis: DocumentationAnalysisResult,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate Docker container interaction and orchestration tests."""
         docker_services = doc_analysis.docker_services
         if not docker_services:
@@ -608,12 +632,20 @@ class AcceptanceTestGenerator:
         Generate Docker container orchestration tests:
 
         ## Docker Services:
-        {json.dumps([{
-            'name': service.name,
-            'exposed_ports': service.exposed_ports,
-            'dependencies': service.dependencies,
-            'health_check': service.health_check
-        } for service in docker_services], indent=2)}
+        {
+            json.dumps(
+                [
+                    {
+                        "name": service.name,
+                        "exposed_ports": service.exposed_ports,
+                        "dependencies": service.dependencies,
+                        "health_check": service.health_check,
+                    }
+                    for service in docker_services
+                ],
+                indent=2,
+            )
+        }
 
         Generate tests for:
         1. Container startup order and dependencies
@@ -639,7 +671,7 @@ class AcceptanceTestGenerator:
             self.logger.error(f"Error generating Docker tests: {e}")
             return {"scenarios": []}
 
-    def _extract_response_text(self, result: Dict[str, Any]) -> str:
+    def _extract_response_text(self, result: dict[str, Any]) -> str:
         """Extract response text from agent result."""
         if "output" in result:
             return result["output"]
@@ -653,7 +685,7 @@ class AcceptanceTestGenerator:
         else:
             return str(result)
 
-    def _parse_test_response(self, response_text: str, category: str) -> Dict[str, Any]:
+    def _parse_test_response(self, response_text: str, category: str) -> dict[str, Any]:
         """Parse LLM response into structured test scenarios."""
         try:
             # Try to extract JSON from response
@@ -689,13 +721,13 @@ class AcceptanceTestGenerator:
 
     def _create_test_suites(
         self,
-        scenarios: List[AcceptanceTestScenario],
+        scenarios: list[AcceptanceTestScenario],
         source_analysis: SourceCodeAnalysisResult,
-        framework_config: Dict[str, Any],
-    ) -> List[AcceptanceTestSuite]:
+        framework_config: dict[str, Any],
+    ) -> list[AcceptanceTestSuite]:
         """Create organized test suites from scenarios."""
         # Group scenarios by category
-        categories: Dict[str, List[AcceptanceTestScenario]] = {}
+        categories: dict[str, list[AcceptanceTestScenario]] = {}
         for scenario in scenarios:
             if scenario.category not in categories:
                 categories[scenario.category] = []
@@ -733,9 +765,9 @@ class AcceptanceTestGenerator:
     def _generate_test_file_content(
         self,
         category: str,
-        scenarios: List[AcceptanceTestScenario],
+        scenarios: list[AcceptanceTestScenario],
         source_analysis: SourceCodeAnalysisResult,
-        framework_config: Dict[str, Any],
+        framework_config: dict[str, Any],
     ) -> str:
         """Generate complete test file content for a category."""
         class_name = f"Test{category.title().replace('_', '')}"
@@ -786,12 +818,12 @@ def wait_for_service_ready(url: str, timeout: int = 30) -> None:
         except requests.RequestException:
             pass
         time.sleep(2)
-    
+
     pytest.fail(f"Service at {{url}} failed to become ready within {{timeout}} seconds")
 """
 
         return f'''"""
-{class_name} - Acceptance tests for {category.replace('_', ' ')} functionality.
+{class_name} - Acceptance tests for {category.replace("_", " ")} functionality.
 
 Generated by Diversifier Acceptance Test Generator.
 These tests validate external interfaces and behavior through black-box testing.
@@ -801,8 +833,8 @@ All tests run in Docker containers and communicate via network interfaces only.
 {imports}
 
 class {class_name}:
-    """Test {category.replace('_', ' ')} functionality."""
-{''.join(test_methods)}
+    """Test {category.replace("_", " ")} functionality."""
+{"".join(test_methods)}
 
 {helper_functions}
 '''
@@ -812,7 +844,7 @@ class {class_name}:
         agent: DiversificationAgent,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
-        framework_config: Dict[str, Any],
+        framework_config: dict[str, Any],
     ) -> str:
         """Generate Docker Compose configuration for testing using LLM analysis.
 
@@ -827,34 +859,55 @@ class {class_name}:
         """
         prompt = f"""
         Generate a Docker Compose configuration for acceptance testing based on the project analysis:
-        
+
         ## Framework Configuration:
         Framework: {source_analysis.framework_detected}
-        Default Port: {framework_config.get('default_port', 8000)}
-        Health Endpoint: {framework_config.get('health_endpoint', '/health')}
-        Python Version: {framework_config.get('python_version', '3.11')}
-        Base Image: {framework_config.get('base_docker_image', 'python:3.11-slim')}
-        
+        Default Port: {framework_config.get("default_port", 8000)}
+        Health Endpoint: {framework_config.get("health_endpoint", "/health")}
+        Python Version: {framework_config.get("python_version", "3.11")}
+        Base Image: {framework_config.get("base_docker_image", "python:3.11-slim")}
+
         ## Project Dependencies:
-        External Services: {json.dumps([{
-            'type': integration.service_type,
-            'purpose': integration.purpose
-        } for integration in source_analysis.external_service_integrations], indent=2)}
-        
+        External Services: {
+            json.dumps(
+                [
+                    {"type": integration.service_type, "purpose": integration.purpose}
+                    for integration in source_analysis.external_service_integrations
+                ],
+                indent=2,
+            )
+        }
+
         ## Configuration Requirements:
-        Environment Variables: {json.dumps([{
-            'name': config.name,
-            'required': config.required,
-            'purpose': config.purpose
-        } for config in source_analysis.configuration_usage], indent=2)}
-        
+        Environment Variables: {
+            json.dumps(
+                [
+                    {
+                        "name": config.name,
+                        "required": config.required,
+                        "purpose": config.purpose,
+                    }
+                    for config in source_analysis.configuration_usage
+                ],
+                indent=2,
+            )
+        }
+
         ## Docker Services (if any):
-        {json.dumps([{
-            'name': service.name,
-            'ports': service.exposed_ports,
-            'dependencies': service.dependencies
-        } for service in doc_analysis.docker_services], indent=2)}
-        
+        {
+            json.dumps(
+                [
+                    {
+                        "name": service.name,
+                        "ports": service.exposed_ports,
+                        "dependencies": service.dependencies,
+                    }
+                    for service in doc_analysis.docker_services
+                ],
+                indent=2,
+            )
+        }
+
         Generate a complete docker-compose.yml file that includes:
         1. Application service with appropriate port mapping
         2. Test service for running acceptance tests
@@ -862,7 +915,7 @@ class {class_name}:
         4. Proper health checks for all services
         5. Environment variables based on configuration requirements
         6. Volume mounts for test results
-        
+
         Provide the result as a complete YAML file content (no markdown formatting).
         """
 
@@ -888,7 +941,7 @@ class {class_name}:
             # Fallback to basic template
             return self._get_fallback_docker_compose(framework_config)
 
-    def _get_fallback_docker_compose(self, framework_config: Dict[str, Any]) -> str:
+    def _get_fallback_docker_compose(self, framework_config: dict[str, Any]) -> str:
         """Generate fallback Docker Compose configuration.
 
         Args:
@@ -955,7 +1008,7 @@ pytest-cov>=4.0.0
 pytest-xdist>=3.0.0
 """
 
-    def _get_test_dependencies(self) -> List[str]:
+    def _get_test_dependencies(self) -> list[str]:
         """Get list of test dependencies."""
         return [
             "pytest",
@@ -972,7 +1025,7 @@ pytest-xdist>=3.0.0
         agent: DiversificationAgent,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate Docker configuration for testing."""
         # Get framework configuration if not already cached
         if not self._framework_config_cache:
@@ -1004,7 +1057,7 @@ pytest-xdist>=3.0.0
             },
         }
 
-    def _generate_dockerfile_content(self, framework_config: Dict[str, Any]) -> str:
+    def _generate_dockerfile_content(self, framework_config: dict[str, Any]) -> str:
         """Generate Dockerfile content for testing.
 
         Args:
@@ -1030,13 +1083,13 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
 
     def _analyze_test_coverage(
         self,
-        scenarios: List[AcceptanceTestScenario],
+        scenarios: list[AcceptanceTestScenario],
         source_analysis: SourceCodeAnalysisResult,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze test coverage across different areas."""
-        coverage: Dict[str, Any] = {
+        coverage: dict[str, Any] = {
             "total_scenarios": len(scenarios),
-            "categories_covered": len(set(scenario.category for scenario in scenarios)),
+            "categories_covered": len({scenario.category for scenario in scenarios}),
             "api_endpoints_covered": 0,
             "external_services_covered": 0,
             "configuration_covered": 0,
@@ -1044,7 +1097,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         }
 
         # Count coverage by category
-        category_counts: Dict[str, int] = {}
+        category_counts: dict[str, int] = {}
         for scenario in scenarios:
             category_counts[scenario.category] = (
                 category_counts.get(scenario.category, 0) + 1
@@ -1076,7 +1129,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
 
     def _calculate_generation_confidence(
         self,
-        scenarios: List[AcceptanceTestScenario],
+        scenarios: list[AcceptanceTestScenario],
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
     ) -> float:
@@ -1126,7 +1179,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         return sum(confidence_factors)
 
     async def export_test_suites(
-        self, result: AcceptanceTestGenerationResult, output_dir: Optional[str] = None
+        self, result: AcceptanceTestGenerationResult, output_dir: str | None = None
     ) -> str:
         """Export generated test suites to files.
 
@@ -1170,7 +1223,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
 
             # Export test generation metadata
             metadata = {
-                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_at": datetime.now(UTC).isoformat(),
                 "total_suites": len(result.test_suites),
                 "total_scenarios": len(result.test_scenarios),
                 "coverage_analysis": result.coverage_analysis,
@@ -1215,18 +1268,14 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
     def _log(self, message: str) -> None:
         """Log a workflow message."""
         self.logger.info(message)
-        self.execution_logs.append(
-            f"[{datetime.now(timezone.utc).isoformat()}] {message}"
-        )
+        self.execution_logs.append(f"[{datetime.now(UTC).isoformat()}] {message}")
 
     def _log_error(self, message: str) -> None:
         """Log a workflow error message."""
         self.logger.error(message)
-        self.error_messages.append(
-            f"[{datetime.now(timezone.utc).isoformat()}] {message}"
-        )
+        self.error_messages.append(f"[{datetime.now(UTC).isoformat()}] {message}")
 
-    async def initialize_mcp_servers(self) -> Dict[MCPServerType, bool]:
+    async def initialize_mcp_servers(self) -> dict[MCPServerType, bool]:
         """Initialize required MCP servers for the workflow.
 
         Returns:
@@ -1278,7 +1327,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         output_dir: str,
         image_name: str = "diversifier-tests",
         image_tag: str = "latest",
-    ) -> Optional[str]:
+    ) -> str | None:
         """Build Docker container with generated tests.
 
         Args:
@@ -1328,7 +1377,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         test_service_name: str = "test",
         app_container_name: str = "diversifier_app",
         cleanup_containers: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute the complete test workflow using Docker Compose.
 
         Args:
@@ -1421,7 +1470,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         self,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         model_name: str = "gpt-4",
         execute_tests: bool = False,
     ) -> WorkflowExecutionResult:
@@ -1437,7 +1486,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         Returns:
             Complete workflow execution results
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         self._log(f"Starting complete workflow: {self.workflow_id}")
 
         try:
@@ -1487,7 +1536,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
                 self._log("Executing test workflow")
                 await self.execute_test_workflow(docker_compose_path)
 
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
             execution_time = (end_time - start_time).total_seconds()
 
             result = WorkflowExecutionResult(
@@ -1508,7 +1557,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
             return result
 
         except Exception as e:
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
             execution_time = (end_time - start_time).total_seconds()
 
             self._log_error(f"Workflow failed: {e}")
@@ -1556,8 +1605,8 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         )
 
     async def _collect_container_logs(
-        self, container_names: List[str]
-    ) -> Dict[str, str]:
+        self, container_names: list[str]
+    ) -> dict[str, str]:
         """Collect logs from containers."""
         logs = {}
 

@@ -3,21 +3,21 @@
 
 import json
 from pathlib import Path
-from typing import Optional, List
+
+from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
+from mcp.types import (
+    TextContent,
+    Tool,
+)
 
 import git
-from mcp.server.models import InitializationOptions
-from mcp.server import NotificationOptions, Server
-from mcp.types import (
-    Tool,
-    TextContent,
-)
 
 
 class GitMCPServer:
     """MCP Server for Git operations with security constraints."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the Git MCP Server.
 
         Args:
@@ -575,7 +575,7 @@ class GitMCPServer:
             return [TextContent(type="text", text=f"Error listing branches: {e}")]
 
     async def _add_files(
-        self, repo_path: str, file_patterns: List[str]
+        self, repo_path: str, file_patterns: list[str]
     ) -> list[TextContent]:
         """Stage files for commit."""
         repo = self._get_repo(repo_path)
@@ -602,8 +602,8 @@ class GitMCPServer:
         self,
         repo_path: str,
         message: str,
-        author_name: Optional[str] = None,
-        author_email: Optional[str] = None,
+        author_name: str | None = None,
+        author_email: str | None = None,
     ) -> list[TextContent]:
         """Commit staged changes."""
         repo = self._get_repo(repo_path)
@@ -634,8 +634,8 @@ class GitMCPServer:
         self,
         repo_path: str,
         staged: bool = False,
-        commit_range: Optional[str] = None,
-        file_paths: Optional[List[str]] = None,
+        commit_range: str | None = None,
+        file_paths: list[str] | None = None,
     ) -> list[TextContent]:
         """Get diff of changes."""
         repo = self._get_repo(repo_path)
@@ -668,8 +668,8 @@ class GitMCPServer:
         self,
         repo_path: str,
         max_count: int = 10,
-        branch: Optional[str] = None,
-        file_path: Optional[str] = None,
+        branch: str | None = None,
+        file_path: str | None = None,
     ) -> list[TextContent]:
         """Get commit history."""
         repo = self._get_repo(repo_path)

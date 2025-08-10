@@ -7,10 +7,8 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from .config import LoggingConfig
-
 
 # Context variable for correlation IDs
 correlation_id: contextvars.ContextVar[str] = contextvars.ContextVar(
@@ -71,7 +69,7 @@ class DiversifierFormatter(logging.Formatter):
         return formatted
 
 
-def setup_logging(config: Optional[LoggingConfig] = None) -> None:
+def setup_logging(config: LoggingConfig | None = None) -> None:
     """Set up logging configuration for diversifier.
 
     Args:
@@ -132,7 +130,7 @@ def setup_logging(config: Optional[LoggingConfig] = None) -> None:
     )
 
 
-def set_correlation_id(corr_id: Optional[str] = None) -> str:
+def set_correlation_id(corr_id: str | None = None) -> str:
     """Set correlation ID for current context.
 
     Args:
@@ -210,7 +208,7 @@ def log_mcp_operation(
 
 
 def log_agent_interaction(
-    logger: logging.Logger, agent_type: str, task: str, duration: Optional[float] = None
+    logger: logging.Logger, agent_type: str, task: str, duration: float | None = None
 ) -> None:
     """Log agent interactions.
 
@@ -228,7 +226,7 @@ def log_migration_progress(
     logger: logging.Logger,
     files_processed: int,
     total_files: int,
-    current_file: Optional[str] = None,
+    current_file: str | None = None,
 ) -> None:
     """Log migration progress.
 

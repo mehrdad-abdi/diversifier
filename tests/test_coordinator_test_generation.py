@@ -1,14 +1,15 @@
 """Tests for coordinator test generation workflow integration."""
 
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
-from src.orchestration.coordinator import DiversificationCoordinator
+import pytest
+
 from src.orchestration.acceptance_test_generator import (
-    WorkflowExecutionResult,
     AcceptanceTestGenerationResult,
     AcceptanceTestSuite,
+    WorkflowExecutionResult,
 )
+from src.orchestration.coordinator import DiversificationCoordinator
 
 
 class TestCoordinatorTestGeneration:

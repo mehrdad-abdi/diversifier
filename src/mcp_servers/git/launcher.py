@@ -1,24 +1,24 @@
 """Git MCP Server launcher and lifecycle management."""
 
 import asyncio
+import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-import json
+from typing import Any
 
 
 class GitMCPClient:
     """Client for managing Git MCP Server lifecycle and communication."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the MCP client.
 
         Args:
             project_root: Root directory to constrain Git operations to.
         """
         self.project_root = project_root or str(Path.cwd())
-        self.process: Optional[subprocess.Popen] = None
+        self.process: subprocess.Popen | None = None
 
     def start_server(self) -> bool:
         """Start the Git MCP Server process.
@@ -57,8 +57,8 @@ class GitMCPClient:
             self.process = None
 
     def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         """Send a JSON-RPC request to the server.
 
         Args:
@@ -91,13 +91,11 @@ class GitMCPClient:
 
         return None
 
-    def list_tools(self) -> Optional[Dict[str, Any]]:
+    def list_tools(self) -> dict[str, Any] | None:
         """List available tools."""
         return self.send_request("tools/list")
 
-    def call_tool(
-        self, name: str, arguments: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
         """Call a specific tool.
 
         Args:
@@ -109,7 +107,7 @@ class GitMCPClient:
         """
         return self.send_request("tools/call", {"name": name, "arguments": arguments})
 
-    def init_repository(self, repo_path: str = ".") -> Optional[Dict[str, Any]]:
+    def init_repository(self, repo_path: str = ".") -> dict[str, Any] | None:
         """Initialize a Git repository.
 
         Args:
@@ -128,7 +126,7 @@ class GitMCPClient:
                     pass
         return None
 
-    def clone_repository(self, url: str, destination: str) -> Optional[Dict[str, Any]]:
+    def clone_repository(self, url: str, destination: str) -> dict[str, Any] | None:
         """Clone a Git repository.
 
         Args:
@@ -150,7 +148,7 @@ class GitMCPClient:
                     pass
         return None
 
-    def get_status(self, repo_path: str = ".") -> Optional[Dict[str, Any]]:
+    def get_status(self, repo_path: str = ".") -> dict[str, Any] | None:
         """Get Git repository status.
 
         Args:
@@ -171,7 +169,7 @@ class GitMCPClient:
 
     def create_branch(
         self, branch_name: str, repo_path: str = ".", switch: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Create a new branch.
 
         Args:
@@ -197,7 +195,7 @@ class GitMCPClient:
 
     def switch_branch(
         self, branch_name: str, repo_path: str = "."
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Switch to an existing branch.
 
         Args:
@@ -221,7 +219,7 @@ class GitMCPClient:
 
     def list_branches(
         self, repo_path: str = ".", include_remote: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """List all branches.
 
         Args:
@@ -245,8 +243,8 @@ class GitMCPClient:
         return None
 
     def add_files(
-        self, file_patterns: List[str], repo_path: str = "."
-    ) -> Optional[Dict[str, Any]]:
+        self, file_patterns: list[str], repo_path: str = "."
+    ) -> dict[str, Any] | None:
         """Stage files for commit.
 
         Args:
@@ -272,9 +270,9 @@ class GitMCPClient:
         self,
         message: str,
         repo_path: str = ".",
-        author_name: Optional[str] = None,
-        author_email: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        author_name: str | None = None,
+        author_email: str | None = None,
+    ) -> dict[str, Any] | None:
         """Commit staged changes.
 
         Args:
@@ -306,9 +304,9 @@ class GitMCPClient:
         self,
         repo_path: str = ".",
         staged: bool = False,
-        commit_range: Optional[str] = None,
-        file_paths: Optional[List[str]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        commit_range: str | None = None,
+        file_paths: list[str] | None = None,
+    ) -> dict[str, Any] | None:
         """Get diff of changes.
 
         Args:
@@ -340,9 +338,9 @@ class GitMCPClient:
         self,
         repo_path: str = ".",
         max_count: int = 10,
-        branch: Optional[str] = None,
-        file_path: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        branch: str | None = None,
+        file_path: str | None = None,
+    ) -> dict[str, Any] | None:
         """Get commit history.
 
         Args:
@@ -375,7 +373,7 @@ class GitMCPClient:
         repo_path: str = ".",
         base_commit: str = "HEAD~1",
         target_commit: str = "HEAD",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Get list of changed files between commits.
 
         Args:
@@ -408,7 +406,7 @@ class GitMCPClient:
         repo_path: str = ".",
         base_branch: str = "main",
         prefix: str = "diversifier-temp",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Create a temporary branch for migration work.
 
         Args:

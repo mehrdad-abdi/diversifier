@@ -1,6 +1,7 @@
 """Custom exceptions for Diversifier tool."""
 
-from typing import Optional, Dict, Any, List
+from typing import Any
+
 from src.orchestration.error_handling import ErrorCategory, ErrorSeverity
 
 
@@ -12,9 +13,9 @@ class DiversifierError(Exception):
         message: str,
         category: ErrorCategory,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize Diversifier error.
 
@@ -40,10 +41,10 @@ class MCPServerError(DiversifierError):
     def __init__(
         self,
         message: str,
-        server_type: Optional[str] = None,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        server_type: str | None = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize MCP server error.
 
@@ -80,10 +81,10 @@ class AgentExecutionError(DiversifierError):
     def __init__(
         self,
         message: str,
-        agent_type: Optional[str] = None,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        agent_type: str | None = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize agent execution error.
 
@@ -121,11 +122,11 @@ class FileOperationError(DiversifierError):
     def __init__(
         self,
         message: str,
-        file_path: Optional[str] = None,
-        operation: Optional[str] = None,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        file_path: str | None = None,
+        operation: str | None = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize file operation error.
 
@@ -166,11 +167,11 @@ class MigrationError(DiversifierError):
     def __init__(
         self,
         message: str,
-        source_lib: Optional[str] = None,
-        target_lib: Optional[str] = None,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        source_lib: str | None = None,
+        target_lib: str | None = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize migration error.
 
@@ -211,10 +212,10 @@ class ValidationError(DiversifierError):
     def __init__(
         self,
         message: str,
-        validation_type: Optional[str] = None,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        validation_type: str | None = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize validation error.
 
@@ -252,10 +253,10 @@ class ConfigurationError(DiversifierError):
     def __init__(
         self,
         message: str,
-        config_key: Optional[str] = None,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        config_key: str | None = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize configuration error.
 
@@ -297,10 +298,10 @@ class SystemResourceError(DiversifierError):
     def __init__(
         self,
         message: str,
-        resource_type: Optional[str] = None,
-        details: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        recovery_suggestions: Optional[List[str]] = None,
+        resource_type: str | None = None,
+        details: str | None = None,
+        context: dict[str, Any] | None = None,
+        recovery_suggestions: list[str] | None = None,
     ):
         """Initialize system resource error.
 

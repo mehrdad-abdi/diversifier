@@ -1,27 +1,28 @@
 """Tests for acceptance test generator functionality."""
 
 import json
-import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from src.orchestration.acceptance_test_generator import (
-    AcceptanceTestGenerator,
-    AcceptanceTestSuite,
-    AcceptanceTestScenario,
     AcceptanceTestGenerationResult,
+    AcceptanceTestGenerator,
+    AcceptanceTestScenario,
+    AcceptanceTestSuite,
 )
-from src.orchestration.mcp_manager import MCPManager, MCPServerType
 from src.orchestration.doc_analyzer import (
+    DockerServiceInfo,
     DocumentationAnalysisResult,
     ExternalInterface,
-    DockerServiceInfo,
 )
+from src.orchestration.mcp_manager import MCPManager, MCPServerType
 from src.orchestration.source_code_analyzer import (
-    SourceCodeAnalysisResult,
     APIEndpoint,
-    ExternalServiceIntegration,
     ConfigurationUsage,
+    ExternalServiceIntegration,
+    SourceCodeAnalysisResult,
 )
 
 

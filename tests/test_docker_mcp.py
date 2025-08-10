@@ -5,10 +5,11 @@ import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pytest
 
-from src.mcp_servers.docker.server import DockerMCPServer
 from src.mcp_servers.docker.launcher import DockerMCPLauncher
+from src.mcp_servers.docker.server import DockerMCPServer
 
 
 @pytest.fixture

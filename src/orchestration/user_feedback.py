@@ -2,14 +2,13 @@
 
 import sys
 import time
-from typing import Optional, List
 from contextlib import contextmanager
-from threading import Thread, Event
 from dataclasses import dataclass
 from enum import Enum
+from threading import Event, Thread
 
-from src.orchestration.exceptions import DiversifierError
 from src.orchestration.error_handling import ErrorInfo, ErrorSeverity
+from src.orchestration.exceptions import DiversifierError
 
 
 class FeedbackLevel(Enum):
@@ -29,7 +28,7 @@ class UserMessage:
     message: str
     level: FeedbackLevel = FeedbackLevel.INFO
     show_timestamp: bool = False
-    prefix: Optional[str] = None
+    prefix: str | None = None
 
 
 class ProgressIndicator:
@@ -45,7 +44,7 @@ class ProgressIndicator:
         self.message = message
         self.show_spinner = show_spinner
         self._stop_event = Event()
-        self._spinner_thread: Optional[Thread] = None
+        self._spinner_thread: Thread | None = None
         self._spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
         self._current_char = 0
 
@@ -59,7 +58,7 @@ class ProgressIndicator:
         else:
             print(f"⏳ {self.message}...", flush=True)
 
-    def stop(self, success_message: Optional[str] = None) -> None:
+    def stop(self, success_message: str | None = None) -> None:
         """Stop the progress indicator.
 
         Args:
@@ -113,7 +112,7 @@ class UserFeedback:
             FeedbackLevel.SUCCESS: "✅",
         }
 
-    def info(self, message: str, prefix: Optional[str] = None) -> None:
+    def info(self, message: str, prefix: str | None = None) -> None:
         """Display info message.
 
         Args:
@@ -124,7 +123,7 @@ class UserFeedback:
             UserMessage(message=message, level=FeedbackLevel.INFO, prefix=prefix)
         )
 
-    def success(self, message: str, prefix: Optional[str] = None) -> None:
+    def success(self, message: str, prefix: str | None = None) -> None:
         """Display success message.
 
         Args:
@@ -135,7 +134,7 @@ class UserFeedback:
             UserMessage(message=message, level=FeedbackLevel.SUCCESS, prefix=prefix)
         )
 
-    def warning(self, message: str, prefix: Optional[str] = None) -> None:
+    def warning(self, message: str, prefix: str | None = None) -> None:
         """Display warning message.
 
         Args:
@@ -146,7 +145,7 @@ class UserFeedback:
             UserMessage(message=message, level=FeedbackLevel.WARNING, prefix=prefix)
         )
 
-    def error(self, message: str, prefix: Optional[str] = None) -> None:
+    def error(self, message: str, prefix: str | None = None) -> None:
         """Display error message.
 
         Args:
@@ -157,7 +156,7 @@ class UserFeedback:
             UserMessage(message=message, level=FeedbackLevel.ERROR, prefix=prefix)
         )
 
-    def debug(self, message: str, prefix: Optional[str] = None) -> None:
+    def debug(self, message: str, prefix: str | None = None) -> None:
         """Display debug message (only if verbose mode enabled).
 
         Args:
@@ -230,7 +229,7 @@ class UserFeedback:
                 self.debug(f"Traceback:\n{traceback.format_exc()}")
 
     @contextmanager
-    def progress(self, message: str, success_message: Optional[str] = None):
+    def progress(self, message: str, success_message: str | None = None):
         """Context manager for progress indication.
 
         Args:
@@ -338,7 +337,7 @@ class UserFeedback:
 
         return response in ["y", "yes", "true", "1"]
 
-    def show_summary(self, title: str, items: List[str]) -> None:
+    def show_summary(self, title: str, items: list[str]) -> None:
         """Show a summary with title and bullet points.
 
         Args:

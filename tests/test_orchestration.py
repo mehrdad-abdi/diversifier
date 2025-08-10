@@ -1,22 +1,23 @@
 """Tests for orchestration system components."""
 
-import pytest
-import tempfile
 import logging
-from unittest.mock import Mock, patch
+import tempfile
 from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
 
 from src.orchestration.agent import AgentManager, AgentType, DiversificationAgent
-from src.orchestration.mcp_manager import MCPManager, MCPServerType, MCPConnection
+from src.orchestration.coordinator import DiversificationCoordinator
+from src.orchestration.error_handling import ErrorCategory, ErrorHandler, ErrorSeverity
+from src.orchestration.logging_config import get_logger, setup_logging
+from src.orchestration.mcp_manager import MCPConnection, MCPManager, MCPServerType
 from src.orchestration.workflow import (
-    WorkflowState,
     MigrationContext,
     WorkflowStage,
+    WorkflowState,
     WorkflowStatus,
 )
-from src.orchestration.coordinator import DiversificationCoordinator
-from src.orchestration.error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
-from src.orchestration.logging_config import setup_logging, get_logger
 
 
 class TestDiversificationAgent:
@@ -316,7 +317,6 @@ class TestMCPManager:
             patch.object(manager, "initialize_git_server", return_value=True),
             patch.object(manager, "initialize_docker_server", return_value=True),
         ):
-
             results = await manager.initialize_all_servers()
 
             assert len(results) == 4
@@ -663,7 +663,6 @@ class TestDiversificationCoordinator:
                 coordinator, "_finalize_migration", return_value={"success": True}
             ),
         ):
-
             result = await coordinator.execute_workflow(dry_run=True, auto_proceed=True)
 
             assert result is True

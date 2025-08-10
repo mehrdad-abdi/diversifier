@@ -1,7 +1,7 @@
 """Tests for exit codes."""
 
-from src.orchestration.exit_codes import ExitCode, ExitCodeManager
 from src.orchestration.error_handling import ErrorCategory, ErrorSeverity
+from src.orchestration.exit_codes import ExitCode, ExitCodeManager
 
 
 class TestExitCode:

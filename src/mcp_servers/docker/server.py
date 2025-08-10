@@ -4,23 +4,24 @@
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
+
+from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
+from mcp.types import (
+    TextContent,
+    Tool,
+)
+
 import docker
 from docker.errors import APIError, BuildError
 from docker.models.containers import Container
-
-from mcp.server.models import InitializationOptions
-from mcp.server import NotificationOptions, Server
-from mcp.types import (
-    Tool,
-    TextContent,
-)
 
 
 class DockerMCPServer:
     """MCP Server for Docker container operations with security constraints."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the Docker MCP Server.
 
         Args:
@@ -42,7 +43,7 @@ class DockerMCPServer:
         self.server = Server("docker-server")
 
         # Keep track of managed containers for cleanup
-        self.managed_containers: Dict[str, Container] = {}
+        self.managed_containers: dict[str, Container] = {}
 
         # Register tools
         self._register_tools()
@@ -371,7 +372,7 @@ class DockerMCPServer:
         path: str,
         tag: str,
         dockerfile: str = "Dockerfile",
-        buildargs: Optional[Dict[str, str]] = None,
+        buildargs: dict[str, str] | None = None,
     ) -> list[TextContent]:
         """Build Docker image from Dockerfile."""
         if buildargs is None:
@@ -441,14 +442,14 @@ class DockerMCPServer:
     async def _run_container(
         self,
         image: str,
-        command: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
-        volumes: Optional[Dict[str, str]] = None,
-        working_dir: Optional[str] = None,
+        command: str | None = None,
+        environment: dict[str, str] | None = None,
+        volumes: dict[str, str] | None = None,
+        working_dir: str | None = None,
         detach: bool = False,
         remove: bool = True,
-        mem_limit: Optional[str] = None,
-        cpu_quota: Optional[int] = None,
+        mem_limit: str | None = None,
+        cpu_quota: int | None = None,
     ) -> list[TextContent]:
         """Run a container with specified configuration."""
         if environment is None:
@@ -474,7 +475,7 @@ class DockerMCPServer:
                 }
 
             # Prepare container configuration
-            container_config: Dict[str, Any] = {
+            container_config: dict[str, Any] = {
                 "image": image,
                 "detach": detach,
                 "remove": remove,
@@ -619,7 +620,7 @@ class DockerMCPServer:
             return [TextContent(type="text", text=f"Get logs error: {str(e)}")]
 
     async def _list_containers(
-        self, all_containers: bool = False, filters: Optional[Dict[str, Any]] = None
+        self, all_containers: bool = False, filters: dict[str, Any] | None = None
     ) -> list[TextContent]:
         """List containers with optional filtering."""
         if filters is None:
@@ -660,7 +661,7 @@ class DockerMCPServer:
             return [TextContent(type="text", text=f"List containers error: {str(e)}")]
 
     async def _list_images(
-        self, name: Optional[str] = None, filters: Optional[Dict[str, Any]] = None
+        self, name: str | None = None, filters: dict[str, Any] | None = None
     ) -> list[TextContent]:
         """List Docker images."""
         if filters is None:

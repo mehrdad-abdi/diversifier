@@ -2,16 +2,16 @@
 
 import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 from langchain_core.tools import BaseTool, tool
 
-from .agent import DiversificationAgent, AgentType
-from .mcp_manager import MCPManager, MCPServerType
+from .agent import AgentType, DiversificationAgent
 from .config import get_config
+from .mcp_manager import MCPManager, MCPServerType
 
 
 @dataclass
@@ -21,9 +21,9 @@ class ExternalInterface:
     type: str  # "http_api", "websocket", "database", "message_queue"
     name: str
     description: str
-    port: Optional[int] = None
-    protocol: Optional[str] = None
-    authentication: Optional[str] = None
+    port: int | None = None
+    protocol: str | None = None
+    authentication: str | None = None
     required_for_testing: bool = True
 
 
@@ -32,22 +32,22 @@ class DockerServiceInfo:
     """Docker service configuration information."""
 
     name: str
-    container_name: Optional[str]
-    exposed_ports: List[int]
-    dependencies: List[str]
-    environment_variables: List[str]
-    health_check: Optional[str] = None
+    container_name: str | None
+    exposed_ports: list[int]
+    dependencies: list[str]
+    environment_variables: list[str]
+    health_check: str | None = None
 
 
 @dataclass
 class DocumentationAnalysisResult:
     """Results of documentation analysis."""
 
-    external_interfaces: List[ExternalInterface]
-    docker_services: List[DockerServiceInfo]
-    network_configuration: Dict[str, Any]
-    testing_requirements: Dict[str, Any]
-    deployment_patterns: Dict[str, Any]
+    external_interfaces: list[ExternalInterface]
+    docker_services: list[DockerServiceInfo]
+    network_configuration: dict[str, Any]
+    testing_requirements: dict[str, Any]
+    deployment_patterns: dict[str, Any]
     analysis_confidence: float  # 0.0 to 1.0
 
 
@@ -148,7 +148,7 @@ class DocumentationAnalyzer:
 
         return result
 
-    async def _collect_documentation_files(self) -> List[Path]:
+    async def _collect_documentation_files(self) -> list[Path]:
         """Collect documentation files matching patterns."""
         doc_files = []
 
@@ -181,7 +181,7 @@ class DocumentationAnalyzer:
         # Remove duplicates and return
         return list(set(doc_files))
 
-    async def _collect_configuration_files(self) -> List[Path]:
+    async def _collect_configuration_files(self) -> list[Path]:
         """Collect configuration files for deployment analysis."""
         config_files = []
 
@@ -210,7 +210,7 @@ class DocumentationAnalyzer:
 
         return list(set(config_files))
 
-    def _create_file_system_tools(self) -> List[BaseTool]:
+    def _create_file_system_tools(self) -> list[BaseTool]:
         """Create file system tools for the analyzer agent."""
 
         @tool
@@ -271,8 +271,8 @@ class DocumentationAnalyzer:
         return [read_documentation_file, list_project_files]
 
     def _analyze_documentation_files(
-        self, agent: DiversificationAgent, doc_files: List[Path]
-    ) -> Dict[str, Any]:
+        self, agent: DiversificationAgent, doc_files: list[Path]
+    ) -> dict[str, Any]:
         """Analyze documentation files using the LLM agent."""
 
         # Load documentation analyzer prompt
@@ -287,10 +287,10 @@ class DocumentationAnalyzer:
 
         analysis_prompt = f"""
         {doc_prompt}
-        
+
         ## Task
         Analyze the following project documentation files to identify external interfaces, APIs, and communication patterns.
-        
+
         Focus on discovering:
         1. HTTP/REST API endpoints and their specifications
         2. Database connections and schemas
@@ -298,12 +298,12 @@ class DocumentationAnalyzer:
         4. External service dependencies
         5. Network ports and protocols
         6. Authentication and security requirements
-        
+
         ## Documentation Files to Analyze
         {[str(f) for f in files_to_analyze]}
-        
+
         Use the read_documentation_file tool to examine each file and extract external interface information.
-        
+
         Provide your analysis in the specified JSON format.
         """
 
@@ -353,8 +353,8 @@ class DocumentationAnalyzer:
             }
 
     def _analyze_docker_configuration(
-        self, agent: DiversificationAgent, config_files: List[Path]
-    ) -> Dict[str, Any]:
+        self, agent: DiversificationAgent, config_files: list[Path]
+    ) -> dict[str, Any]:
         """Analyze Docker and deployment configuration files."""
 
         # Load Docker service discovery prompt
@@ -366,7 +366,7 @@ class DocumentationAnalyzer:
 
         analysis_prompt = f"""
         {docker_prompt}
-        
+
         ## Task
         Analyze the project's Docker and deployment configuration files to understand:
         1. Container networking and service discovery
@@ -375,12 +375,12 @@ class DocumentationAnalyzer:
         4. Service dependencies and startup order
         5. Environment variable requirements
         6. Testing infrastructure needs
-        
+
         ## Configuration Files to Analyze
         {[str(f) for f in config_files]}
-        
+
         Use the read_documentation_file and list_project_files tools to examine configuration files.
-        
+
         Provide your analysis in the specified JSON format focusing on Docker service architecture.
         """
 
@@ -426,7 +426,7 @@ class DocumentationAnalyzer:
             }
 
     def _combine_analysis_results(
-        self, doc_analysis: Dict[str, Any], docker_analysis: Dict[str, Any]
+        self, doc_analysis: dict[str, Any], docker_analysis: dict[str, Any]
     ) -> DocumentationAnalysisResult:
         """Combine documentation and Docker analysis results."""
 
@@ -515,7 +515,7 @@ class DocumentationAnalyzer:
         )
 
     def _calculate_analysis_confidence(
-        self, doc_analysis: Dict[str, Any], docker_analysis: Dict[str, Any]
+        self, doc_analysis: dict[str, Any], docker_analysis: dict[str, Any]
     ) -> float:
         """Calculate confidence score for the analysis results."""
         confidence_factors = []
@@ -548,7 +548,7 @@ class DocumentationAnalyzer:
         return sum(confidence_factors)
 
     async def export_analysis_results(
-        self, result: DocumentationAnalysisResult, output_path: Optional[str] = None
+        self, result: DocumentationAnalysisResult, output_path: str | None = None
     ) -> str:
         """Export analysis results to JSON file.
 
@@ -591,7 +591,7 @@ class DocumentationAnalyzer:
             "testing_requirements": result.testing_requirements,
             "deployment_patterns": result.deployment_patterns,
             "analysis_confidence": result.analysis_confidence,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
 
         # Write to file using MCP server if available

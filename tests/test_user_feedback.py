@@ -3,14 +3,14 @@
 import io
 from unittest.mock import patch
 
-from src.orchestration.user_feedback import (
-    UserFeedback,
-    FeedbackLevel,
-    UserMessage,
-    ProgressIndicator,
-)
-from src.orchestration.error_handling import ErrorInfo, ErrorCategory, ErrorSeverity
+from src.orchestration.error_handling import ErrorCategory, ErrorInfo, ErrorSeverity
 from src.orchestration.exceptions import DiversifierError
+from src.orchestration.user_feedback import (
+    FeedbackLevel,
+    ProgressIndicator,
+    UserFeedback,
+    UserMessage,
+)
 
 
 class TestUserMessage:

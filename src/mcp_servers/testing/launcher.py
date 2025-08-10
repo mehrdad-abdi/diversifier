@@ -1,24 +1,24 @@
 """Testing MCP Server launcher and lifecycle management."""
 
 import asyncio
+import json
 import subprocess
 import sys
-import json
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 
 class TestingMCPClient:
     """Client for managing Testing MCP Server lifecycle and communication."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         """Initialize the MCP client.
 
         Args:
             project_root: Root directory to constrain test operations to.
         """
         self.project_root = project_root or str(Path.cwd())
-        self.process: Optional[subprocess.Popen] = None
+        self.process: subprocess.Popen | None = None
 
     def start_server(self) -> bool:
         """Start the Testing MCP Server process.
@@ -57,8 +57,8 @@ class TestingMCPClient:
             self.process = None
 
     def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         """Send a JSON-RPC request to the server.
 
         Args:
@@ -91,13 +91,11 @@ class TestingMCPClient:
 
         return None
 
-    def list_tools(self) -> Optional[Dict[str, Any]]:
+    def list_tools(self) -> dict[str, Any] | None:
         """List available tools."""
         return self.send_request("tools/list")
 
-    def call_tool(
-        self, name: str, arguments: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
         """Call a specific tool.
 
         Args:
@@ -111,7 +109,7 @@ class TestingMCPClient:
 
     def discover_tests(
         self, test_path: str = "tests/", pattern: str = "test_*.py"
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Discover tests using pytest.
 
         Args:
@@ -135,11 +133,11 @@ class TestingMCPClient:
 
     def run_tests(
         self,
-        test_path: Optional[str] = None,
-        test_filter: Optional[str] = None,
+        test_path: str | None = None,
+        test_filter: str | None = None,
         verbose: bool = True,
         capture: str = "no",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Execute tests using pytest.
 
         Args:
@@ -169,11 +167,11 @@ class TestingMCPClient:
 
     def run_tests_with_coverage(
         self,
-        test_path: Optional[str] = None,
+        test_path: str | None = None,
         source_path: str = "src/",
         coverage_format: str = "term-missing",
-        min_coverage: Optional[float] = None,
-    ) -> Optional[Dict[str, Any]]:
+        min_coverage: float | None = None,
+    ) -> dict[str, Any] | None:
         """Execute tests with coverage analysis.
 
         Args:
@@ -185,7 +183,7 @@ class TestingMCPClient:
         Returns:
             Test and coverage results
         """
-        args: Dict[str, Any] = {
+        args: dict[str, Any] = {
             "source_path": source_path,
             "coverage_format": coverage_format,
         }
@@ -205,8 +203,8 @@ class TestingMCPClient:
         return None
 
     def analyze_test_results(
-        self, output_file: Optional[str] = None, output_text: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, output_file: str | None = None, output_text: str | None = None
+    ) -> dict[str, Any] | None:
         """Parse and analyze pytest output.
 
         Args:
@@ -237,7 +235,7 @@ class TestingMCPClient:
         baseline_results: str,
         migration_results: str,
         comparison_type: str = "pass_fail",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Compare test results between baseline and migrated versions.
 
         Args:
@@ -267,7 +265,7 @@ class TestingMCPClient:
 
     def validate_test_equivalence(
         self, baseline_path: str, migrated_path: str, tolerance: float = 1e-10
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Validate that migrated code produces equivalent test results.
 
         Args:
@@ -296,8 +294,8 @@ class TestingMCPClient:
         return None
 
     def create_test_environment(
-        self, requirements: List[str], env_name: str = "test_env"
-    ) -> Optional[Dict[str, Any]]:
+        self, requirements: list[str], env_name: str = "test_env"
+    ) -> dict[str, Any] | None:
         """Set up isolated test environment with specific dependencies.
 
         Args:

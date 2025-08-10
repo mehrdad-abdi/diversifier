@@ -1,19 +1,20 @@
 """Tests for source code analyzer functionality."""
 
 import json
-import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
+from src.orchestration.mcp_manager import MCPManager, MCPServerType
 from src.orchestration.source_code_analyzer import (
-    SourceCodeAnalyzer,
     APIEndpoint,
-    ExternalServiceIntegration,
     ConfigurationUsage,
     ExistingTestPattern,
+    ExternalServiceIntegration,
     SourceCodeAnalysisResult,
+    SourceCodeAnalyzer,
 )
-from src.orchestration.mcp_manager import MCPManager, MCPServerType
 
 
 class TestAPIEndpoint:
@@ -736,9 +737,7 @@ class TestSourceCodeAnalyzer:
         generated_at = parsed_content["generated_at"]
         assert isinstance(generated_at, str)
         assert (
-            generated_at.endswith("Z")
-            or "+" in generated_at
-            or generated_at.endswith(":00")
+            generated_at.endswith(("Z", ":00")) or "+" in generated_at
         )
 
         # Parse to ensure it's a valid ISO format timestamp
