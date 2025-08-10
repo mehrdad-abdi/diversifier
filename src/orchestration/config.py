@@ -484,16 +484,29 @@ def get_config_manager(config_path: Union[str, Path]) -> ConfigManager:
     return _config_manager
 
 
-def get_config(config_path: Union[str, Path]) -> DiversifierConfig:
+def get_config(config_path: Optional[Union[str, Path]] = None) -> DiversifierConfig:
     """Get current configuration.
 
     Args:
-        config_path: Path to configuration file (REQUIRED)
+        config_path: Path to configuration file. If None, uses global config manager.
 
     Returns:
         Configuration object
+        
+    Raises:
+        ValueError: If no config path provided and no global config manager initialized
     """
-    return get_config_manager(config_path).get_config()
+    if config_path is not None:
+        return get_config_manager(config_path).get_config()
+    else:
+        # Use global config manager if already initialized
+        global _config_manager
+        if _config_manager is None:
+            raise ValueError(
+                "No configuration available. Either provide config_path or initialize "
+                "global config first by calling get_config_manager() with a path."
+            )
+        return _config_manager.get_config()
 
 
 def get_task_temperature(

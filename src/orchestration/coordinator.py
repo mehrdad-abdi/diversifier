@@ -84,11 +84,11 @@ class DiversificationCoordinator:
             )
 
             # Prepare initialization arguments
-            kwargs = {
+            kwargs: Dict[str, Any] = {
                 "temperature": self.llm_config.temperature,
                 "max_tokens": self.llm_config.max_tokens,
             }
-            # Add additional params with proper typing
+            # Add additional params
             for key, value in self.llm_config.additional_params.items():
                 kwargs[key] = value
 
