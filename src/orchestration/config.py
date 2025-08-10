@@ -80,13 +80,13 @@ class TaskTemperatureConfig:
 class LLMConfig:
     """LLM (Large Language Model) configuration settings."""
 
-    provider: str = "anthropic"  # anthropic, openai, google_genai, etc.
-    model_name: str = "claude-3-5-sonnet-20241022"
+    provider: str  # anthropic, openai, google_genai, etc. (REQUIRED)
+    model_name: str  # Model name (REQUIRED)
+    api_key_env_var: str  # Environment variable name for API key (REQUIRED)
     temperature: float = 0.1  # Default temperature
     max_tokens: int = 4096
     timeout: int = 120  # seconds
     retry_attempts: int = 3
-    api_key_env_var: Optional[str] = None  # Environment variable name for API key
     base_url: Optional[str] = None  # Custom API endpoint URL
     task_temperatures: TaskTemperatureConfig = field(
         default_factory=TaskTemperatureConfig
@@ -95,16 +95,28 @@ class LLMConfig:
         default_factory=dict
     )
 
+    def __post_init__(self):
+        """Validate LLM configuration after initialization."""
+        # Validate that API key environment variable is set
+        import os
+
+        api_key = os.getenv(self.api_key_env_var)
+        if not api_key:
+            raise ValueError(
+                f"API key environment variable '{self.api_key_env_var}' is not set. "
+                f"Please set: export {self.api_key_env_var}=your_api_key_here"
+            )
+
 
 @dataclass
 class DiversifierConfig:
     """Complete configuration for the Diversifier tool."""
 
+    llm: LLMConfig  # LLM configuration (REQUIRED)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     mcp: MCPConfig = field(default_factory=MCPConfig)
     migration: MigrationConfig = field(default_factory=MigrationConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
-    llm: LLMConfig = field(default_factory=LLMConfig)
     project_root: str = "."
     temp_dir: str = "/tmp/diversifier"
     debug_mode: bool = False
@@ -113,13 +125,13 @@ class DiversifierConfig:
 class ConfigManager:
     """Manages configuration loading and environment variable overrides."""
 
-    def __init__(self, config_path: Optional[Union[str, Path]] = None):
+    def __init__(self, config_path: Union[str, Path]):
         """Initialize configuration manager.
 
         Args:
-            config_path: Optional path to TOML configuration file
+            config_path: Path to TOML configuration file (REQUIRED)
         """
-        self.config_path = Path(config_path) if config_path else None
+        self.config_path = Path(config_path)
         self._config: Optional[DiversifierConfig] = None
 
     def load_config(self) -> DiversifierConfig:
@@ -131,12 +143,15 @@ class ConfigManager:
         if self._config is not None:
             return self._config
 
-        # Start with default configuration
-        config_data = {}
+        # Require config file to exist
+        if not self.config_path.exists():
+            raise ValueError(
+                f"Configuration file not found: {self.config_path}\n"
+                f"Create a config file using: diversifier --create-config {self.config_path}"
+            )
 
-        # Load from TOML file if provided
-        if self.config_path and self.config_path.exists():
-            config_data = self._load_toml_config()
+        # Load from TOML file
+        config_data = self._load_toml_config()
 
         # Apply environment variable overrides
         config_data = self._apply_env_overrides(config_data)
@@ -400,16 +415,15 @@ slow_operation_threshold = 1.0
 enable_memory_tracking = false
 
 [llm]
-# LLM Provider: Use correct LangChain provider names
+# LLM Provider: Use correct LangChain provider names  
 # See https://python.langchain.com/docs/integrations/chat/ for all supported providers
 provider = "anthropic"
 model_name = "claude-3-5-sonnet-20241022"
+api_key_env_var = "ANTHROPIC_API_KEY"  # REQUIRED: Environment variable name for API key
 temperature = 0.1  # Default temperature for all tasks
 max_tokens = 4096
 timeout = 120
 retry_attempts = 3
-# Optional: Environment variable name for API key (defaults to provider-specific)
-# api_key_env_var = "ANTHROPIC_API_KEY"
 # Optional: Custom API endpoint URL
 # base_url = "https://api.anthropic.com"
 
@@ -455,11 +469,11 @@ debug_mode = false
 _config_manager: Optional[ConfigManager] = None
 
 
-def get_config_manager(config_path: Optional[Union[str, Path]] = None) -> ConfigManager:
+def get_config_manager(config_path: Union[str, Path]) -> ConfigManager:
     """Get global configuration manager instance.
 
     Args:
-        config_path: Optional path to configuration file
+        config_path: Path to configuration file (REQUIRED)
 
     Returns:
         Configuration manager instance
@@ -470,13 +484,28 @@ def get_config_manager(config_path: Optional[Union[str, Path]] = None) -> Config
     return _config_manager
 
 
-def get_config() -> DiversifierConfig:
+def get_config(config_path: Optional[Union[str, Path]] = None) -> DiversifierConfig:
     """Get current configuration.
+
+    Args:
+        config_path: Path to configuration file. If None, uses global config manager.
 
     Returns:
         Configuration object
+
+    Raises:
+        ValueError: If no config path provided and no global config manager initialized
     """
-    return get_config_manager().get_config()
+    if config_path is not None:
+        return get_config_manager(config_path).get_config()
+    else:
+        # Use global config manager if already initialized
+        if _config_manager is None:
+            raise ValueError(
+                "No configuration available. Either provide config_path or initialize "
+                "global config first by calling get_config_manager() with a path."
+            )
+        return _config_manager.get_config()
 
 
 def get_task_temperature(

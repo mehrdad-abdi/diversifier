@@ -10,7 +10,7 @@ from .workflow import WorkflowState, MigrationContext
 from .acceptance_test_generator import AcceptanceTestGenerator
 from .doc_analyzer import DocumentationAnalyzer
 from .source_code_analyzer import SourceCodeAnalyzer
-from .config import LLMConfig, get_config
+from .config import LLMConfig
 
 
 class DiversificationCoordinator:
@@ -34,7 +34,11 @@ class DiversificationCoordinator:
         self.project_path = Path(project_path).resolve()
         self.source_library = source_library
         self.target_library = target_library
-        self.llm_config = llm_config or get_config().llm
+        if llm_config is None:
+            raise ValueError(
+                "llm_config is required - no default configuration available"
+            )
+        self.llm_config = llm_config
 
         # Initialize components
         self.agent_manager = AgentManager(llm_config=self.llm_config)
@@ -65,6 +69,46 @@ class DiversificationCoordinator:
         self.dry_run = False
         self.auto_proceed = False
 
+    def _validate_api_key(self) -> bool:
+        """Validate LLM configuration by attempting to initialize a chat model.
+
+        Returns:
+            True if LLM config is valid, False otherwise
+        """
+        try:
+            from langchain.chat_models import init_chat_model
+
+            # Create the model identifier for init_chat_model
+            model_id = (
+                f"{self.llm_config.provider.lower()}:{self.llm_config.model_name}"
+            )
+
+            # Prepare initialization arguments
+            kwargs: Dict[str, Any] = {
+                "temperature": self.llm_config.temperature,
+                "max_tokens": self.llm_config.max_tokens,
+            }
+            # Add additional params
+            for key, value in self.llm_config.additional_params.items():
+                kwargs[key] = value
+
+            # Try to initialize the LLM - this validates the config without API calls
+            init_chat_model(model=model_id, **kwargs)
+
+            self.logger.info(
+                f"✅ LLM configuration validated for {self.llm_config.provider}:{self.llm_config.model_name}"
+            )
+            return True
+
+        except Exception as e:
+            print("❌ Error: Invalid LLM configuration")
+            print(f"Provider: {self.llm_config.provider}")
+            print(f"Model: {self.llm_config.model_name}")
+            print("")
+            print(f"Error: {e}")
+
+            return False
+
     async def execute_workflow(
         self, dry_run: bool = False, auto_proceed: bool = False
     ) -> bool:
@@ -84,6 +128,10 @@ class DiversificationCoordinator:
             f"Starting diversification workflow: {self.source_library} -> {self.target_library}"
         )
         self.logger.info(f"Project path: {self.project_path}")
+
+        # Validate API key before starting workflow
+        if not self._validate_api_key():
+            return False
 
         try:
             # Execute workflow steps in order

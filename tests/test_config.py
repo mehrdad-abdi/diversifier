@@ -96,29 +96,35 @@ class TestPerformanceConfig:
 class TestLLMConfig:
     """Tests for LLMConfig dataclass."""
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_default_values(self):
         """Test default configuration values."""
-        config = LLMConfig()
+        config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-5-sonnet-20241022",
+            api_key_env_var="TEST_API_KEY",
+        )
         assert config.provider == "anthropic"
         assert config.model_name == "claude-3-5-sonnet-20241022"
         assert config.temperature == 0.1
         assert config.max_tokens == 4096
         assert config.timeout == 120
         assert config.retry_attempts == 3
-        assert config.api_key_env_var is None
+        assert config.api_key_env_var == "TEST_API_KEY"
         assert config.base_url is None
         assert config.additional_params == {}
 
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-openai-key"}, clear=False)
     def test_custom_values(self):
         """Test custom configuration values."""
         config = LLMConfig(
             provider="openai",
             model_name="gpt-4",
+            api_key_env_var="OPENAI_API_KEY",
             temperature=0.7,
             max_tokens=2048,
             timeout=60,
             retry_attempts=5,
-            api_key_env_var="OPENAI_API_KEY",
             base_url="https://api.openai.com/v1",
             additional_params={"top_p": 0.9, "frequency_penalty": 0.1},
         )
@@ -132,13 +138,14 @@ class TestLLMConfig:
         assert config.base_url == "https://api.openai.com/v1"
         assert config.additional_params == {"top_p": 0.9, "frequency_penalty": 0.1}
 
+    @patch.dict(os.environ, {"GOOGLE_API_KEY": "test-google-key"}, clear=False)
     def test_google_provider_config(self):
         """Test configuration for Google/Gemini provider."""
         config = LLMConfig(
             provider="google",
             model_name="gemini-pro",
-            temperature=0.5,
             api_key_env_var="GOOGLE_API_KEY",
+            temperature=0.5,
         )
         assert config.provider == "google"
         assert config.model_name == "gemini-pro"
@@ -149,9 +156,15 @@ class TestLLMConfig:
 class TestDiversifierConfig:
     """Tests for main DiversifierConfig dataclass."""
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_default_values(self):
         """Test default configuration values."""
-        config = DiversifierConfig()
+        llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-5-sonnet-20241022",
+            api_key_env_var="TEST_API_KEY",
+        )
+        config = DiversifierConfig(llm=llm_config)
         assert isinstance(config.logging, LoggingConfig)
         assert isinstance(config.mcp, MCPConfig)
         assert isinstance(config.migration, MigrationConfig)
@@ -172,31 +185,26 @@ class TestConfigManager:
 
         src.orchestration.config._config_manager = None
 
-    def test_init_without_config_path(self):
-        """Test initialization without config path."""
-        manager = ConfigManager()
-        assert manager.config_path is None
-        assert manager._config is None
-
-    def test_init_with_config_path(self):
-        """Test initialization with config path."""
+    def test_init_with_required_config_path(self):
+        """Test initialization with required config path."""
         manager = ConfigManager("/path/to/config.toml")
         assert manager.config_path == Path("/path/to/config.toml")
         assert manager._config is None
 
-    def test_load_config_default(self):
-        """Test loading default configuration."""
-        manager = ConfigManager()
-        config = manager.load_config()
+    def test_init_with_path_object(self):
+        """Test initialization with Path object."""
+        path = Path("/path/to/config.toml")
+        manager = ConfigManager(path)
+        assert manager.config_path == path
+        assert manager._config is None
 
-        assert isinstance(config, DiversifierConfig)
-        assert config.logging.level == "INFO"
-        assert config.mcp.timeout == 30
-        assert config.migration.max_iterations == 5
-        assert config.performance.enable_metrics is True
-        assert config.llm.provider == "anthropic"
-        assert config.llm.temperature == 0.1
+    def test_load_config_file_not_found(self):
+        """Test loading configuration when file doesn't exist."""
+        manager = ConfigManager("/nonexistent/config.toml")
+        with pytest.raises(ValueError, match="Configuration file not found"):
+            manager.load_config()
 
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-openai-key"}, clear=False)
     def test_load_config_from_file(self):
         """Test loading configuration from TOML file."""
         toml_content = """
@@ -267,7 +275,15 @@ api_key_env_var = "OPENAI_API_KEY"
 
     def test_apply_env_overrides(self):
         """Test applying environment variable overrides."""
+        # Create a basic TOML config file
+        toml_content = """
+[llm]
+provider = "anthropic"
+model_name = "claude-3-5-sonnet-20241022"
+api_key_env_var = "TEST_API_KEY"
+"""
         env_vars = {
+            "TEST_API_KEY": "test-key",
             "DIVERSIFIER_LOG_LEVEL": "ERROR",
             "DIVERSIFIER_LOG_CONSOLE": "false",
             "DIVERSIFIER_MCP_TIMEOUT": "120",
@@ -280,22 +296,31 @@ api_key_env_var = "OPENAI_API_KEY"
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
-            manager = ConfigManager()
-            config = manager.load_config()
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
+                f.write(toml_content)
+                f.flush()
 
-            assert config.logging.level == "ERROR"
-            assert config.logging.console is False
-            assert config.mcp.timeout == 120
-            assert config.debug_mode is True
-            assert config.migration.min_test_coverage == 0.9
-            assert config.llm.provider == "google"
-            assert config.llm.model_name == "gemini-pro"
-            assert config.llm.temperature == 0.8
-            assert config.llm.max_tokens == 8192
+                try:
+                    manager = ConfigManager(f.name)
+                    config = manager.load_config()
+
+                    assert config.logging.level == "ERROR"
+                    assert config.logging.console is False
+                    assert config.mcp.timeout == 120
+                    assert config.debug_mode is True
+                    assert config.migration.min_test_coverage == 0.9
+                    assert config.llm.provider == "google"
+                    assert config.llm.model_name == "gemini-pro"
+                    assert config.llm.temperature == 0.8
+                    assert config.llm.max_tokens == 8192
+                finally:
+                    os.unlink(f.name)
 
     def test_convert_env_value_boolean(self):
         """Test environment value conversion for booleans."""
-        manager = ConfigManager()
+        manager = ConfigManager("/dummy/path.toml")
 
         # Test true values
         assert manager._convert_env_value("true", "logging", "console") is True
@@ -312,7 +337,7 @@ api_key_env_var = "OPENAI_API_KEY"
 
     def test_convert_env_value_integer(self):
         """Test environment value conversion for integers."""
-        manager = ConfigManager()
+        manager = ConfigManager("/dummy/path.toml")
 
         assert manager._convert_env_value("123", "mcp", "timeout") == 123
         assert manager._convert_env_value("0", "mcp", "timeout") == 0
@@ -320,7 +345,7 @@ api_key_env_var = "OPENAI_API_KEY"
 
     def test_convert_env_value_float(self):
         """Test environment value conversion for floats."""
-        manager = ConfigManager()
+        manager = ConfigManager("/dummy/path.toml")
 
         assert (
             manager._convert_env_value("1.5", "migration", "min_test_coverage") == 1.5
@@ -337,7 +362,7 @@ api_key_env_var = "OPENAI_API_KEY"
 
     def test_convert_env_value_string(self):
         """Test environment value conversion for strings."""
-        manager = ConfigManager()
+        manager = ConfigManager("/dummy/path.toml")
 
         assert manager._convert_env_value("test", "logging", "level") == "test"
         assert (
@@ -347,28 +372,63 @@ api_key_env_var = "OPENAI_API_KEY"
 
     def test_get_config_caches_result(self):
         """Test that get_config caches the result."""
-        manager = ConfigManager()
-        config1 = manager.get_config()
-        config2 = manager.get_config()
+        # Create a basic TOML config file
+        toml_content = """
+[llm]
+provider = "anthropic"
+model_name = "claude-3-5-sonnet-20241022"
+api_key_env_var = "TEST_API_KEY"
+"""
+        with patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False):
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
+                f.write(toml_content)
+                f.flush()
 
-        assert config1 is config2
+                try:
+                    manager = ConfigManager(f.name)
+                    config1 = manager.get_config()
+                    config2 = manager.get_config()
+
+                    assert config1 is config2
+                finally:
+                    os.unlink(f.name)
 
     def test_reload_config(self):
         """Test reloading configuration."""
-        manager = ConfigManager()
-        config1 = manager.load_config()
-        config2 = manager.reload_config()
+        # Create a basic TOML config file
+        toml_content = """
+[llm]
+provider = "anthropic"
+model_name = "claude-3-5-sonnet-20241022"
+api_key_env_var = "TEST_API_KEY"
+"""
+        with patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False):
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
+                f.write(toml_content)
+                f.flush()
 
-        assert config1 is not config2
-        assert isinstance(config2, DiversifierConfig)
+                try:
+                    manager = ConfigManager(f.name)
+                    config1 = manager.load_config()
+                    config2 = manager.reload_config()
 
+                    assert config1 is not config2
+                    assert isinstance(config2, DiversifierConfig)
+                finally:
+                    os.unlink(f.name)
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False)
     def test_save_config_template(self):
         """Test saving configuration template."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             template_path = f.name
 
         try:
-            manager = ConfigManager()
+            manager = ConfigManager("/dummy/path.toml")
             manager.save_config_template(template_path)
 
             assert Path(template_path).exists()
@@ -395,8 +455,8 @@ class TestGlobalFunctions:
 
     def test_get_config_manager_singleton(self):
         """Test that get_config_manager returns singleton instance."""
-        manager1 = get_config_manager()
-        manager2 = get_config_manager()
+        manager1 = get_config_manager("/test/path.toml")
+        manager2 = get_config_manager("/test/path.toml")
 
         assert manager1 is manager2
         assert isinstance(manager1, ConfigManager)
@@ -408,11 +468,46 @@ class TestGlobalFunctions:
 
     def test_get_config(self):
         """Test get_config function."""
-        config = get_config()
-        assert isinstance(config, DiversifierConfig)
+        # Create a basic TOML config file
+        toml_content = """
+[llm]
+provider = "anthropic"
+model_name = "claude-3-5-sonnet-20241022"
+api_key_env_var = "TEST_API_KEY"
+"""
+        with patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False):
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
+                f.write(toml_content)
+                f.flush()
 
-    @patch.dict(os.environ, {"DIVERSIFIER_DEBUG": "true"}, clear=False)
+                try:
+                    config = get_config(f.name)
+                    assert isinstance(config, DiversifierConfig)
+                finally:
+                    os.unlink(f.name)
+
+    @patch.dict(
+        os.environ,
+        {"DIVERSIFIER_DEBUG": "true", "TEST_API_KEY": "test-key"},
+        clear=False,
+    )
     def test_get_config_with_env_vars(self):
         """Test get_config with environment variables."""
-        config = get_config()
-        assert config.debug_mode is True
+        # Create a basic TOML config file
+        toml_content = """
+[llm]
+provider = "anthropic"
+model_name = "claude-3-5-sonnet-20241022"
+api_key_env_var = "TEST_API_KEY"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+
+            try:
+                config = get_config(f.name)
+                assert config.debug_mode is True
+            finally:
+                os.unlink(f.name)

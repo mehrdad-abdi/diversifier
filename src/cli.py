@@ -27,17 +27,34 @@ Examples:
     )
 
     parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        help="Path to configuration file (REQUIRED for normal operation)",
+    )
+
+    parser.add_argument(
+        "--create-config",
+        type=str,
+        help="Create a default configuration file at the specified path and exit",
+    )
+
+    parser.add_argument(
         "project_path",
         type=str,
+        nargs="?",
         help="Path to the Python project directory to diversify",
     )
 
     parser.add_argument(
-        "remove_lib", type=str, help="Name of the library to remove/replace"
+        "remove_lib", type=str, nargs="?", help="Name of the library to remove/replace"
     )
 
     parser.add_argument(
-        "inject_lib", type=str, help="Name of the library to inject/substitute"
+        "inject_lib",
+        type=str,
+        nargs="?",
+        help="Name of the library to inject/substitute",
     )
 
     parser.add_argument(
@@ -72,8 +89,8 @@ async def run_diversification(args) -> int:
     setup_logging(logging_config)
 
     try:
-        # Initialize coordinator with configuration from config files/environment
-        config = get_config()
+        # Initialize coordinator with configuration from config file
+        config = get_config(args.config)
 
         coordinator = DiversificationCoordinator(
             project_path=str(args.project_path),
@@ -102,6 +119,32 @@ async def run_diversification(args) -> int:
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
+
+    # Handle config file creation
+    if args.create_config:
+        try:
+            from .orchestration.config import ConfigManager
+
+            config_manager = ConfigManager(args.create_config)
+            config_manager.save_config_template(args.create_config)
+            print(f"✅ Configuration template created: {args.create_config}")
+            print(
+                f"Edit the file to add your LLM provider settings, then run diversifier with --config {args.create_config}"
+            )
+            return 0
+        except Exception as e:
+            print(f"❌ Failed to create config file: {e}")
+            return 1
+
+    # Validate required arguments for normal operation
+    if not args.config:
+        print("❌ Error: --config is required")
+        print("Use --create-config to create a configuration file first")
+        return 1
+
+    if not args.project_path or not args.remove_lib or not args.inject_lib:
+        print("❌ Error: project_path, remove_lib, and inject_lib are required")
+        return 1
 
     project_path = validate_project_path(args.project_path)
     if not project_path:

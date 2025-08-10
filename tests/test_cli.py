@@ -17,10 +17,15 @@ class TestCreateParser:
     def test_parser_required_arguments(self):
         parser = create_parser()
 
-        with pytest.raises(SystemExit):
-            parser.parse_args([])
+        # Test that --config is required for normal operation
+        args = parser.parse_args(["--create-config", "/test/config.toml"])
+        assert args.create_config == "/test/config.toml"
 
-        args = parser.parse_args([".", "requests", "httpx"])
+        # Test normal operation with config
+        args = parser.parse_args(
+            ["--config", "/test/config.toml", ".", "requests", "httpx"]
+        )
+        assert args.config == "/test/config.toml"
         assert args.project_path == "."
         assert args.remove_lib == "requests"
         assert args.inject_lib == "httpx"
@@ -30,7 +35,17 @@ class TestCreateParser:
     def test_parser_optional_flags(self):
         parser = create_parser()
 
-        args = parser.parse_args([".", "requests", "httpx", "--dry-run", "--verbose"])
+        args = parser.parse_args(
+            [
+                "--config",
+                "/test/config.toml",
+                ".",
+                "requests",
+                "httpx",
+                "--dry-run",
+                "--verbose",
+            ]
+        )
         assert args.dry_run is True
         assert args.verbose is True
 
@@ -49,6 +64,7 @@ class TestCreateParser:
 
 
 class TestMainFunction:
+    @patch("src.cli.get_config")
     @patch("src.cli.DiversificationCoordinator")
     @patch("src.cli.validate_library_name")
     @patch("src.cli.validate_project_path")
@@ -61,7 +77,16 @@ class TestMainFunction:
         mock_validate_path,
         mock_validate_lib,
         mock_coordinator_class,
+        mock_get_config,
     ):
+        from src.orchestration.config import DiversifierConfig, LLMConfig
+
+        # Mock LLM config
+        mock_llm_config = Mock(spec=LLMConfig)
+        mock_config = Mock(spec=DiversifierConfig)
+        mock_config.llm = mock_llm_config
+        mock_get_config.return_value = mock_config
+
         mock_validate_python.return_value = (True, [])
         mock_validate_path.return_value = "/fake/path"
         mock_validate_lib.return_value = True
@@ -72,6 +97,8 @@ class TestMainFunction:
 
         test_args = [
             "diversifier",
+            "--config",
+            "/test/config.toml",
             ".",
             "requests",
             "httpx",
@@ -84,15 +111,33 @@ class TestMainFunction:
         assert result == 0
         mock_validate_python.assert_called_once()
 
+    @patch("src.cli.get_config")
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
-    def test_main_invalid_project(self, mock_print, mock_validate_python):
+    def test_main_invalid_project(
+        self, mock_print, mock_validate_python, mock_get_config
+    ):
+        from src.orchestration.config import DiversifierConfig, LLMConfig
+
+        # Mock LLM config
+        mock_llm_config = Mock(spec=LLMConfig)
+        mock_config = Mock(spec=DiversifierConfig)
+        mock_config.llm = mock_llm_config
+        mock_get_config.return_value = mock_config
+
         mock_validate_python.return_value = (
             False,
             ["No Python files found"],
         )
 
-        test_args = ["diversifier", ".", "requests", "httpx"]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            ".",
+            "requests",
+            "httpx",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
@@ -101,40 +146,80 @@ class TestMainFunction:
 
     @patch("builtins.print")
     def test_main_nonexistent_path(self, mock_print):
-        test_args = ["diversifier", "/nonexistent", "requests", "httpx"]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            "/nonexistent",
+            "requests",
+            "httpx",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
         assert result == 1
 
+    @patch("src.cli.get_config")
     @patch("src.cli.DiversificationCoordinator")
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
     def test_main_same_libraries(
-        self, mock_print, mock_validate_python, mock_coordinator_class
+        self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
+        from src.orchestration.config import DiversifierConfig, LLMConfig
+
+        # Mock LLM config
+        mock_llm_config = Mock(spec=LLMConfig)
+        mock_config = Mock(spec=DiversifierConfig)
+        mock_config.llm = mock_llm_config
+        mock_get_config.return_value = mock_config
+
         mock_validate_python.return_value = (True, [])
 
-        test_args = ["diversifier", ".", "requests", "requests"]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            ".",
+            "requests",
+            "requests",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
         assert result == 1
 
+    @patch("src.cli.get_config")
     @patch("src.cli.DiversificationCoordinator")
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
     def test_main_invalid_library_name(
-        self, mock_print, mock_validate_python, mock_coordinator_class
+        self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
+        from src.orchestration.config import DiversifierConfig, LLMConfig
+
+        # Mock LLM config
+        mock_llm_config = Mock(spec=LLMConfig)
+        mock_config = Mock(spec=DiversifierConfig)
+        mock_config.llm = mock_llm_config
+        mock_get_config.return_value = mock_config
+
         mock_validate_python.return_value = (True, [])
 
-        test_args = ["diversifier", ".", "requests", ""]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            ".",
+            "requests",
+            "",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
         assert result == 1
 
+    @patch("src.cli.get_config")
     @patch("src.cli.DiversificationCoordinator")
     @patch("src.cli.validate_library_name")
     @patch("src.cli.validate_project_path")
@@ -147,7 +232,16 @@ class TestMainFunction:
         mock_validate_path,
         mock_validate_lib,
         mock_coordinator_class,
+        mock_get_config,
     ):
+        from src.orchestration.config import DiversifierConfig, LLMConfig
+
+        # Mock LLM config
+        mock_llm_config = Mock(spec=LLMConfig)
+        mock_config = Mock(spec=DiversifierConfig)
+        mock_config.llm = mock_llm_config
+        mock_get_config.return_value = mock_config
+
         mock_validate_python.return_value = (True, [])
         mock_validate_path.return_value = "/fake/path"
         mock_validate_lib.return_value = True
@@ -158,6 +252,8 @@ class TestMainFunction:
 
         test_args = [
             "diversifier",
+            "--config",
+            "/test/config.toml",
             ".",
             "requests",
             "httpx",
