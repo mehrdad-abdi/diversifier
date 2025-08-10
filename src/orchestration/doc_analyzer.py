@@ -11,6 +11,7 @@ from langchain_core.tools import BaseTool, tool
 
 from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
+from .config import get_config
 
 
 @dataclass
@@ -115,10 +116,18 @@ class DocumentationAnalyzer:
 
         # Create analyzer agent with file system tools
         file_tools = self._create_file_system_tools()
+
+        # Get base LLM config and override model if specified
+        llm_config = get_config().llm
+        if model_name != llm_config.model_name:
+            # Create a copy with the specified model name
+            from dataclasses import replace
+
+            llm_config = replace(llm_config, model_name=model_name)
+
         analyzer_agent = DiversificationAgent(
-            agent_type=AgentType.ANALYZER,
-            model_name=model_name,
-            temperature=0.1,
+            agent_type=AgentType.DOC_ANALYZER,
+            llm_config=llm_config,
             tools=file_tools,
         )
 

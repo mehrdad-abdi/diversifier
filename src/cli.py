@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import os
 import sys
 
 from .validation import (
@@ -9,7 +8,7 @@ from .validation import (
     validate_library_name,
 )
 from .orchestration.coordinator import DiversificationCoordinator
-from .orchestration.config import get_config, LoggingConfig
+from .orchestration.config import LoggingConfig, get_config
 from .orchestration.logging_config import setup_logging
 
 
@@ -60,20 +59,6 @@ Examples:
 
     parser.add_argument("--log-file", type=str, help="Write logs to file")
 
-    parser.add_argument(
-        "--model",
-        type=str,
-        default=os.getenv("DIVERSIFIER_MODEL", "gpt-4"),
-        help="LLM model to use (default: gpt-4, can be set via DIVERSIFIER_MODEL env var)",
-    )
-
-    parser.add_argument(
-        "--temperature",
-        type=float,
-        default=float(os.getenv("DIVERSIFIER_TEMPERATURE", "0.1")),
-        help="LLM temperature (default: 0.1, can be set via DIVERSIFIER_TEMPERATURE env var)",
-    )
-
     return parser
 
 
@@ -87,18 +72,14 @@ async def run_diversification(args) -> int:
     setup_logging(logging_config)
 
     try:
-        # Initialize coordinator with updated configuration
+        # Initialize coordinator with configuration from config files/environment
         config = get_config()
-        # Override LLM settings from command line args
-        config.llm.model_name = args.model
-        config.llm.temperature = args.temperature
 
         coordinator = DiversificationCoordinator(
             project_path=str(args.project_path),
             source_library=args.remove_lib,
             target_library=args.inject_lib,
-            model_name=args.model,
-            temperature=args.temperature,
+            llm_config=config.llm,
         )
 
         # Execute workflow

@@ -64,17 +64,33 @@ class PerformanceConfig:
 
 
 @dataclass
+class TaskTemperatureConfig:
+    """Task-specific temperature configuration."""
+
+    analyzer: float = 0.1  # Lower for precise analysis
+    migrator: float = 0.2  # Slightly higher for code transformation
+    tester: float = 0.3  # Higher for creative test generation
+    repairer: float = 0.2  # Moderate for problem solving
+    doc_analyzer: float = 0.1  # Lower for precise documentation analysis
+    source_code_analyzer: float = 0.1  # Lower for precise code analysis
+    acceptance_test_generator: float = 0.2  # Moderate for test generation
+
+
+@dataclass
 class LLMConfig:
     """LLM (Large Language Model) configuration settings."""
 
-    provider: str = "anthropic"  # anthropic, openai, google
+    provider: str = "anthropic"  # anthropic, openai, google_genai, etc.
     model_name: str = "claude-3-5-sonnet-20241022"
-    temperature: float = 0.1
+    temperature: float = 0.1  # Default temperature
     max_tokens: int = 4096
     timeout: int = 120  # seconds
     retry_attempts: int = 3
     api_key_env_var: Optional[str] = None  # Environment variable name for API key
     base_url: Optional[str] = None  # Custom API endpoint URL
+    task_temperatures: TaskTemperatureConfig = field(
+        default_factory=TaskTemperatureConfig
+    )
     additional_params: Dict[str, Union[str, int, float, bool]] = field(
         default_factory=dict
     )
@@ -290,9 +306,24 @@ class ConfigManager:
                 if k in PerformanceConfig.__dataclass_fields__
             }
         )
-        llm_config = LLMConfig(
-            **{k: v for k, v in llm_data.items() if k in LLMConfig.__dataclass_fields__}
+
+        # Handle task temperatures separately
+        task_temps_data = llm_data.get("task_temperatures", {})
+        task_temperatures = TaskTemperatureConfig(
+            **{
+                k: v
+                for k, v in task_temps_data.items()
+                if k in TaskTemperatureConfig.__dataclass_fields__
+            }
         )
+
+        # Create LLM config with task temperatures
+        llm_config_data = {
+            k: v
+            for k, v in llm_data.items()
+            if k != "task_temperatures" and k in LLMConfig.__dataclass_fields__
+        }
+        llm_config = LLMConfig(task_temperatures=task_temperatures, **llm_config_data)
 
         # Extract top-level configuration
         top_level_data = {
@@ -369,10 +400,11 @@ slow_operation_threshold = 1.0
 enable_memory_tracking = false
 
 [llm]
-# LLM Provider: "anthropic", "openai", "google"
+# LLM Provider: Use correct LangChain provider names
+# See https://python.langchain.com/docs/integrations/chat/ for all supported providers
 provider = "anthropic"
 model_name = "claude-3-5-sonnet-20241022"
-temperature = 0.1
+temperature = 0.1  # Default temperature for all tasks
 max_tokens = 4096
 timeout = 120
 retry_attempts = 3
@@ -381,16 +413,30 @@ retry_attempts = 3
 # Optional: Custom API endpoint URL
 # base_url = "https://api.anthropic.com"
 
+# Task-specific temperatures (override default temperature for specific tasks)
+[llm.task_temperatures]
+analyzer = 0.1  # Lower for precise analysis
+migrator = 0.2  # Slightly higher for code transformation
+tester = 0.3  # Higher for creative test generation
+repairer = 0.2  # Moderate for problem solving
+doc_analyzer = 0.1  # Lower for precise documentation analysis
+source_code_analyzer = 0.1  # Lower for precise code analysis
+acceptance_test_generator = 0.2  # Moderate for test generation
+
 # Example configurations for different providers:
 # For OpenAI:
 # provider = "openai"
 # model_name = "gpt-4"
 # api_key_env_var = "OPENAI_API_KEY"
 
-# For Google/Gemini:
-# provider = "google"
+# For Google Gemini (use google_genai for LangChain):
+# provider = "google_genai"
 # model_name = "gemini-pro"
 # api_key_env_var = "GOOGLE_API_KEY"
+
+# For Azure OpenAI:
+# provider = "azure_openai"
+# model_name = "gpt-4"
 
 # General settings
 project_root = "."
@@ -431,3 +477,27 @@ def get_config() -> DiversifierConfig:
         Configuration object
     """
     return get_config_manager().get_config()
+
+
+def get_task_temperature(
+    task_name: str, llm_config: Optional[LLMConfig] = None
+) -> float:
+    """Get temperature for a specific task.
+
+    Args:
+        task_name: Name of the task (analyzer, migrator, etc.)
+        llm_config: Optional LLM config. If None, uses global config.
+
+    Returns:
+        Temperature value for the task
+    """
+    if llm_config is None:
+        llm_config = get_config().llm
+
+    # Try to get task-specific temperature
+    task_temp = getattr(llm_config.task_temperatures, task_name, None)
+    if task_temp is not None:
+        return task_temp
+
+    # Fall back to default temperature
+    return llm_config.temperature

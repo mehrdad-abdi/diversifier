@@ -11,6 +11,8 @@ dependencies = [
     "docker>=7.1.0",
     "langgraph>=0.6.4",
     "gitpython>=3.1.45",
+    "langchain-anthropic>=0.3.18",
+    "langchain-google-genai>=2.1.9",
 ]
 
 [project.scripts]
