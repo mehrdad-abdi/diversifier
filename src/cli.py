@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import os
 import sys
 
 from .validation import (
