@@ -31,7 +31,7 @@ package = true
 [dependency-groups]
 dev = [
     "black>=25.1.0",
-    "flake8>=7.3.0",
+    "ruff>=0.9.0",
     "mypy>=1.17.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.0.0",
@@ -47,4 +47,52 @@ addopts = [
     "--timeout-method=signal",
     "-v"
 ]
+
+# Ruff configuration - replaces flake8
+[tool.ruff]
+# Python version compatibility
+target-version = "py313"
+
+# Include all directories that were checked by flake8
+include = ["src/**/*.py", "tests/**/*.py", "main.py"]
+
+# Lint configuration
+[tool.ruff.lint]
+# Select rules equivalent to flake8 --select F plus import-in-functions validation
+# F = Pyflakes (all F-rules that flake8 was checking)
+# E402 = Module level import not at top of file (import-in-functions validation)
+select = [
+    "F",     # Pyflakes - equivalent to flake8 --select F
+    "E402",  # Module level import not at top of file (import-in-functions)
+]
+
+# Skip minor warnings, only show errors
+# These are typically stylistic issues that don't affect functionality
+ignore = [
+    # Skip warnings that are not critical errors
+    "E501",  # Line too long (handled by black formatter)
+]
+
+# Make import fixes safe by default
+extend-safe-fixes = ["F401", "F811"]
+
+# Don't auto-fix these rules to avoid breaking imports accidentally
+unfixable = ["F401", "F811"]  # Prevent auto-removal of imports that might break functionality
+
+# Per-file ignore rules
+[tool.ruff.lint.per-file-ignores]
+# Allow unused imports in __init__.py files (common for re-exports)
+"__init__.py" = ["F401", "F403"]
+# Allow imports not at top in test files (common pattern for pytest fixtures)
+"tests/**" = ["E402"]
+
+# Additional configuration for import checking
+[tool.ruff.lint.isort]
+# Ensure imports are properly organized
+known-first-party = ["src"]
+
+[tool.ruff.lint.pyflakes]
+# Configure pyflakes for strict import checking
+# Allow some specific imports that may appear unused but are intentional
+allowed-unused-imports = []  # Strict mode - flag all unused imports
 

@@ -1,4 +1,4 @@
-name: flake8
+name: ruff
 
 on:
   push:
@@ -26,5 +26,5 @@ jobs:
     - name: Install dependencies
       run: uv sync --group dev
     
-    - name: Lint with flake8
-      run: uv run flake8 --select F src/ tests/ main.py
+    - name: Lint with ruff
+      run: uv run ruff check
