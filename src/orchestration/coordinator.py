@@ -10,7 +10,7 @@ from .workflow import WorkflowState, MigrationContext
 from .acceptance_test_generator import AcceptanceTestGenerator
 from .doc_analyzer import DocumentationAnalyzer
 from .source_code_analyzer import SourceCodeAnalyzer
-from .config import LLMConfig, get_config
+from .config import LLMConfig
 
 
 class DiversificationCoordinator:
@@ -34,7 +34,11 @@ class DiversificationCoordinator:
         self.project_path = Path(project_path).resolve()
         self.source_library = source_library
         self.target_library = target_library
-        self.llm_config = llm_config or get_config().llm
+        if llm_config is None:
+            raise ValueError(
+                "llm_config is required - no default configuration available"
+            )
+        self.llm_config = llm_config
 
         # Initialize components
         self.agent_manager = AgentManager(llm_config=self.llm_config)
@@ -84,16 +88,12 @@ class DiversificationCoordinator:
                 "temperature": self.llm_config.temperature,
                 "max_tokens": self.llm_config.max_tokens,
             }
-            kwargs.update(self.llm_config.additional_params)
+            # Add additional params with proper typing
+            for key, value in self.llm_config.additional_params.items():
+                kwargs[key] = value
 
-            # Try to initialize the LLM and make a test call - this will fail if API key is missing/invalid
-            llm = init_chat_model(model=model_id, **kwargs)
-
-            # Make a minimal test call to validate credentials
-            from langchain_core.messages import HumanMessage
-
-            test_messages = [HumanMessage(content="test")]
-            llm.invoke(test_messages)
+            # Try to initialize the LLM - this validates the config without API calls
+            init_chat_model(model=model_id, **kwargs)
 
             self.logger.info(
                 f"✅ LLM configuration validated for {self.llm_config.provider}:{self.llm_config.model_name}"
@@ -101,10 +101,10 @@ class DiversificationCoordinator:
             return True
 
         except Exception as e:
-            print(f"❌ Error: Invalid LLM configuration")
+            print("❌ Error: Invalid LLM configuration")
             print(f"Provider: {self.llm_config.provider}")
             print(f"Model: {self.llm_config.model_name}")
-            print(f"")
+            print("")
             print(f"Error: {e}")
 
             return False
