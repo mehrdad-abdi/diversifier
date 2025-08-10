@@ -66,53 +66,74 @@ class DiversificationCoordinator:
         self.auto_proceed = False
 
     def _validate_api_key(self) -> bool:
-        """Validate that required API key is set for the LLM provider.
+        """Validate LLM configuration by attempting to initialize a chat model.
 
         Returns:
-            True if API key is configured, False otherwise
+            True if LLM config is valid, False otherwise
         """
-        import os
+        try:
+            from langchain.chat_models import init_chat_model
 
-        # Map providers to their expected environment variables
-        provider_env_vars = {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "google_genai": "GOOGLE_API_KEY",
-            "azure_openai": "AZURE_OPENAI_API_KEY",
-        }
+            # Create the model identifier for init_chat_model
+            model_id = (
+                f"{self.llm_config.provider.lower()}:{self.llm_config.model_name}"
+            )
 
-        provider = self.llm_config.provider.lower()
-        expected_env_var = provider_env_vars.get(provider)
+            # Prepare initialization arguments
+            kwargs = {
+                "temperature": self.llm_config.temperature,
+                "max_tokens": self.llm_config.max_tokens,
+            }
+            kwargs.update(self.llm_config.additional_params)
 
-        if not expected_env_var:
-            self.logger.warning(
-                f"Unknown provider '{provider}' - skipping API key validation"
+            # Try to initialize the LLM and make a test call - this will fail if API key is missing/invalid
+            llm = init_chat_model(model=model_id, **kwargs)
+
+            # Make a minimal test call to validate credentials
+            from langchain_core.messages import HumanMessage
+
+            test_messages = [HumanMessage(content="test")]
+            llm.invoke(test_messages)
+
+            self.logger.info(
+                f"✅ LLM configuration validated for {self.llm_config.provider}:{self.llm_config.model_name}"
             )
             return True
 
-        # Check if API key is set
-        api_key = os.getenv(expected_env_var)
-        if not api_key:
-            print(f"❌ Error: Missing API key for {self.llm_config.provider}")
-            print(f"Please set the environment variable: {expected_env_var}")
+        except Exception as e:
+            error_str = str(e).lower()
+
+            print(f"❌ Error: Invalid LLM configuration")
+            print(f"Provider: {self.llm_config.provider}")
+            print(f"Model: {self.llm_config.model_name}")
             print(f"")
-            print(f"Example:")
-            print(f"  export {expected_env_var}=your_api_key_here")
-            print(f"")
-            print(f"For more information on getting API keys:")
-            if provider == "anthropic":
-                print(f"  https://console.anthropic.com/")
-            elif provider == "openai":
-                print(f"  https://platform.openai.com/api-keys")
-            elif provider == "google_genai":
-                print(f"  https://makersuite.google.com/app/apikey")
+
+            # Provide specific guidance based on error type
+            if any(
+                term in error_str
+                for term in ["api key", "authentication", "unauthorized", "forbidden"]
+            ):
+                print(f"Authentication issue - please check your API key:")
+                if self.llm_config.provider.lower() == "anthropic":
+                    print(f"  export ANTHROPIC_API_KEY=your_api_key_here")
+                    print(f"  Get your key at: https://console.anthropic.com/")
+                elif self.llm_config.provider.lower() == "openai":
+                    print(f"  export OPENAI_API_KEY=your_api_key_here")
+                    print(f"  Get your key at: https://platform.openai.com/api-keys")
+                elif self.llm_config.provider.lower() == "google_genai":
+                    print(f"  export GOOGLE_API_KEY=your_api_key_here")
+                    print(
+                        f"  Get your key at: https://makersuite.google.com/app/apikey"
+                    )
+            else:
+                print(f"Configuration error: {e}")
+                print(f"")
+                print(f"Please check:")
+                print(f"  - Provider name is correct for LangChain")
+                print(f"  - Model name is supported by the provider")
+                print(f"  - Required LangChain integration packages are installed")
 
             return False
-
-        self.logger.info(
-            f"✅ API key validated for provider: {self.llm_config.provider}"
-        )
-        return True
 
     async def execute_workflow(
         self, dry_run: bool = False, auto_proceed: bool = False
