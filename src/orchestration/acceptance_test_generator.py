@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from langchain_core.tools import BaseTool, tool
 
