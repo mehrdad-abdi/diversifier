@@ -190,36 +190,8 @@ class DiversificationAgent:
                 prompt = self._get_agent_prompt()
                 messages = prompt.format_messages(input=input_text)
 
-                self.logger.info(f"Invoking LLM for {self.agent_type.value} agent...")
-
-                try:
-                    response = self.llm.invoke(messages)
-                    result = {"output": response.content}
-
-                except Exception as llm_error:
-                    # Check for common API credential issues
-                    error_str = str(llm_error).lower()
-                    if any(
-                        term in error_str
-                        for term in [
-                            "api key",
-                            "authentication",
-                            "unauthorized",
-                            "forbidden",
-                        ]
-                    ):
-                        error_msg = (
-                            f"LLM API authentication failed: {llm_error}\n"
-                            f"Please ensure your API key is properly configured.\n"
-                            f"For {self.llm_config.provider}, set the appropriate environment variable:\n"
-                            f"- Anthropic: ANTHROPIC_API_KEY\n"
-                            f"- OpenAI: OPENAI_API_KEY\n"
-                            f"- Google: GOOGLE_API_KEY"
-                        )
-                        self.logger.error(error_msg)
-                        raise RuntimeError(error_msg) from llm_error
-                    else:
-                        raise
+                response = self.llm.invoke(messages)
+                result = {"output": response.content}
 
             self.logger.info(
                 f"Agent {self.agent_type.value} completed task successfully"

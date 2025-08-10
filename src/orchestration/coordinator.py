@@ -65,6 +65,55 @@ class DiversificationCoordinator:
         self.dry_run = False
         self.auto_proceed = False
 
+    def _validate_api_key(self) -> bool:
+        """Validate that required API key is set for the LLM provider.
+
+        Returns:
+            True if API key is configured, False otherwise
+        """
+        import os
+
+        # Map providers to their expected environment variables
+        provider_env_vars = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "google_genai": "GOOGLE_API_KEY",
+            "azure_openai": "AZURE_OPENAI_API_KEY",
+        }
+
+        provider = self.llm_config.provider.lower()
+        expected_env_var = provider_env_vars.get(provider)
+
+        if not expected_env_var:
+            self.logger.warning(
+                f"Unknown provider '{provider}' - skipping API key validation"
+            )
+            return True
+
+        # Check if API key is set
+        api_key = os.getenv(expected_env_var)
+        if not api_key:
+            print(f"❌ Error: Missing API key for {self.llm_config.provider}")
+            print(f"Please set the environment variable: {expected_env_var}")
+            print(f"")
+            print(f"Example:")
+            print(f"  export {expected_env_var}=your_api_key_here")
+            print(f"")
+            print(f"For more information on getting API keys:")
+            if provider == "anthropic":
+                print(f"  https://console.anthropic.com/")
+            elif provider == "openai":
+                print(f"  https://platform.openai.com/api-keys")
+            elif provider == "google_genai":
+                print(f"  https://makersuite.google.com/app/apikey")
+
+            return False
+
+        self.logger.info(
+            f"✅ API key validated for provider: {self.llm_config.provider}"
+        )
+        return True
+
     async def execute_workflow(
         self, dry_run: bool = False, auto_proceed: bool = False
     ) -> bool:
@@ -84,6 +133,10 @@ class DiversificationCoordinator:
             f"Starting diversification workflow: {self.source_library} -> {self.target_library}"
         )
         self.logger.info(f"Project path: {self.project_path}")
+
+        # Validate API key before starting workflow
+        if not self._validate_api_key():
+            return False
 
         try:
             # Execute workflow steps in order
