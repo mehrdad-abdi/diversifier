@@ -311,12 +311,36 @@ class WorkflowState:
 
         step = self.steps[step_name]
 
+        if step.status != WorkflowStatus.FAILED:
+            return False
+
+        # Check if the error is a permanent failure that should not be retried
+        if step.error:
+            error_lower = step.error.lower()
+            # Don't retry authentication/API key errors
+            if any(term in error_lower for term in [
+                'authentication failed', 'api key', 'authorization', 
+                'unauthorized', 'forbidden', 'invalid api key'
+            ]):
+                self.logger.info(f"Not retrying {step_name} - permanent authentication error")
+                return False
+            
+            # Don't retry configuration errors
+            if any(term in error_lower for term in [
+                'configuration error', 'config error', 'missing configuration'
+            ]):
+                self.logger.info(f"Not retrying {step_name} - permanent configuration error")
+                return False
+
         # Repair step can be retried up to max attempts
         if step.stage == WorkflowStage.REPAIR:
             return self.context.repair_attempts < self.context.max_repair_attempts
 
-        # Other failed steps can generally be retried once
-        return step.status == WorkflowStatus.FAILED
+        # Other failed steps can generally be retried once (but only if not already retried)
+        # Add a simple retry counter check
+        if not hasattr(step, '_retry_count'):
+            step._retry_count = 0
+        return step._retry_count < 1
 
     def retry_step(self, step_name: str) -> bool:
         """Retry a failed step.
@@ -340,7 +364,12 @@ class WorkflowState:
         if step.stage == WorkflowStage.REPAIR:
             self.context.repair_attempts += 1
 
-        self.logger.info(f"Reset step for retry: {step_name}")
+        # Increment retry counter
+        if not hasattr(step, '_retry_count'):
+            step._retry_count = 0
+        step._retry_count += 1
+
+        self.logger.info(f"Reset step for retry: {step_name} (attempt {step._retry_count})")
         return True
 
     def is_workflow_complete(self) -> bool:
