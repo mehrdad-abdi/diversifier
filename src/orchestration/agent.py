@@ -76,12 +76,13 @@ class DiversificationAgent:
 
             # Initialize the LLM using init_chat_model with configuration
             from typing import Any
+
             kwargs: dict[str, Any] = {
                 "temperature": self.llm_config.temperature,
                 "max_tokens": self.llm_config.max_tokens,
             }
             kwargs.update(self.llm_config.additional_params)
-            
+
             self.llm = init_chat_model(model=model_id, **kwargs)
 
             self.logger.info(

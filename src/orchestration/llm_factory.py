@@ -59,12 +59,13 @@ def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
     try:
         # Use init_chat_model with our configuration
         from typing import Any
+
         kwargs: dict[str, Any] = {
             "temperature": config.temperature,
             "max_tokens": config.max_tokens,
         }
         kwargs.update(config.additional_params)
-        
+
         return init_chat_model(model=model_id, **kwargs)
 
     except Exception as e:
