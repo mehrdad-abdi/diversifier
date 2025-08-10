@@ -101,37 +101,11 @@ class DiversificationCoordinator:
             return True
 
         except Exception as e:
-            error_str = str(e).lower()
-
             print(f"❌ Error: Invalid LLM configuration")
             print(f"Provider: {self.llm_config.provider}")
             print(f"Model: {self.llm_config.model_name}")
             print(f"")
-
-            # Provide specific guidance based on error type
-            if any(
-                term in error_str
-                for term in ["api key", "authentication", "unauthorized", "forbidden"]
-            ):
-                print(f"Authentication issue - please check your API key:")
-                if self.llm_config.provider.lower() == "anthropic":
-                    print(f"  export ANTHROPIC_API_KEY=your_api_key_here")
-                    print(f"  Get your key at: https://console.anthropic.com/")
-                elif self.llm_config.provider.lower() == "openai":
-                    print(f"  export OPENAI_API_KEY=your_api_key_here")
-                    print(f"  Get your key at: https://platform.openai.com/api-keys")
-                elif self.llm_config.provider.lower() == "google_genai":
-                    print(f"  export GOOGLE_API_KEY=your_api_key_here")
-                    print(
-                        f"  Get your key at: https://makersuite.google.com/app/apikey"
-                    )
-            else:
-                print(f"Configuration error: {e}")
-                print(f"")
-                print(f"Please check:")
-                print(f"  - Provider name is correct for LangChain")
-                print(f"  - Model name is supported by the provider")
-                print(f"  - Required LangChain integration packages are installed")
+            print(f"Error: {e}")
 
             return False
 
