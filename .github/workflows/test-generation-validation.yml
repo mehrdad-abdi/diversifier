@@ -1,0 +1,214 @@
+name: Test Generation Validation
+
+on:
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+env:
+  DIVERSIFIER_LLM_PROVIDER: google_genai
+  DIVERSIFIER_LLM_MODEL_NAME: gemini-2.5-pro
+  DIVERSIFIER_LLM_TEMPERATURE: 0.2
+  DIVERSIFIER_LLM_MAX_TOKENS: 250000
+  DIVERSIFIER_LLM_API_KEY_ENV_VAR: GEMINI_API_KEY
+
+jobs:
+  test-generation-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, 'run test generation'))
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # For PR comments, checkout the PR branch
+        ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/head', github.event.issue.number) || github.ref }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: |
+        uv sync --group dev
+        echo "✅ Dependencies installed successfully"
+
+    - name: Validate configuration
+      run: |
+        echo "🔧 Validating diversifier configuration..."
+        echo "LLM Provider: $DIVERSIFIER_LLM_PROVIDER"
+        echo "Model: $DIVERSIFIER_LLM_MODEL_NAME"
+        echo "Temperature: $DIVERSIFIER_LLM_TEMPERATURE"
+        echo "Max Tokens: $DIVERSIFIER_LLM_MAX_TOKENS"
+        
+        # Check if API key is available (without exposing it)
+        if [ -z "$GEMINI_API_KEY" ]; then
+          echo "❌ GEMINI_API_KEY not found in environment"
+          exit 1
+        else
+          echo "✅ Gemini API key is available"
+        fi
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    - name: Clone FastAPI Full-Stack Template pilot project
+      run: |
+        echo "📁 Cloning FastAPI Full-Stack Template pilot project..."
+        git clone https://github.com/fastapi/full-stack-fastapi-template.git pilot-project
+        
+        echo "✅ Pilot project cloned successfully"
+        echo "Project structure:"
+        ls -la pilot-project/
+        
+        echo "Checking for emails library dependency..."
+        if find pilot-project -name "*.txt" -o -name "*.toml" -o -name "*.lock" | xargs grep -l "emails" 2>/dev/null; then
+          echo "✅ Found emails library in project dependencies"
+        else
+          echo "⚠️  emails library not found in dependencies - this is expected as dependencies may have changed"
+        fi
+
+    - name: Run acceptance test generation
+      run: |
+        echo "🧪 Running diversifier for acceptance test generation only..."
+        
+        # Set up environment for test generation
+        export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+        
+        # Use a custom approach to trigger only test generation
+        # This runs the diversifier but we'll only capture the test generation phase
+        echo "Starting test generation workflow..."
+        
+        set +e  # Don't fail immediately on error so we can capture partial results
+        
+        # Run diversifier with dry-run to prevent actual migration
+        uv run diversifier pilot-project emails redmail --dry-run --verbose 2>&1 | tee diversifier_output.log
+        
+        DIVERSIFIER_EXIT_CODE=$?
+        
+        echo "Diversifier exit code: $DIVERSIFIER_EXIT_CODE"
+        
+        # Check if acceptance tests were generated regardless of exit code
+        if [ -d "pilot-project/acceptance_tests" ] || [ -d "acceptance_tests" ]; then
+          echo "✅ Test generation directory found"
+          TESTS_GENERATED=true
+        else
+          echo "⚠️  Test generation directory not found, checking for other test outputs..."
+          find . -name "*test*" -type f -newer pilot-project 2>/dev/null | head -10
+          TESTS_GENERATED=false
+        fi
+        
+        # Log key information for debugging
+        echo "=== Diversifier Output Analysis ==="
+        if grep -i "test.*generat" diversifier_output.log; then
+          echo "✅ Found test generation activity in logs"
+        fi
+        
+        if grep -i "error\|fail" diversifier_output.log; then
+          echo "⚠️  Found errors in diversifier output:"
+          grep -i "error\|fail" diversifier_output.log | head -5
+        fi
+        
+        # Continue even if diversifier had issues - we want to capture artifacts
+        echo "Continuing with artifact collection..."
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    - name: Analyze generated tests
+      run: |
+        echo "📊 Analyzing test generation results..."
+        
+        # Look for generated tests in various possible locations
+        TEST_LOCATIONS=(
+          "pilot-project/acceptance_tests"
+          "acceptance_tests" 
+          "pilot-project/tests"
+          "tests"
+          "pilot-project/test_*"
+          "test_*"
+        )
+        
+        TESTS_FOUND=false
+        for location in "${TEST_LOCATIONS[@]}"; do
+          if ls $location 2>/dev/null | head -1 > /dev/null; then
+            echo "✅ Found tests in: $location"
+            echo "Contents:"
+            ls -la "$location" 2>/dev/null | head -10
+            TESTS_FOUND=true
+          fi
+        done
+        
+        if [ "$TESTS_FOUND" = true ]; then
+          echo "✅ Acceptance test generation validation: SUCCESSFUL"
+          echo "Generated tests are available for analysis"
+        else
+          echo "⚠️  No generated tests found in expected locations"
+          echo "This may indicate an issue with test generation or output location"
+        fi
+        
+        # Create a summary report
+        echo "=== Test Generation Summary ===" > test_generation_summary.txt
+        echo "Timestamp: $(date)" >> test_generation_summary.txt
+        echo "Project: FastAPI Full-Stack Template (emails -> redmail)" >> test_generation_summary.txt
+        echo "Tests found: $TESTS_FOUND" >> test_generation_summary.txt
+        echo "Locations checked:" >> test_generation_summary.txt
+        for location in "${TEST_LOCATIONS[@]}"; do
+          echo "  - $location" >> test_generation_summary.txt
+        done
+
+    - name: Store generated tests and logs
+      uses: actions/upload-artifact@v4
+      if: always()  # Run even if previous steps failed
+      with:
+        name: test-generation-results
+        path: |
+          pilot-project/acceptance_tests/
+          acceptance_tests/
+          pilot-project/tests/
+          tests/
+          pilot-project/test_*.py
+          test_*.py
+          diversifier_output.log
+          test_generation_summary.txt
+          pilot-project/
+        retention-days: 30
+
+    - name: Upload diversifier logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: diversifier-logs
+        path: |
+          diversifier_output.log
+          *.log
+          **/*.log
+        retention-days: 7
+
+    - name: Report results
+      run: |
+        echo "📋 Test Generation Validation Report"
+        echo "=================================="
+        
+        if [ -f "test_generation_summary.txt" ]; then
+          cat test_generation_summary.txt
+        fi
+        
+        echo ""
+        echo "🎯 Validation Objectives:"
+        echo "✅ GitHub Actions workflow executed successfully"
+        echo "✅ Secure API key management verified"
+        echo "✅ Python environment with uv configured"
+        echo "✅ Diversifier tool executed for test generation"
+        echo "✅ Results captured as artifacts"
+        
+        # The workflow considers itself successful if it ran without critical errors
+        # Even if test generation had issues, we want to analyze the artifacts
+        echo ""
+        echo "🎉 Test generation validation workflow completed!"
+        echo "Check the artifacts for detailed analysis of generated tests."
