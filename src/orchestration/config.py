@@ -492,7 +492,7 @@ def get_config(config_path: Optional[Union[str, Path]] = None) -> DiversifierCon
 
     Returns:
         Configuration object
-        
+
     Raises:
         ValueError: If no config path provided and no global config manager initialized
     """
@@ -500,7 +500,6 @@ def get_config(config_path: Optional[Union[str, Path]] = None) -> DiversifierCon
         return get_config_manager(config_path).get_config()
     else:
         # Use global config manager if already initialized
-        global _config_manager
         if _config_manager is None:
             raise ValueError(
                 "No configuration available. Either provide config_path or initialize "

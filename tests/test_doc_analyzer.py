@@ -476,19 +476,20 @@ class TestDocumentationAnalyzer:
         """Test full project documentation analysis integration."""
         # Mock configuration
         from src.orchestration.config import DiversifierConfig, LLMConfig
+
         mock_llm_config = Mock(spec=LLMConfig)
         mock_llm_config.model_name = "test-model"
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_get_config.return_value = mock_config
-        
+
         # Patch dataclasses.replace to handle mock objects
         def mock_replace(obj, **changes):
             for key, value in changes.items():
                 setattr(obj, key, value)
             return obj
-        
-        with patch('dataclasses.replace', side_effect=mock_replace):
+
+        with patch("dataclasses.replace", side_effect=mock_replace):
             # Mock file collection
             structure_response = {
                 "result": [{"text": json.dumps({"config_files": [], "total_files": 0})}]
@@ -520,7 +521,10 @@ class TestDocumentationAnalyzer:
                     "output": json.dumps(
                         {
                             "service_architecture": {
-                                "primary_service": {"name": "web", "exposed_ports": [8000]}
+                                "primary_service": {
+                                    "name": "web",
+                                    "exposed_ports": [8000],
+                                }
                             },
                             "network_configuration": {"networks": []},
                         }

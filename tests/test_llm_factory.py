@@ -35,6 +35,7 @@ class TestLLMFactory:
             config = LLMConfig(
                 provider="anthropic",
                 model_name="claude-3-sonnet",
+                api_key_env_var="ANTHROPIC_API_KEY",
                 temperature=0.5,
                 max_tokens=1000,
                 timeout=60,
@@ -45,9 +46,14 @@ class TestLLMFactory:
 
     def test_validate_llm_config_invalid_provider(self):
         """Test validation with invalid provider."""
-        config = LLMConfig(provider="invalid_provider")
-        issues = validate_llm_config(config)
-        # Now it's just an informational note, not an error - but should still generate an issue
+        with patch.dict(os.environ, {"TEST_API_KEY": "test-key"}):
+            config = LLMConfig(
+                provider="invalid_provider",
+                model_name="test-model",
+                api_key_env_var="TEST_API_KEY",
+            )
+            issues = validate_llm_config(config)
+            # Now it's just an informational note, not an error - but should still generate an issue
         assert any(
             "not in the list of commonly used providers" in issue for issue in issues
         )
@@ -55,11 +61,21 @@ class TestLLMFactory:
     def test_validate_llm_config_invalid_temperature(self):
         """Test validation with invalid temperature."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-            config = LLMConfig(temperature=1.5)  # Too high
+            config = LLMConfig(
+                provider="anthropic",
+                model_name="claude-3-sonnet",
+                api_key_env_var="ANTHROPIC_API_KEY",
+                temperature=1.5,  # Too high
+            )
             issues = validate_llm_config(config)
             assert any("Temperature must be between" in issue for issue in issues)
 
-            config = LLMConfig(temperature=-0.1)  # Too low
+            config = LLMConfig(
+                provider="anthropic",
+                model_name="claude-3-sonnet",
+                api_key_env_var="ANTHROPIC_API_KEY",
+                temperature=-0.1,  # Too low
+            )
             issues = validate_llm_config(config)
             assert any("Temperature must be between" in issue for issue in issues)
 
@@ -67,13 +83,27 @@ class TestLLMFactory:
         """Test validation with missing API key."""
         # Ensure API key is not in environment
         with patch.dict(os.environ, {}, clear=True):
-            config = LLMConfig(provider="anthropic")
-            issues = validate_llm_config(config)
-            assert any("API key not found" in issue for issue in issues)
+            # This should raise a ValueError during LLMConfig creation due to __post_init__
+            try:
+                config = LLMConfig(
+                    provider="anthropic",
+                    model_name="claude-3-sonnet",
+                    api_key_env_var="ANTHROPIC_API_KEY",
+                )
+                # If we get here, validation should catch the missing key
+                issues = validate_llm_config(config)
+                assert any("API key not found" in issue for issue in issues)
+            except ValueError as e:
+                # This is expected - the __post_init__ validates the API key
+                assert "API key environment variable" in str(e)
 
     def test_validate_llm_config_custom_api_key_env_var(self):
         """Test validation with custom API key environment variable."""
         with patch.dict(os.environ, {"CUSTOM_API_KEY": "test-key"}):
-            config = LLMConfig(provider="anthropic", api_key_env_var="CUSTOM_API_KEY")
+            config = LLMConfig(
+                provider="anthropic",
+                model_name="claude-3-sonnet",
+                api_key_env_var="CUSTOM_API_KEY",
+            )
             issues = validate_llm_config(config)
             assert len(issues) == 0

@@ -651,22 +651,25 @@ class TestSourceCodeAnalyzer:
         """Test full project source code analysis integration."""
         # Mock configuration
         from src.orchestration.config import DiversifierConfig, LLMConfig
+
         mock_llm_config = Mock(spec=LLMConfig)
         mock_llm_config.model_name = "test-model"
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_get_config.return_value = mock_config
-        
+
         # Patch dataclasses.replace to handle mock objects
         def mock_replace(obj, **changes):
             for key, value in changes.items():
                 setattr(obj, key, value)
             return obj
-        
-        with patch('dataclasses.replace', side_effect=mock_replace):
+
+        with patch("dataclasses.replace", side_effect=mock_replace):
             # Mock file collection
             file_list_response = {
-                "result": [{"text": json.dumps({"files": ["myapp/views.py"], "count": 1})}]
+                "result": [
+                    {"text": json.dumps({"files": ["myapp/views.py"], "count": 1})}
+                ]
             }
             mock_mcp_manager.call_tool.return_value = file_list_response
 

@@ -101,8 +101,8 @@ class TestLLMConfig:
         """Test default configuration values."""
         config = LLMConfig(
             provider="anthropic",
-            model_name="claude-3-5-sonnet-20241022", 
-            api_key_env_var="TEST_API_KEY"
+            model_name="claude-3-5-sonnet-20241022",
+            api_key_env_var="TEST_API_KEY",
         )
         assert config.provider == "anthropic"
         assert config.model_name == "claude-3-5-sonnet-20241022"
@@ -162,7 +162,7 @@ class TestDiversifierConfig:
         llm_config = LLMConfig(
             provider="anthropic",
             model_name="claude-3-5-sonnet-20241022",
-            api_key_env_var="TEST_API_KEY"
+            api_key_env_var="TEST_API_KEY",
         )
         config = DiversifierConfig(llm=llm_config)
         assert isinstance(config.logging, LoggingConfig)
@@ -283,7 +283,7 @@ model_name = "claude-3-5-sonnet-20241022"
 api_key_env_var = "TEST_API_KEY"
 """
         env_vars = {
-            "TEST_API_KEY": "test-key", 
+            "TEST_API_KEY": "test-key",
             "DIVERSIFIER_LOG_LEVEL": "ERROR",
             "DIVERSIFIER_LOG_CONSOLE": "false",
             "DIVERSIFIER_MCP_TIMEOUT": "120",
@@ -296,10 +296,12 @@ api_key_env_var = "TEST_API_KEY"
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
                 f.write(toml_content)
                 f.flush()
-                
+
                 try:
                     manager = ConfigManager(f.name)
                     config = manager.load_config()
@@ -378,10 +380,12 @@ model_name = "claude-3-5-sonnet-20241022"
 api_key_env_var = "TEST_API_KEY"
 """
         with patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False):
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
                 f.write(toml_content)
                 f.flush()
-                
+
                 try:
                     manager = ConfigManager(f.name)
                     config1 = manager.get_config()
@@ -401,10 +405,12 @@ model_name = "claude-3-5-sonnet-20241022"
 api_key_env_var = "TEST_API_KEY"
 """
         with patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False):
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
                 f.write(toml_content)
                 f.flush()
-                
+
                 try:
                     manager = ConfigManager(f.name)
                     config1 = manager.load_config()
@@ -470,17 +476,23 @@ model_name = "claude-3-5-sonnet-20241022"
 api_key_env_var = "TEST_API_KEY"
 """
         with patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False):
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".toml", delete=False
+            ) as f:
                 f.write(toml_content)
                 f.flush()
-                
+
                 try:
                     config = get_config(f.name)
                     assert isinstance(config, DiversifierConfig)
                 finally:
                     os.unlink(f.name)
 
-    @patch.dict(os.environ, {"DIVERSIFIER_DEBUG": "true", "TEST_API_KEY": "test-key"}, clear=False)
+    @patch.dict(
+        os.environ,
+        {"DIVERSIFIER_DEBUG": "true", "TEST_API_KEY": "test-key"},
+        clear=False,
+    )
     def test_get_config_with_env_vars(self):
         """Test get_config with environment variables."""
         # Create a basic TOML config file
@@ -493,7 +505,7 @@ api_key_env_var = "TEST_API_KEY"
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             f.flush()
-            
+
             try:
                 config = get_config(f.name)
                 assert config.debug_mode is True

@@ -17,17 +17,27 @@ class TestCoordinatorTestGeneration:
     @pytest.fixture
     def mock_coordinator(self):
         """Create a coordinator with mocked dependencies."""
+        import os
+        from src.orchestration.config import LLMConfig
+
         with (
             patch("src.orchestration.coordinator.AgentManager"),
             patch("src.orchestration.coordinator.MCPManager"),
             patch("src.orchestration.coordinator.AcceptanceTestGenerator"),
             patch("src.orchestration.coordinator.DocumentationAnalyzer"),
             patch("src.orchestration.coordinator.SourceCodeAnalyzer"),
+            patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False),
         ):
+            mock_llm_config = LLMConfig(
+                provider="anthropic",
+                model_name="claude-3-5-sonnet-20241022",
+                api_key_env_var="TEST_API_KEY",
+            )
             coordinator = DiversificationCoordinator(
                 project_path="/test/project",
                 source_library="requests",
                 target_library="httpx",
+                llm_config=mock_llm_config,
             )
             return coordinator
 

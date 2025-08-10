@@ -22,7 +22,9 @@ class TestCreateParser:
         assert args.create_config == "/test/config.toml"
 
         # Test normal operation with config
-        args = parser.parse_args(["--config", "/test/config.toml", ".", "requests", "httpx"])
+        args = parser.parse_args(
+            ["--config", "/test/config.toml", ".", "requests", "httpx"]
+        )
         assert args.config == "/test/config.toml"
         assert args.project_path == "."
         assert args.remove_lib == "requests"
@@ -33,7 +35,17 @@ class TestCreateParser:
     def test_parser_optional_flags(self):
         parser = create_parser()
 
-        args = parser.parse_args(["--config", "/test/config.toml", ".", "requests", "httpx", "--dry-run", "--verbose"])
+        args = parser.parse_args(
+            [
+                "--config",
+                "/test/config.toml",
+                ".",
+                "requests",
+                "httpx",
+                "--dry-run",
+                "--verbose",
+            ]
+        )
         assert args.dry_run is True
         assert args.verbose is True
 
@@ -68,13 +80,13 @@ class TestMainFunction:
         mock_get_config,
     ):
         from src.orchestration.config import DiversifierConfig, LLMConfig
-        
+
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_get_config.return_value = mock_config
-        
+
         mock_validate_python.return_value = (True, [])
         mock_validate_path.return_value = "/fake/path"
         mock_validate_lib.return_value = True
@@ -85,7 +97,8 @@ class TestMainFunction:
 
         test_args = [
             "diversifier",
-            "--config", "/test/config.toml",
+            "--config",
+            "/test/config.toml",
             ".",
             "requests",
             "httpx",
@@ -101,21 +114,30 @@ class TestMainFunction:
     @patch("src.cli.get_config")
     @patch("src.cli.validate_python_project")
     @patch("builtins.print")
-    def test_main_invalid_project(self, mock_print, mock_validate_python, mock_get_config):
+    def test_main_invalid_project(
+        self, mock_print, mock_validate_python, mock_get_config
+    ):
         from src.orchestration.config import DiversifierConfig, LLMConfig
-        
+
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_get_config.return_value = mock_config
-        
+
         mock_validate_python.return_value = (
             False,
             ["No Python files found"],
         )
 
-        test_args = ["diversifier", "--config", "/test/config.toml", ".", "requests", "httpx"]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            ".",
+            "requests",
+            "httpx",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
@@ -124,7 +146,14 @@ class TestMainFunction:
 
     @patch("builtins.print")
     def test_main_nonexistent_path(self, mock_print):
-        test_args = ["diversifier", "--config", "/test/config.toml", "/nonexistent", "requests", "httpx"]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            "/nonexistent",
+            "requests",
+            "httpx",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
@@ -138,16 +167,23 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
         from src.orchestration.config import DiversifierConfig, LLMConfig
-        
+
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_get_config.return_value = mock_config
-        
+
         mock_validate_python.return_value = (True, [])
 
-        test_args = ["diversifier", "--config", "/test/config.toml", ".", "requests", "requests"]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            ".",
+            "requests",
+            "requests",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
@@ -161,16 +197,23 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
         from src.orchestration.config import DiversifierConfig, LLMConfig
-        
+
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_get_config.return_value = mock_config
-        
+
         mock_validate_python.return_value = (True, [])
 
-        test_args = ["diversifier", "--config", "/test/config.toml", ".", "requests", ""]
+        test_args = [
+            "diversifier",
+            "--config",
+            "/test/config.toml",
+            ".",
+            "requests",
+            "",
+        ]
         with patch.object(sys, "argv", test_args):
             result = main()
 
@@ -192,13 +235,13 @@ class TestMainFunction:
         mock_get_config,
     ):
         from src.orchestration.config import DiversifierConfig, LLMConfig
-        
+
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_get_config.return_value = mock_config
-        
+
         mock_validate_python.return_value = (True, [])
         mock_validate_path.return_value = "/fake/path"
         mock_validate_lib.return_value = True
@@ -209,7 +252,8 @@ class TestMainFunction:
 
         test_args = [
             "diversifier",
-            "--config", "/test/config.toml",
+            "--config",
+            "/test/config.toml",
             ".",
             "requests",
             "httpx",

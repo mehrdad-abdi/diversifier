@@ -3,6 +3,7 @@
 import pytest
 import tempfile
 import logging
+import os
 from unittest.mock import Mock, patch
 from pathlib import Path
 
@@ -30,12 +31,16 @@ class TestDiversificationAgent:
         """Clean up test environment."""
         self.temp_dir.cleanup()
 
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
     def test_agent_initialization(self):
         """Test agent initialization."""
         from src.orchestration.config import LLMConfig
 
         llm_config = LLMConfig(
-            provider="openai", model_name="gpt-3.5-turbo", temperature=0.2
+            provider="openai",
+            model_name="gpt-3.5-turbo",
+            api_key_env_var="OPENAI_API_KEY",
+            temperature=0.2,
         )
         agent = DiversificationAgent(
             agent_type=AgentType.ANALYZER, llm_config=llm_config
@@ -48,8 +53,16 @@ class TestDiversificationAgent:
         assert agent.memory is not None
         assert len(agent.tools) == 0
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_agent_with_tools(self):
         """Test agent initialization with tools."""
+        from src.orchestration.config import LLMConfig
+
+        mock_llm_config = LLMConfig(
+            provider="openai",
+            model_name="gpt-3.5-turbo",
+            api_key_env_var="TEST_API_KEY",
+        )
 
         # Create a proper mock tool with required attributes
         mock_tool = Mock()
@@ -59,24 +72,47 @@ class TestDiversificationAgent:
         # Skip tool initialization to avoid LangChain issues in testing
         with patch.object(DiversificationAgent, "_initialize_agent"):
             agent = DiversificationAgent(
-                agent_type=AgentType.MIGRATOR, tools=[mock_tool]
+                agent_type=AgentType.MIGRATOR,
+                llm_config=mock_llm_config,
+                tools=[mock_tool],
             )
             agent.tools = [mock_tool]  # Set directly for testing
 
         assert len(agent.tools) == 1
         assert agent.tools[0] == mock_tool
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_agent_invoke_without_tools(self):
         """Test agent invocation without tools."""
-        agent = DiversificationAgent(agent_type=AgentType.ANALYZER)
+        from src.orchestration.config import LLMConfig
+
+        mock_llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+
+        agent = DiversificationAgent(
+            agent_type=AgentType.ANALYZER, llm_config=mock_llm_config
+        )
         result = agent.invoke("Test input")
 
         assert result["output"] == "Mock response"
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_add_tool(self):
         """Test adding a tool to an agent."""
+        from src.orchestration.config import LLMConfig
 
-        agent = DiversificationAgent(agent_type=AgentType.TESTER)
+        mock_llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+
+        agent = DiversificationAgent(
+            agent_type=AgentType.TESTER, llm_config=mock_llm_config
+        )
 
         mock_tool = Mock()
         mock_tool.name = "new_tool"
@@ -89,10 +125,20 @@ class TestDiversificationAgent:
         assert mock_tool in agent.tools
         assert len(agent.tools) == 1
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_clear_memory(self):
         """Test clearing agent memory."""
+        from src.orchestration.config import LLMConfig
 
-        agent = DiversificationAgent(agent_type=AgentType.REPAIRER)
+        mock_llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+
+        agent = DiversificationAgent(
+            agent_type=AgentType.REPAIRER, llm_config=mock_llm_config
+        )
         original_memory = agent.memory
         agent.clear_memory()
 
@@ -103,40 +149,70 @@ class TestDiversificationAgent:
 class TestAgentManager:
     """Test cases for AgentManager."""
 
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
     def test_agent_manager_initialization(self):
         """Test agent manager initialization."""
         from src.orchestration.config import LLMConfig
 
-        llm_config = LLMConfig(provider="openai", model_name="gpt-4", temperature=0.1)
+        llm_config = LLMConfig(
+            provider="openai",
+            model_name="gpt-4",
+            api_key_env_var="OPENAI_API_KEY",
+            temperature=0.1,
+        )
         manager = AgentManager(llm_config=llm_config)
 
         assert manager.llm_config.model_name == "gpt-4"
         assert manager.llm_config.temperature == 0.1
         assert len(manager.agents) == 0
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_agent(self):
         """Test getting an agent from manager."""
+        from src.orchestration.config import LLMConfig
 
-        manager = AgentManager()
+        mock_llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+
+        manager = AgentManager(llm_config=mock_llm_config)
         agent = manager.get_agent(AgentType.ANALYZER)
 
         assert isinstance(agent, DiversificationAgent)
         assert agent.agent_type == AgentType.ANALYZER
         assert AgentType.ANALYZER in manager.agents
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_same_agent_twice(self):
         """Test getting the same agent type twice returns same instance."""
+        from src.orchestration.config import LLMConfig
 
-        manager = AgentManager()
+        mock_llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+
+        manager = AgentManager(llm_config=mock_llm_config)
         agent1 = manager.get_agent(AgentType.MIGRATOR)
         agent2 = manager.get_agent(AgentType.MIGRATOR)
 
         assert agent1 is agent2
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_clear_all_memories(self):
         """Test clearing all agent memories."""
+        from src.orchestration.config import LLMConfig
 
-        manager = AgentManager()
+        mock_llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+
+        manager = AgentManager(llm_config=mock_llm_config)
         agent1 = manager.get_agent(AgentType.ANALYZER)
         agent2 = manager.get_agent(AgentType.MIGRATOR)
 
@@ -607,12 +683,16 @@ class TestDiversificationCoordinator:
         """Clean up test environment."""
         self.temp_dir.cleanup()
 
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
     def test_coordinator_initialization(self):
         """Test coordinator initialization."""
         from src.orchestration.config import LLMConfig
 
         llm_config = LLMConfig(
-            provider="openai", model_name="gpt-3.5-turbo", temperature=0.2
+            provider="openai",
+            model_name="gpt-3.5-turbo",
+            api_key_env_var="OPENAI_API_KEY",
+            temperature=0.2,
         )
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
@@ -631,12 +711,21 @@ class TestDiversificationCoordinator:
         assert isinstance(coordinator.workflow_state, WorkflowState)
 
     @pytest.mark.asyncio
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     async def test_execute_workflow_dry_run(self):
         """Test workflow execution in dry run mode."""
+        from src.orchestration.config import LLMConfig
+
+        llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
+            llm_config=llm_config,
         )
 
         # Mock all the step handlers to return success
@@ -669,12 +758,21 @@ class TestDiversificationCoordinator:
             assert result is True
             assert coordinator.workflow_state.is_workflow_complete()
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_workflow_status(self):
         """Test getting workflow status."""
+        from src.orchestration.config import LLMConfig
+
+        llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
+            llm_config=llm_config,
         )
 
         status = coordinator.get_workflow_status()
