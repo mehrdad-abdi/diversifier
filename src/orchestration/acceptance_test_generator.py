@@ -15,6 +15,7 @@ from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .doc_analyzer import DocumentationAnalysisResult
 from .source_code_analyzer import SourceCodeAnalysisResult
+from .config import get_config
 
 
 @dataclass
@@ -113,8 +114,6 @@ class AcceptanceTestGenerator:
         self.logger.info("Starting acceptance test generation")
 
         # Create test generator agent with file system tools
-        from .config import get_config
-
         file_tools = self._create_file_system_tools()
 
         # Get base LLM config and override model if specified

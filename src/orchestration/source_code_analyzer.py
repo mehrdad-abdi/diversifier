@@ -11,6 +11,7 @@ from langchain_core.tools import BaseTool, tool
 
 from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
+from .config import get_config
 
 
 @dataclass
@@ -148,8 +149,6 @@ class SourceCodeAnalyzer:
         config_files = await self._collect_config_files()
 
         # Create analyzer agent with file system tools
-        from .config import get_config
-
         file_tools = self._create_file_system_tools()
 
         # Get base LLM config and override model if specified

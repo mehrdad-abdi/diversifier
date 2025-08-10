@@ -9,7 +9,7 @@ from .validation import (
     validate_library_name,
 )
 from .orchestration.coordinator import DiversificationCoordinator
-from .orchestration.config import LoggingConfig
+from .orchestration.config import LoggingConfig, get_config
 from .orchestration.logging_config import setup_logging
 
 
@@ -88,8 +88,6 @@ async def run_diversification(args) -> int:
 
     try:
         # Initialize coordinator with updated configuration
-        from .orchestration.config import get_config
-
         # Get base configuration from file/environment
         config = get_config()
 
