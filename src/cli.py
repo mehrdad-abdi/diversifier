@@ -9,7 +9,7 @@ from .validation import (
     validate_library_name,
 )
 from .orchestration.coordinator import DiversificationCoordinator
-from .orchestration.config import get_config, LoggingConfig
+from .orchestration.config import LoggingConfig
 from .orchestration.logging_config import setup_logging
 
 
@@ -88,17 +88,20 @@ async def run_diversification(args) -> int:
 
     try:
         # Initialize coordinator with updated configuration
-        config = get_config()
-        # Override LLM settings from command line args
-        config.llm.model_name = args.model
-        config.llm.temperature = args.temperature
+        from .orchestration.config import LLMConfig
+
+        # Create custom LLM config with command line overrides
+        llm_config = LLMConfig(
+            provider="openai",  # Default to OpenAI for now, can be made configurable later
+            model_name=args.model,
+            temperature=args.temperature,
+        )
 
         coordinator = DiversificationCoordinator(
             project_path=str(args.project_path),
             source_library=args.remove_lib,
             target_library=args.inject_lib,
-            model_name=args.model,
-            temperature=args.temperature,
+            llm_config=llm_config,
         )
 
         # Execute workflow

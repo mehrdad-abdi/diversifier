@@ -32,14 +32,18 @@ class TestDiversificationAgent:
 
     def test_agent_initialization(self):
         """Test agent initialization."""
+        from src.orchestration.config import LLMConfig
 
+        llm_config = LLMConfig(
+            provider="openai", model_name="gpt-3.5-turbo", temperature=0.2
+        )
         agent = DiversificationAgent(
-            agent_type=AgentType.ANALYZER, model_name="gpt-3.5-turbo", temperature=0.2
+            agent_type=AgentType.ANALYZER, llm_config=llm_config
         )
 
         assert agent.agent_type == AgentType.ANALYZER
-        assert agent.model_name == "gpt-3.5-turbo"
-        assert agent.temperature == 0.2
+        assert agent.llm_config.model_name == "gpt-3.5-turbo"
+        assert agent.llm_config.temperature == 0.2
         assert agent.llm is not None
         assert agent.memory is not None
         assert len(agent.tools) == 0
@@ -101,11 +105,13 @@ class TestAgentManager:
 
     def test_agent_manager_initialization(self):
         """Test agent manager initialization."""
+        from src.orchestration.config import LLMConfig
 
-        manager = AgentManager(model_name="gpt-4", temperature=0.1)
+        llm_config = LLMConfig(provider="openai", model_name="gpt-4", temperature=0.1)
+        manager = AgentManager(llm_config=llm_config)
 
-        assert manager.model_name == "gpt-4"
-        assert manager.temperature == 0.1
+        assert manager.llm_config.model_name == "gpt-4"
+        assert manager.llm_config.temperature == 0.1
         assert len(manager.agents) == 0
 
     def test_get_agent(self):
@@ -603,17 +609,23 @@ class TestDiversificationCoordinator:
 
     def test_coordinator_initialization(self):
         """Test coordinator initialization."""
+        from src.orchestration.config import LLMConfig
+
+        llm_config = LLMConfig(
+            provider="openai", model_name="gpt-3.5-turbo", temperature=0.2
+        )
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
-            model_name="gpt-3.5-turbo",
-            temperature=0.2,
+            llm_config=llm_config,
         )
 
         assert str(coordinator.project_path) == str(Path(self.project_path).resolve())
         assert coordinator.source_library == "requests"
         assert coordinator.target_library == "httpx"
+        assert coordinator.llm_config.model_name == "gpt-3.5-turbo"
+        assert coordinator.llm_config.temperature == 0.2
         assert isinstance(coordinator.agent_manager, AgentManager)
         assert isinstance(coordinator.mcp_manager, MCPManager)
         assert isinstance(coordinator.workflow_state, WorkflowState)

@@ -11,6 +11,8 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
+from .config import LLMConfig, get_config
+
 
 class AgentType(Enum):
     """Types of agents used in the diversification process."""
@@ -30,24 +32,18 @@ class DiversificationAgent:
     def __init__(
         self,
         agent_type: AgentType,
-        model_name: str = "gpt-4",
-        temperature: float = 0.1,
-        max_tokens: Optional[int] = None,
+        llm_config: Optional[LLMConfig] = None,
         tools: Optional[List[BaseTool]] = None,
     ):
         """Initialize the LangChain agent.
 
         Args:
             agent_type: Type of agent (analyzer, migrator, tester, repairer)
-            model_name: OpenAI model to use
-            temperature: Temperature for LLM responses
-            max_tokens: Maximum tokens for responses
+            llm_config: LLM configuration to use. If None, uses global config.
             tools: List of tools available to the agent
         """
         self.agent_type = agent_type
-        self.model_name = model_name
-        self.temperature = temperature
-        self.max_tokens = max_tokens
+        self.llm_config = llm_config or get_config().llm
         self.tools = tools or []
         self.agent_executor: Any = None
 
@@ -63,11 +59,38 @@ class DiversificationAgent:
     def _initialize_llm(self) -> None:
         """Initialize the LLM with configuration."""
         try:
-            self.llm = init_chat_model(
-                f"openai:{self.model_name}", temperature=self.temperature
-            )
+            # Map provider names to init_chat_model format
+            provider_map = {
+                "anthropic": "anthropic",
+                "openai": "openai",
+                "google": "google_genai",  # Use google_genai for LangChain Google GenAI
+            }
+
+            provider = provider_map.get(self.llm_config.provider.lower())
+            if not provider:
+                # Fall back to original provider name if not in map
+                provider = self.llm_config.provider.lower()
+
+            # Create the model identifier for init_chat_model
+            model_id = f"{provider}:{self.llm_config.model_name}"
+
+            # Initialize the LLM using init_chat_model with configuration
+            # Note: Only pass parameters that are commonly supported across all providers
+            init_params = {
+                "temperature": self.llm_config.temperature,
+                "max_tokens": self.llm_config.max_tokens,
+            }
+
+            # Add additional params but filter out potentially unsupported ones
+            for key, value in self.llm_config.additional_params.items():
+                if key not in ["timeout"]:  # Skip timeout as it may not be supported
+                    init_params[key] = value  # type: ignore[assignment]
+
+            self.llm = init_chat_model(model=model_id, **init_params)
+
             self.logger.info(
-                f"Initialized {self.model_name} LLM for {self.agent_type.value} agent"
+                f"Initialized {self.llm_config.provider}:{self.llm_config.model_name} "
+                f"LLM for {self.agent_type.value} agent"
             )
 
         except Exception as e:
@@ -197,15 +220,13 @@ class DiversificationAgent:
 class AgentManager:
     """Manager for coordinating multiple diversification agents."""
 
-    def __init__(self, model_name: str = "gpt-4", temperature: float = 0.1):
+    def __init__(self, llm_config: Optional[LLMConfig] = None):
         """Initialize the agent manager.
 
         Args:
-            model_name: OpenAI model to use for all agents
-            temperature: Temperature for all agents
+            llm_config: LLM configuration to use for all agents. If None, uses global config.
         """
-        self.model_name = model_name
-        self.temperature = temperature
+        self.llm_config = llm_config or get_config().llm
         self.agents: Dict[AgentType, DiversificationAgent] = {}
 
         self.logger = logging.getLogger("diversifier.agent_manager")
@@ -225,8 +246,7 @@ class AgentManager:
         if agent_type not in self.agents:
             self.agents[agent_type] = DiversificationAgent(
                 agent_type=agent_type,
-                model_name=self.model_name,
-                temperature=self.temperature,
+                llm_config=self.llm_config,
                 tools=tools,
             )
             self.logger.info(f"Created new {agent_type.value} agent")

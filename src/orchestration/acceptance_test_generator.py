@@ -113,11 +113,15 @@ class AcceptanceTestGenerator:
         self.logger.info("Starting acceptance test generation")
 
         # Create test generator agent with file system tools
+        from .config import LLMConfig
+
         file_tools = self._create_file_system_tools()
+        llm_config = LLMConfig(
+            provider="openai", model_name=model_name, temperature=0.2
+        )  # Slightly higher for creative test generation
         generator_agent = DiversificationAgent(
             agent_type=AgentType.ACCEPTANCE_TEST_GENERATOR,
-            model_name=model_name,
-            temperature=0.2,  # Slightly higher for creative test generation
+            llm_config=llm_config,
             tools=file_tools,
         )
 

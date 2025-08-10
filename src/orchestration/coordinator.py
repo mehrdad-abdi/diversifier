@@ -1,7 +1,7 @@
 """High-level workflow orchestration coordinator."""
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pathlib import Path
 
 from .agent import AgentManager, AgentType
@@ -10,6 +10,7 @@ from .workflow import WorkflowState, MigrationContext
 from .acceptance_test_generator import AcceptanceTestGenerator
 from .doc_analyzer import DocumentationAnalyzer
 from .source_code_analyzer import SourceCodeAnalyzer
+from .config import LLMConfig, get_config
 
 
 class DiversificationCoordinator:
@@ -20,8 +21,7 @@ class DiversificationCoordinator:
         project_path: str,
         source_library: str,
         target_library: str,
-        model_name: str = "gpt-4",
-        temperature: float = 0.1,
+        llm_config: Optional[LLMConfig] = None,
     ):
         """Initialize the diversification coordinator.
 
@@ -29,17 +29,15 @@ class DiversificationCoordinator:
             project_path: Path to the project to diversify
             source_library: Library to migrate from
             target_library: Library to migrate to
-            model_name: LLM model to use
-            temperature: Temperature for LLM responses
+            llm_config: LLM configuration to use. If None, uses global config.
         """
         self.project_path = Path(project_path).resolve()
         self.source_library = source_library
         self.target_library = target_library
+        self.llm_config = llm_config or get_config().llm
 
         # Initialize components
-        self.agent_manager = AgentManager(
-            model_name=model_name, temperature=temperature
-        )
+        self.agent_manager = AgentManager(llm_config=self.llm_config)
         self.mcp_manager = MCPManager(project_root=str(self.project_path))
 
         # Initialize workflow state
@@ -364,7 +362,7 @@ class DiversificationCoordinator:
                     doc_analysis=doc_analysis,
                     source_analysis=source_analysis,
                     output_dir=None,  # Use default location
-                    model_name=self.agent_manager.model_name,
+                    model_name=self.llm_config.model_name,
                     execute_tests=False,  # Don't execute during generation phase
                 )
             )

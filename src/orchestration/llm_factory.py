@@ -1,8 +1,9 @@
 """LLM factory for creating configured LangChain LLM instances."""
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
+from langchain.chat_models import init_chat_model
 from .config import LLMConfig, get_config
 from .logging_config import get_logger
 
@@ -10,7 +11,7 @@ logger = get_logger("llm_factory")
 
 
 def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
-    """Create a LangChain LLM instance from configuration.
+    """Create a LangChain LLM instance from configuration using init_chat_model.
 
     Args:
         config: LLM configuration. If None, uses global config.
@@ -19,7 +20,7 @@ def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
         Configured LangChain LLM instance
 
     Raises:
-        ValueError: If provider is not supported
+        ValueError: If provider is not supported or API key is missing
         ImportError: If required LangChain packages are not installed
     """
     if config is None:
@@ -27,153 +28,52 @@ def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
 
     provider = config.provider.lower()
 
-    # Base parameters common to most providers
-    params = {
-        "model_name": config.model_name,
-        "temperature": config.temperature,
-        "max_tokens": config.max_tokens,
-        "timeout": config.timeout,
-        **config.additional_params,
+    # Map provider names to init_chat_model format
+    provider_map = {
+        "anthropic": "anthropic",
+        "openai": "openai",
+        "google": "google_genai",
     }
 
-    # Add base_url if specified
-    if config.base_url:
-        params["base_url"] = config.base_url
+    mapped_provider = provider_map.get(provider)
+    if not mapped_provider:
+        raise ValueError(
+            f"Unsupported LLM provider: {provider}. Supported providers: {', '.join(provider_map.keys())}"
+        )
+
+    # Check API key is available
+    api_key_env_var = config.api_key_env_var or get_default_api_key_env_var(provider)
+    api_key = os.getenv(api_key_env_var)
+    if not api_key:
+        raise ValueError(
+            f"API key not found in environment variable: {api_key_env_var}"
+        )
+
+    # Create the model identifier for init_chat_model
+    model_id = f"{mapped_provider}:{config.model_name}"
 
     logger.info(
         f"Creating LLM instance: provider={provider}, model={config.model_name}"
     )
 
-    if provider == "anthropic":
-        return _create_anthropic_llm(config, params)
-    elif provider == "openai":
-        return _create_openai_llm(config, params)
-    elif provider == "google":
-        return _create_google_llm(config, params)
-    else:
-        raise ValueError(f"Unsupported LLM provider: {provider}")
-
-
-def _create_anthropic_llm(config: LLMConfig, params: Dict[str, Any]) -> Any:
-    """Create Anthropic Claude LLM instance."""
     try:
-        from langchain_anthropic import ChatAnthropic  # type: ignore
-    except ImportError:
-        raise ImportError(
-            "langchain_anthropic package is required for Anthropic provider. "
-            "Install with: pip install langchain-anthropic"
-        )
+        # Use init_chat_model with our configuration
+        # Note: Only pass parameters that are commonly supported across all providers
+        init_params = {
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens,
+        }
 
-    # Get API key from environment
-    api_key_env_var = config.api_key_env_var or "ANTHROPIC_API_KEY"
-    api_key = os.getenv(api_key_env_var)
-    if not api_key:
-        raise ValueError(
-            f"API key not found in environment variable: {api_key_env_var}"
-        )
+        # Add additional params but filter out potentially unsupported ones
+        for key, value in config.additional_params.items():
+            if key not in ["timeout"]:  # Skip timeout as it may not be supported
+                init_params[key] = value  # type: ignore[assignment]
 
-    # Map parameters for Anthropic
-    anthropic_params = {
-        "model": params["model_name"],
-        "temperature": params["temperature"],
-        "max_tokens": params["max_tokens"],
-        "timeout": params["timeout"],
-        "api_key": api_key,
-    }
+        return init_chat_model(model=model_id, **init_params)
 
-    # Add base_url if specified
-    if "base_url" in params:
-        anthropic_params["base_url"] = params["base_url"]
-
-    # Add any additional parameters
-    additional = {
-        k: v
-        for k, v in params.items()
-        if k not in ["model_name", "temperature", "max_tokens", "timeout", "base_url"]
-    }
-    anthropic_params.update(additional)
-
-    return ChatAnthropic(**anthropic_params)
-
-
-def _create_openai_llm(config: LLMConfig, params: Dict[str, Any]) -> Any:
-    """Create OpenAI GPT LLM instance."""
-    try:
-        from langchain_openai import ChatOpenAI  # type: ignore
-    except ImportError:
-        raise ImportError(
-            "langchain_openai package is required for OpenAI provider. "
-            "Install with: pip install langchain-openai"
-        )
-
-    # Get API key from environment
-    api_key_env_var = config.api_key_env_var or "OPENAI_API_KEY"
-    api_key = os.getenv(api_key_env_var)
-    if not api_key:
-        raise ValueError(
-            f"API key not found in environment variable: {api_key_env_var}"
-        )
-
-    # Map parameters for OpenAI
-    openai_params = {
-        "model": params["model_name"],
-        "temperature": params["temperature"],
-        "max_tokens": params["max_tokens"],
-        "timeout": params["timeout"],
-        "api_key": api_key,
-    }
-
-    # Add base_url if specified
-    if "base_url" in params:
-        openai_params["base_url"] = params["base_url"]
-
-    # Add any additional parameters
-    additional = {
-        k: v
-        for k, v in params.items()
-        if k not in ["model_name", "temperature", "max_tokens", "timeout", "base_url"]
-    }
-    openai_params.update(additional)
-
-    return ChatOpenAI(**openai_params)
-
-
-def _create_google_llm(config: LLMConfig, params: Dict[str, Any]) -> Any:
-    """Create Google Gemini LLM instance."""
-    try:
-        from langchain_google_genai import ChatGoogleGenerativeAI  # type: ignore
-    except ImportError:
-        raise ImportError(
-            "langchain_google_genai package is required for Google provider. "
-            "Install with: pip install langchain-google-genai"
-        )
-
-    # Get API key from environment
-    api_key_env_var = config.api_key_env_var or "GOOGLE_API_KEY"
-    api_key = os.getenv(api_key_env_var)
-    if not api_key:
-        raise ValueError(
-            f"API key not found in environment variable: {api_key_env_var}"
-        )
-
-    # Map parameters for Google
-    google_params = {
-        "model": params["model_name"],
-        "temperature": params["temperature"],
-        "max_output_tokens": params["max_tokens"],  # Google uses max_output_tokens
-        "timeout": params["timeout"],
-        "google_api_key": api_key,
-    }
-
-    # Add any additional parameters
-    additional = {
-        k: v
-        for k, v in params.items()
-        if k not in ["model_name", "temperature", "max_tokens", "timeout", "base_url"]
-    }
-    google_params.update(additional)
-
-    return ChatGoogleGenerativeAI(**google_params)
+    except Exception as e:
+        logger.error(f"Failed to create LLM instance: {e}")
+        raise
 
 
 def get_default_api_key_env_var(provider: str) -> str:

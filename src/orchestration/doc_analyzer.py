@@ -114,11 +114,15 @@ class DocumentationAnalyzer:
         config_files = await self._collect_configuration_files()
 
         # Create analyzer agent with file system tools
+        from .config import LLMConfig
+
         file_tools = self._create_file_system_tools()
+        llm_config = LLMConfig(
+            provider="openai", model_name=model_name, temperature=0.1
+        )
         analyzer_agent = DiversificationAgent(
             agent_type=AgentType.ANALYZER,
-            model_name=model_name,
-            temperature=0.1,
+            llm_config=llm_config,
             tools=file_tools,
         )
 
