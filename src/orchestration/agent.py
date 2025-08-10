@@ -189,7 +189,6 @@ class DiversificationAgent:
                 # For agents without tools, use LLM directly
                 prompt = self._get_agent_prompt()
                 messages = prompt.format_messages(input=input_text)
-
                 response = self.llm.invoke(messages)
                 result = {"output": response.content}
 
