@@ -360,7 +360,9 @@ class DiversificationCoordinator:
 
             # Step 1: Analyze project documentation
             self.logger.info("Analyzing project documentation")
-            doc_analysis = await self.doc_analyzer.analyze_project_documentation()
+            doc_analysis = await self.doc_analyzer.analyze_project_documentation(
+                self.llm_config
+            )
 
             if not doc_analysis:
                 self.logger.warning(
@@ -379,7 +381,7 @@ class DiversificationCoordinator:
             # Step 2: Analyze source code
             self.logger.info("Analyzing source code")
             source_analysis = await self.source_analyzer.analyze_project_source_code(
-                self.source_library
+                self.llm_config
             )
 
             if not source_analysis:
@@ -405,8 +407,8 @@ class DiversificationCoordinator:
                 await self.acceptance_test_generator.run_complete_workflow(
                     doc_analysis=doc_analysis,
                     source_analysis=source_analysis,
+                    llm_config=self.llm_config,
                     output_dir=None,  # Use default location
-                    model_name=self.llm_config.model_name,
                     execute_tests=False,  # Don't execute during generation phase
                 )
             )

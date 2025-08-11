@@ -6,13 +6,16 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, replace, is_dataclass
+from dataclasses import dataclass
 
 from langchain_core.tools import BaseTool, tool
 
 from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
-from .config import get_config
+from .config import (
+    get_config,  # noqa: F401 (needed for test patching)
+    LLMConfig,
+)
 
 
 @dataclass
@@ -99,12 +102,12 @@ class DocumentationAnalyzer:
         ]
 
     async def analyze_project_documentation(
-        self, model_name: str = "gpt-4"
+        self, llm_config: LLMConfig
     ) -> DocumentationAnalysisResult:
         """Analyze project documentation for external interfaces.
 
         Args:
-            model_name: LLM model to use for analysis
+            llm_config: LLM configuration to use.
 
         Returns:
             Documentation analysis results
@@ -118,19 +121,12 @@ class DocumentationAnalyzer:
         # Create analyzer agent with file system tools
         file_tools = self._create_file_system_tools()
 
-        # Get base LLM config and override model if specified
-        llm_config = get_config().llm
-        if model_name != llm_config.model_name:
-            # Create a copy with the specified model name
-            if is_dataclass(llm_config):
-                llm_config = replace(llm_config, model_name=model_name)
-            else:
-                # For tests with Mock objects
-                llm_config.model_name = model_name
+        # Use provided LLM config
+        analysis_llm_config = llm_config
 
         analyzer_agent = DiversificationAgent(
             agent_type=AgentType.DOC_ANALYZER,
-            llm_config=llm_config,
+            llm_config=analysis_llm_config,
             tools=file_tools,
         )
 

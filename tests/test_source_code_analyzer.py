@@ -1,6 +1,7 @@
 """Tests for source code analyzer functionality."""
 
 import json
+import os
 import pytest
 from datetime import datetime
 from pathlib import Path
@@ -646,6 +647,7 @@ class TestSourceCodeAnalyzer:
 
     @patch("src.orchestration.source_code_analyzer.get_config")
     @patch("src.orchestration.source_code_analyzer.DiversificationAgent")
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     @pytest.mark.asyncio
     async def test_analyze_project_source_code_integration(
         self, mock_agent_class, mock_get_config, analyzer, mock_mcp_manager
@@ -696,8 +698,15 @@ class TestSourceCodeAnalyzer:
             ]
             mock_agent_class.return_value = mock_agent
 
+            # Create test LLM config
+            test_llm_config = LLMConfig(
+                provider="anthropic",
+                model_name="claude-3-5-sonnet-20241022",
+                api_key_env_var="TEST_API_KEY",
+            )
+
             # Run analysis
-            result = await analyzer.analyze_project_source_code()
+            result = await analyzer.analyze_project_source_code(test_llm_config)
 
             # Verify result
             assert isinstance(result, SourceCodeAnalysisResult)
