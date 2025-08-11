@@ -1,113 +1,26 @@
 """Git MCP Server launcher and lifecycle management."""
 
 import asyncio
-import subprocess
-import sys
+import json
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-import json
+from ..base_client import BaseMCPClient
 
 
-class GitMCPClient:
+class GitMCPClient(BaseMCPClient):
     """Client for managing Git MCP Server lifecycle and communication."""
 
     def __init__(self, project_root: Optional[str] = None):
-        """Initialize the MCP client.
+        """Initialize the Git MCP client.
 
         Args:
             project_root: Root directory to constrain Git operations to.
         """
-        self.project_root = project_root or str(Path.cwd())
-        self.process: Optional[subprocess.Popen] = None
+        super().__init__(project_root, "Git MCP Server")
 
-    def start_server(self) -> bool:
-        """Start the Git MCP Server process.
-
-        Returns:
-            True if server started successfully, False otherwise.
-        """
-        try:
-            # Get path to server script
-            server_script = Path(__file__).parent / "server.py"
-
-            # Start server process with stdio communication
-            self.process = subprocess.Popen(
-                [sys.executable, str(server_script), self.project_root],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=0,
-            )
-
-            return True
-
-        except Exception as e:
-            print(f"Failed to start Git MCP Server: {e}")
-            return False
-
-    def stop_server(self) -> None:
-        """Stop the Git MCP Server process."""
-        if self.process:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-            self.process = None
-
-    def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Send a JSON-RPC request to the server.
-
-        Args:
-            method: Method name to call
-            params: Parameters for the method
-
-        Returns:
-            Response from server or None if error
-        """
-        if not self.process:
-            return None
-
-        request = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
-
-        try:
-            # Send request
-            request_json = json.dumps(request) + "\n"
-            if self.process.stdin:
-                self.process.stdin.write(request_json)
-                self.process.stdin.flush()
-
-            # Read response
-            if self.process.stdout:
-                response_line = self.process.stdout.readline()
-                if response_line:
-                    return json.loads(response_line.strip())
-
-        except Exception as e:
-            print(f"Error communicating with server: {e}")
-
-        return None
-
-    def list_tools(self) -> Optional[Dict[str, Any]]:
-        """List available tools."""
-        return self.send_request("tools/list")
-
-    def call_tool(
-        self, name: str, arguments: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Call a specific tool.
-
-        Args:
-            name: Tool name
-            arguments: Tool arguments
-
-        Returns:
-            Tool result
-        """
-        return self.send_request("tools/call", {"name": name, "arguments": arguments})
+    def _get_server_script_path(self) -> Path:
+        """Get the path to the Git server script."""
+        return Path(__file__).parent / "server.py"
 
     def init_repository(self, repo_path: str = ".") -> Optional[Dict[str, Any]]:
         """Initialize a Git repository.

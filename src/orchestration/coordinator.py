@@ -179,6 +179,7 @@ class DiversificationCoordinator:
         Returns:
             True if step completed successfully
         """
+        # breakpoint()
         if not self.workflow_state.start_step(step_name):
             return False
 
