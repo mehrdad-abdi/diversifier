@@ -5,12 +5,7 @@ on:
   issue_comment:
     types: [created]
 
-env:
-  DIVERSIFIER_LLM_PROVIDER: google_genai
-  DIVERSIFIER_LLM_MODEL_NAME: gemini-2.5-pro
-  DIVERSIFIER_LLM_TEMPERATURE: 0.2
-  DIVERSIFIER_LLM_MAX_TOKENS: 250000
-  DIVERSIFIER_LLM_API_KEY_ENV_VAR: GEMINI_API_KEY
+# Configuration is now managed via config file created during workflow
 
 jobs:
   test-generation-validation:
@@ -43,20 +38,22 @@ jobs:
     - name: Validate configuration
       run: |
         echo "🔧 Validating diversifier configuration..."
-        echo "LLM Provider: $DIVERSIFIER_LLM_PROVIDER"
-        echo "Model: $DIVERSIFIER_LLM_MODEL_NAME"
-        echo "Temperature: $DIVERSIFIER_LLM_TEMPERATURE"
-        echo "Max Tokens: $DIVERSIFIER_LLM_MAX_TOKENS"
+        echo "Will create config with:"
+        echo "LLM Provider: google_genai"
+        echo "Model: gemini-2.5-flash"
+        echo "Max Tokens: 200000"
+        echo "Temperature: 0.2"
+        echo "API Key Environment Variable: GOOGLE_API_KEY"
         
         # Check if API key is available (without exposing it)
-        if [ -z "$GEMINI_API_KEY" ]; then
-          echo "❌ GEMINI_API_KEY not found in environment"
+        if [ -z "$GOOGLE_API_KEY" ]; then
+          echo "❌ GOOGLE_API_KEY not found in environment"
           exit 1
         else
-          echo "✅ Gemini API key is available"
+          echo "✅ Google API key is available"
         fi
       env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     - name: Clone FastAPI Full-Stack Template pilot project
       run: |
@@ -74,21 +71,52 @@ jobs:
           echo "⚠️  emails library not found in dependencies - this is expected as dependencies may have changed"
         fi
 
+    - name: Create diversifier config
+      run: |
+        echo "🔧 Creating diversifier configuration file..."
+        
+        # Create config using --create-config
+        uv run diversifier --create-config diversifier_config.toml
+        
+        echo "✅ Configuration file created"
+        if [ -f "diversifier_config.toml" ]; then
+          echo "Config file location: diversifier_config.toml"
+          echo "Initial config contents:"
+          cat diversifier_config.toml
+        else
+          echo "❌ Configuration file not found"
+          exit 1
+        fi
+
+    - name: Update configuration with Google GenAI settings
+      run: |
+        echo "⚙️  Updating configuration with Google GenAI settings..."
+        
+        # Update the LLM section in the TOML config file
+        sed -i 's/provider = "anthropic"/provider = "google_genai"/' diversifier_config.toml
+        sed -i 's/model_name = "claude-3-5-sonnet-20241022"/model_name = "gemini-2.5-flash"/' diversifier_config.toml
+        sed -i 's/api_key_env_var = "ANTHROPIC_API_KEY"/api_key_env_var = "GOOGLE_API_KEY"/' diversifier_config.toml
+        sed -i 's/max_tokens = 4096/max_tokens = 200000/' diversifier_config.toml
+        sed -i 's/temperature = 0.1/temperature = 0.2/' diversifier_config.toml
+        
+        echo "✅ Configuration updated with Google GenAI settings"
+        echo "Updated config contents:"
+        cat diversifier_config.toml
+
     - name: Run acceptance test generation
       run: |
-        echo "🧪 Running diversifier for acceptance test generation only..."
+        echo "🧪 Running diversifier for acceptance test generation using config file..."
         
         # Set up environment for test generation
-        export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+        export GOOGLE_API_KEY="${{ secrets.GEMINI_API_KEY }}"
         
-        # Use a custom approach to trigger only test generation
-        # This runs the diversifier but we'll only capture the test generation phase
-        echo "Starting test generation workflow..."
+        # Use config file approach
+        echo "Starting test generation workflow with config file..."
         
         set +e  # Don't fail immediately on error so we can capture partial results
         
-        # Run diversifier with dry-run to prevent actual migration
-        uv run diversifier pilot-project emails redmail --dry-run --verbose 2>&1 | tee diversifier_output.log
+        # Run diversifier using config file with dry-run to prevent actual migration
+        uv run diversifier pilot-project emails redmail --config diversifier_config.toml --dry-run --verbose 2>&1 | tee diversifier_output.log
         
         DIVERSIFIER_EXIT_CODE=$?
         
@@ -118,7 +146,7 @@ jobs:
         # Continue even if diversifier had issues - we want to capture artifacts
         echo "Continuing with artifact collection..."
       env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     - name: Analyze generated tests
       run: |
@@ -176,6 +204,7 @@ jobs:
           test_*.py
           diversifier_output.log
           test_generation_summary.txt
+          diversifier_config.toml
           pilot-project/
         retention-days: 30
 
