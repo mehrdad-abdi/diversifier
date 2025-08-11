@@ -360,7 +360,9 @@ class DiversificationCoordinator:
 
             # Step 1: Analyze project documentation
             self.logger.info("Analyzing project documentation")
-            doc_analysis = await self.doc_analyzer.analyze_project_documentation()
+            doc_analysis = await self.doc_analyzer.analyze_project_documentation(
+                self.llm_config
+            )
 
             if not doc_analysis:
                 self.logger.warning(
@@ -405,8 +407,8 @@ class DiversificationCoordinator:
                 await self.acceptance_test_generator.run_complete_workflow(
                     doc_analysis=doc_analysis,
                     source_analysis=source_analysis,
-                    output_dir=None,  # Use default location
                     llm_config=self.llm_config,
+                    output_dir=None,  # Use default location
                     execute_tests=False,  # Don't execute during generation phase
                 )
             )

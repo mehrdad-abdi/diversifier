@@ -1417,8 +1417,8 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         self,
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
+        llm_config: LLMConfig,
         output_dir: Optional[str] = None,
-        llm_config: Optional[LLMConfig] = None,
         execute_tests: bool = False,
     ) -> WorkflowExecutionResult:
         """Run the complete test generation and execution workflow.
@@ -1426,8 +1426,8 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         Args:
             doc_analysis: Documentation analysis results
             source_analysis: Source code analysis results
+            llm_config: LLM configuration to use.
             output_dir: Directory for test output
-            llm_config: LLM configuration to use. If None, uses global config.
             execute_tests: Whether to execute tests after generation
 
         Returns:
@@ -1442,8 +1442,8 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
 
             # Generate acceptance tests
             self._log("Generating acceptance tests")
-            # Use provided LLM config or default
-            test_llm_config = llm_config or get_config().llm
+            # Use provided LLM config
+            test_llm_config = llm_config
 
             generation_result = await self.generate_acceptance_tests(
                 doc_analysis, source_analysis, test_llm_config

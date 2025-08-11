@@ -12,7 +12,7 @@ from langchain_core.tools import BaseTool, tool
 
 from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
-from .config import get_config, LLMConfig
+from .config import LLMConfig
 
 
 @dataclass
@@ -132,12 +132,12 @@ class SourceCodeAnalyzer:
         }
 
     async def analyze_project_source_code(
-        self, llm_config: Optional[LLMConfig] = None
+        self, llm_config: LLMConfig
     ) -> SourceCodeAnalysisResult:
         """Analyze project source code for external interfaces.
 
         Args:
-            llm_config: LLM configuration to use. If None, uses global config.
+            llm_config: LLM configuration to use.
 
         Returns:
             Source code analysis results
@@ -152,8 +152,8 @@ class SourceCodeAnalyzer:
         # Create analyzer agent with file system tools
         file_tools = self._create_file_system_tools()
 
-        # Use provided LLM config or default
-        analysis_llm_config = llm_config or get_config().llm
+        # Use provided LLM config
+        analysis_llm_config = llm_config
 
         analyzer_agent = DiversificationAgent(
             agent_type=AgentType.SOURCE_CODE_ANALYZER,

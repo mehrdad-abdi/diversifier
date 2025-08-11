@@ -12,7 +12,7 @@ from langchain_core.tools import BaseTool, tool
 
 from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
-from .config import get_config, LLMConfig
+from .config import LLMConfig
 
 
 @dataclass
@@ -99,12 +99,12 @@ class DocumentationAnalyzer:
         ]
 
     async def analyze_project_documentation(
-        self, llm_config: Optional[LLMConfig] = None
+        self, llm_config: LLMConfig
     ) -> DocumentationAnalysisResult:
         """Analyze project documentation for external interfaces.
 
         Args:
-            llm_config: LLM configuration to use. If None, uses global config.
+            llm_config: LLM configuration to use.
 
         Returns:
             Documentation analysis results
@@ -118,8 +118,8 @@ class DocumentationAnalyzer:
         # Create analyzer agent with file system tools
         file_tools = self._create_file_system_tools()
 
-        # Use provided LLM config or default
-        analysis_llm_config = llm_config or get_config().llm
+        # Use provided LLM config
+        analysis_llm_config = llm_config
 
         analyzer_agent = DiversificationAgent(
             agent_type=AgentType.DOC_ANALYZER,
