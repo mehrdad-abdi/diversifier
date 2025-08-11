@@ -19,6 +19,7 @@ class GitMCPClient:
         """
         self.project_root = project_root or str(Path.cwd())
         self.process: Optional[subprocess.Popen] = None
+        self.initialized = False
 
     def start_server(self) -> bool:
         """Start the Git MCP Server process.
@@ -91,8 +92,53 @@ class GitMCPClient:
 
         return None
 
+    def _initialize_mcp_session(self) -> bool:
+        """Send the MCP initialize handshake."""
+        if self.initialized:
+            return True
+
+        # Send initialize request as per MCP protocol
+        initialize_params = {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {"tools": {}},
+            "clientInfo": {"name": "diversifier-git-client", "version": "1.0.0"},
+        }
+
+        # Send initialize request
+        init_response = self.send_request("initialize", initialize_params)
+        if init_response and "error" not in init_response:
+            # Send initialized notification (no response expected)
+            self._send_notification("notifications/initialized")
+            self.initialized = True
+            return True
+        else:
+            print(f"MCP initialization failed: {init_response}")
+            return False
+
+    def _send_notification(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Send a JSON-RPC notification (no response expected)."""
+        if not self.process:
+            return
+
+        notification: Dict[str, Any] = {"jsonrpc": "2.0", "method": method}
+        if params:
+            notification["params"] = params
+
+        try:
+            notification_json = json.dumps(notification) + "\n"
+            if self.process.stdin:
+                self.process.stdin.write(notification_json)
+                self.process.stdin.flush()
+        except Exception as e:
+            print(f"Error sending notification: {e}")
+
     def list_tools(self) -> Optional[Dict[str, Any]]:
         """List available tools."""
+        # Ensure MCP session is initialized
+        if not self._initialize_mcp_session():
+            return None
         return self.send_request("tools/list")
 
     def call_tool(
@@ -107,6 +153,9 @@ class GitMCPClient:
         Returns:
             Tool result
         """
+        # Ensure MCP session is initialized
+        if not self._initialize_mcp_session():
+            return None
         return self.send_request("tools/call", {"name": name, "arguments": arguments})
 
     def init_repository(self, repo_path: str = ".") -> Optional[Dict[str, Any]]:
