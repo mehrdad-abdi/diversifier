@@ -250,7 +250,7 @@ class TestSetupLogging:
         assert isinstance(formatter, DiversifierFormatter)
         assert formatter.enable_correlation_ids is False
 
-    @patch("src.orchestration.config.get_config")
+    @patch("src.orchestration.logging_config.get_config")
     def test_setup_logging_no_config(self, mock_get_config):
         """Test setup logging without providing config."""
         mock_config = MagicMock()
