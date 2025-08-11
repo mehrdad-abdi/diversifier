@@ -179,6 +179,7 @@ class DiversificationCoordinator:
         Returns:
             True if step completed successfully
         """
+        # breakpoint()
         if not self.workflow_state.start_step(step_name):
             return False
 
@@ -300,6 +301,7 @@ class DiversificationCoordinator:
                 self.logger.info("Creating git-based backup branch")
 
                 # Get current status
+                breakpoint()
                 status_result = await self.mcp_manager.call_tool(
                     MCPServerType.GIT, "get_status", {"repo_path": "."}
                 )
@@ -357,6 +359,7 @@ class DiversificationCoordinator:
         """Generate library-independent Docker-based acceptance tests."""
         try:
             self.logger.info("Starting Docker-based test generation workflow")
+            breakpoint()
 
             # Step 1: Analyze project documentation
             self.logger.info("Analyzing project documentation")
