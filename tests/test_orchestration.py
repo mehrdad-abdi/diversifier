@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.orchestration.agent import AgentManager, AgentType, DiversificationAgent
 from src.orchestration.mcp_manager import MCPManager, MCPServerType, MCPConnection
+from src.orchestration.config import LLMConfig, LoggingConfig
 from src.orchestration.workflow import (
     WorkflowState,
     MigrationContext,
@@ -34,7 +35,6 @@ class TestDiversificationAgent:
     @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
     def test_agent_initialization(self):
         """Test agent initialization."""
-        from src.orchestration.config import LLMConfig
 
         llm_config = LLMConfig(
             provider="openai",
@@ -56,7 +56,6 @@ class TestDiversificationAgent:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_agent_with_tools(self):
         """Test agent initialization with tools."""
-        from src.orchestration.config import LLMConfig
 
         mock_llm_config = LLMConfig(
             provider="openai",
@@ -84,7 +83,6 @@ class TestDiversificationAgent:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_agent_invoke_without_tools(self):
         """Test agent invocation without tools."""
-        from src.orchestration.config import LLMConfig
 
         mock_llm_config = LLMConfig(
             provider="anthropic",
@@ -102,7 +100,6 @@ class TestDiversificationAgent:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_add_tool(self):
         """Test adding a tool to an agent."""
-        from src.orchestration.config import LLMConfig
 
         mock_llm_config = LLMConfig(
             provider="anthropic",
@@ -128,7 +125,6 @@ class TestDiversificationAgent:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_clear_memory(self):
         """Test clearing agent memory."""
-        from src.orchestration.config import LLMConfig
 
         mock_llm_config = LLMConfig(
             provider="anthropic",
@@ -152,7 +148,6 @@ class TestAgentManager:
     @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
     def test_agent_manager_initialization(self):
         """Test agent manager initialization."""
-        from src.orchestration.config import LLMConfig
 
         llm_config = LLMConfig(
             provider="openai",
@@ -169,7 +164,6 @@ class TestAgentManager:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_agent(self):
         """Test getting an agent from manager."""
-        from src.orchestration.config import LLMConfig
 
         mock_llm_config = LLMConfig(
             provider="anthropic",
@@ -187,7 +181,6 @@ class TestAgentManager:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_same_agent_twice(self):
         """Test getting the same agent type twice returns same instance."""
-        from src.orchestration.config import LLMConfig
 
         mock_llm_config = LLMConfig(
             provider="anthropic",
@@ -204,7 +197,6 @@ class TestAgentManager:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_clear_all_memories(self):
         """Test clearing all agent memories."""
-        from src.orchestration.config import LLMConfig
 
         mock_llm_config = LLMConfig(
             provider="anthropic",
@@ -686,7 +678,6 @@ class TestDiversificationCoordinator:
     @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
     def test_coordinator_initialization(self):
         """Test coordinator initialization."""
-        from src.orchestration.config import LLMConfig
 
         llm_config = LLMConfig(
             provider="openai",
@@ -714,7 +705,6 @@ class TestDiversificationCoordinator:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     async def test_execute_workflow_dry_run(self):
         """Test workflow execution in dry run mode."""
-        from src.orchestration.config import LLMConfig
 
         llm_config = LLMConfig(
             provider="anthropic",
@@ -761,7 +751,6 @@ class TestDiversificationCoordinator:
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_workflow_status(self):
         """Test getting workflow status."""
-        from src.orchestration.config import LLMConfig
 
         llm_config = LLMConfig(
             provider="anthropic",
@@ -847,8 +836,6 @@ class TestLoggingConfig:
 
     def test_setup_logging(self):
         """Test logging setup."""
-        from src.orchestration.config import LoggingConfig
-
         # This is mainly to ensure no exceptions are raised
         config = LoggingConfig(level="DEBUG", console=True)
         setup_logging(config)

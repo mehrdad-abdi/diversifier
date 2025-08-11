@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Git MCP Server with stdio transport."""
 
+import asyncio
 import json
+import sys
+import time
 from pathlib import Path
 from typing import Optional, List
 
 import git
+from mcp.server.stdio import stdio_server
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
 from mcp.types import (
@@ -776,8 +780,6 @@ class GitMCPServer:
         repo = self._get_repo(repo_path)
 
         try:
-            import time
-
             timestamp = int(time.time())
             temp_branch_name = f"{prefix}-{timestamp}"
 
@@ -804,8 +806,6 @@ class GitMCPServer:
 
     async def run(self) -> None:
         """Run the MCP server with stdio transport."""
-        from mcp.server.stdio import stdio_server
-
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
                 read_stream,
@@ -823,9 +823,6 @@ class GitMCPServer:
 
 def main():
     """Main entry point for the Git MCP Server."""
-    import asyncio
-    import sys
-
     # Get project root from command line argument if provided
     project_root = sys.argv[1] if len(sys.argv) > 1 else None
 

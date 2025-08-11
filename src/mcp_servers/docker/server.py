@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Docker MCP Server with stdio transport for container operations."""
 
+import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 import docker
 from docker.errors import APIError, BuildError
 from docker.models.containers import Container
+from mcp.server.stdio import stdio_server
 
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
@@ -764,8 +767,6 @@ class DockerMCPServer:
 
     async def run(self) -> None:
         """Run the MCP server with stdio transport."""
-        from mcp.server.stdio import stdio_server
-
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
                 read_stream,
@@ -783,14 +784,10 @@ class DockerMCPServer:
 
 def main():
     """Main entry point for the Docker MCP Server."""
-    import sys
-
     # Get project root from command line argument if provided
     project_root = sys.argv[1] if len(sys.argv) > 1 else None
 
     try:
-        import asyncio
-
         server = DockerMCPServer(project_root=project_root)
         asyncio.run(server.run())
     except RuntimeError as e:

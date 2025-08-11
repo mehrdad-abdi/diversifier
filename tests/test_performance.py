@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import src.orchestration.performance
 from src.orchestration.config import PerformanceConfig
 from src.orchestration.performance import (
     OperationMetrics,
@@ -327,8 +328,6 @@ class TestGlobalFunctions:
     def setup_method(self):
         """Set up test fixtures."""
         # Clear global monitor
-        import src.orchestration.performance
-
         src.orchestration.performance._performance_monitor = None
 
     def test_get_performance_monitor_singleton(self):

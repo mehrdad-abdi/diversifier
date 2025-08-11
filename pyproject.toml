@@ -47,7 +47,7 @@ target-version = "py313"
 line-length = 88
 
 [tool.ruff.lint]
-# Enable F rules (Pyflakes) + PLE0415 for import in functions check + critical E/W rules
+# Enable F rules (Pyflakes) + PLC0415 for import in functions check + critical E/W rules
 select = [
     "F",       # Pyflakes (replaces flake8 --select F)
     "E4",      # Import related errors  

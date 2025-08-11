@@ -2,6 +2,7 @@
 
 import contextvars
 import logging
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -108,8 +109,6 @@ class TestDiversifierFormatter:
         try:
             raise ValueError("Test exception")
         except ValueError:
-            import sys
-
             exc_info = sys.exc_info()
             record = logging.LogRecord(
                 name="test.logger",

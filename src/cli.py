@@ -8,7 +8,7 @@ from .validation import (
     validate_library_name,
 )
 from .orchestration.coordinator import DiversificationCoordinator
-from .orchestration.config import LoggingConfig, get_config
+from .orchestration.config import LoggingConfig, get_config, ConfigManager
 from .orchestration.logging_config import setup_logging
 
 
@@ -123,8 +123,6 @@ def main() -> int:
     # Handle config file creation
     if args.create_config:
         try:
-            from .orchestration.config import ConfigManager
-
             config_manager = ConfigManager(args.create_config)
             config_manager.save_config_template(args.create_config)
             print(f"✅ Configuration template created: {args.create_config}")

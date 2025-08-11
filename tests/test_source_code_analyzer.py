@@ -2,9 +2,11 @@
 
 import json
 import pytest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from src.orchestration.config import DiversifierConfig, LLMConfig
 from src.orchestration.source_code_analyzer import (
     SourceCodeAnalyzer,
     APIEndpoint,
@@ -650,8 +652,6 @@ class TestSourceCodeAnalyzer:
     ):
         """Test full project source code analysis integration."""
         # Mock configuration
-        from src.orchestration.config import DiversifierConfig, LLMConfig
-
         mock_llm_config = Mock(spec=LLMConfig)
         mock_llm_config.model_name = "test-model"
         mock_config = Mock(spec=DiversifierConfig)
@@ -761,8 +761,6 @@ class TestSourceCodeAnalyzer:
         )
 
         # Parse to ensure it's a valid ISO format timestamp
-        from datetime import datetime
-
         datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
 
         assert output_path == "/test/output.json"

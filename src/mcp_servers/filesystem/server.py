@@ -2,10 +2,13 @@
 """File System MCP Server with stdio transport."""
 
 import ast
+import asyncio
 import json
 import shutil
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
+from mcp.server.stdio import stdio_server
 
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
@@ -463,8 +466,6 @@ class FileSystemMCPServer:
 
     async def run(self) -> None:
         """Run the MCP server with stdio transport."""
-        from mcp.server.stdio import stdio_server
-
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
                 read_stream,
@@ -482,9 +483,6 @@ class FileSystemMCPServer:
 
 def main():
     """Main entry point for the File System MCP Server."""
-    import asyncio
-    import sys
-
     # Get project root from command line argument if provided
     project_root = sys.argv[1] if len(sys.argv) > 1 else None
 

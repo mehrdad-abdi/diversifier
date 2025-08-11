@@ -98,8 +98,6 @@ class LLMConfig:
     def __post_init__(self):
         """Validate LLM configuration after initialization."""
         # Validate that API key environment variable is set
-        import os
-
         api_key = os.getenv(self.api_key_env_var)
         if not api_key:
             raise ValueError(

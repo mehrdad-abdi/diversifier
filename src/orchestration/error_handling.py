@@ -1,5 +1,6 @@
 """Error handling and recovery mechanisms for orchestration."""
 
+import gc
 import logging
 from typing import Dict, Any, Optional, List, Callable
 from enum import Enum
@@ -640,8 +641,6 @@ class ErrorHandler:
             if resource_type == "memory":
                 self.logger.info("Attempting memory cleanup")
                 # Would implement garbage collection, cache clearing, etc.
-                import gc
-
                 gc.collect()
                 return True
 

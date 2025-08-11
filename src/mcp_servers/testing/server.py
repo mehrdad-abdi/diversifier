@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Testing MCP Server with stdio transport."""
 
+import asyncio
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from mcp.server.stdio import stdio_server
 
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
@@ -838,8 +840,6 @@ class TestingMCPServer:
 
     async def run(self) -> None:
         """Run the MCP server with stdio transport."""
-        from mcp.server.stdio import stdio_server
-
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
                 read_stream,
@@ -857,9 +857,6 @@ class TestingMCPServer:
 
 def main():
     """Main entry point for the Testing MCP Server."""
-    import asyncio
-    import sys
-
     # Get project root from command line argument if provided
     project_root = sys.argv[1] if len(sys.argv) > 1 else None
 

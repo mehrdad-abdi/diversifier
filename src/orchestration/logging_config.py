@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from .config import LoggingConfig
+from .config import LoggingConfig, get_config
 
 
 # Context variable for correlation IDs
@@ -78,8 +78,6 @@ def setup_logging(config: Optional[LoggingConfig] = None) -> None:
         config: Logging configuration object. If None, uses default configuration.
     """
     if config is None:
-        from .config import get_config
-
         config = get_config().logging
 
     # Convert string level to logging constant

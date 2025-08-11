@@ -3,12 +3,12 @@
 import os
 from unittest.mock import patch
 
-from src.orchestration.config import LLMConfig
 from src.orchestration.llm_factory import (
     get_default_api_key_env_var,
     get_supported_providers,
     validate_llm_config,
 )
+from src.orchestration.config import LLMConfig
 
 
 class TestLLMFactory:

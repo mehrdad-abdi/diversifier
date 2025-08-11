@@ -11,6 +11,7 @@ from src.orchestration.acceptance_test_generator import (
     AcceptanceTestScenario,
     AcceptanceTestGenerationResult,
 )
+from src.orchestration.config import DiversifierConfig, LLMConfig
 from src.orchestration.mcp_manager import MCPManager, MCPServerType
 from src.orchestration.doc_analyzer import (
     DocumentationAnalysisResult,
@@ -717,8 +718,6 @@ services:
             ) as mock_get_config,
         ):
             # Mock configuration
-            from src.orchestration.config import DiversifierConfig, LLMConfig
-
             mock_llm_config = Mock(spec=LLMConfig)
             mock_config = Mock(spec=DiversifierConfig)
             mock_config.llm = mock_llm_config
