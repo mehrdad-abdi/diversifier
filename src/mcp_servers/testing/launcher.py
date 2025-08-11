@@ -17,7 +17,7 @@ class TestingMCPClient(BaseMCPClient):
             project_root: Root directory to constrain test operations to.
         """
         super().__init__(project_root, "Testing MCP Server")
-    
+
     def _get_server_script_path(self) -> Path:
         """Get the path to the Testing server script."""
         return Path(__file__).parent / "server.py"

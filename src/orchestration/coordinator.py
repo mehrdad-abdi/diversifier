@@ -301,7 +301,6 @@ class DiversificationCoordinator:
                 self.logger.info("Creating git-based backup branch")
 
                 # Get current status
-                breakpoint()
                 status_result = await self.mcp_manager.call_tool(
                     MCPServerType.GIT, "get_status", {"repo_path": "."}
                 )
@@ -359,7 +358,6 @@ class DiversificationCoordinator:
         """Generate library-independent Docker-based acceptance tests."""
         try:
             self.logger.info("Starting Docker-based test generation workflow")
-            breakpoint()
 
             # Step 1: Analyze project documentation
             self.logger.info("Analyzing project documentation")

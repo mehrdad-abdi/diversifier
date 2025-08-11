@@ -17,7 +17,7 @@ class FileSystemMCPClient(BaseMCPClient):
             project_root: Root directory to constrain file operations to.
         """
         super().__init__(project_root, "Filesystem MCP Server")
-    
+
     def _get_server_script_path(self) -> Path:
         """Get the path to the Filesystem server script."""
         return Path(__file__).parent / "server.py"

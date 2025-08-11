@@ -17,7 +17,7 @@ class GitMCPClient(BaseMCPClient):
             project_root: Root directory to constrain Git operations to.
         """
         super().__init__(project_root, "Git MCP Server")
-    
+
     def _get_server_script_path(self) -> Path:
         """Get the path to the Git server script."""
         return Path(__file__).parent / "server.py"

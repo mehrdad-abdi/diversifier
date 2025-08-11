@@ -18,7 +18,7 @@ class DockerMCPLauncher(BaseMCPClient):
                          If None, uses current working directory.
         """
         super().__init__(project_root, "Docker MCP Server")
-    
+
     def _get_server_script_path(self) -> Path:
         """Get the path to the Docker server script."""
         return Path(__file__).parent / "server.py"
