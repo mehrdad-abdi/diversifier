@@ -110,6 +110,16 @@ jobs:
         # Set up environment for test generation
         export GOOGLE_API_KEY="${{ secrets.GEMINI_API_KEY }}"
         
+        # Set up LangSmith tracing if API key is available
+        if [ -n "$LANGSMITH_API_KEY" ]; then
+          echo "✅ Enabling LangSmith tracing"
+          export LANGSMITH_TRACING="true"
+          export LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
+          export LANGSMITH_PROJECT="pr-pertinent-youth-30"
+        else
+          echo "⚠️  LangSmith API key not found, tracing disabled"
+        fi
+        
         # Use config file approach
         echo "Starting test generation workflow with config file..."
         
@@ -147,6 +157,7 @@ jobs:
         echo "Continuing with artifact collection..."
       env:
         GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
 
     - name: Analyze generated tests
       run: |

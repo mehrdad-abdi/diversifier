@@ -10,6 +10,7 @@ from .validation import (
 from .orchestration.coordinator import DiversificationCoordinator
 from .orchestration.config import LoggingConfig, get_config, ConfigManager
 from .orchestration.logging_config import setup_logging
+from .orchestration.langsmith_config import setup_langsmith_tracing
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -119,6 +120,9 @@ async def run_diversification(args) -> int:
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
+
+    # Setup LangSmith tracing if configured
+    setup_langsmith_tracing()
 
     # Handle config file creation
     if args.create_config:
