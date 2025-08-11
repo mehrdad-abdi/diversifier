@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from langchain_core.tools import BaseTool, tool
 
@@ -1418,7 +1418,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
         doc_analysis: DocumentationAnalysisResult,
         source_analysis: SourceCodeAnalysisResult,
         output_dir: Optional[str] = None,
-        model_name: str = "gpt-4",
+        llm_config: Optional[LLMConfig] = None,
         execute_tests: bool = False,
     ) -> WorkflowExecutionResult:
         """Run the complete test generation and execution workflow.
@@ -1427,7 +1427,7 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
             doc_analysis: Documentation analysis results
             source_analysis: Source code analysis results
             output_dir: Directory for test output
-            model_name: LLM model to use
+            llm_config: LLM configuration to use. If None, uses global config.
             execute_tests: Whether to execute tests after generation
 
         Returns:
@@ -1442,10 +1442,8 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
 
             # Generate acceptance tests
             self._log("Generating acceptance tests")
-            # Create LLM config from model_name if specified
-            test_llm_config = get_config().llm
-            if model_name != test_llm_config.model_name:
-                test_llm_config = replace(test_llm_config, model_name=model_name)
+            # Use provided LLM config or default
+            test_llm_config = llm_config or get_config().llm
 
             generation_result = await self.generate_acceptance_tests(
                 doc_analysis, source_analysis, test_llm_config

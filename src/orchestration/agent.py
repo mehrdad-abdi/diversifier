@@ -84,17 +84,38 @@ class DiversificationAgent:
                 f"LLM for {self.agent_type.value} agent with temperature {task_temperature}"
             )
 
-        except Exception as e:
+        except ValueError as e:
+            # Handle provider/model identification errors - no retry needed
             error_msg = (
-                f"Failed to initialize LLM for {self.agent_type.value} agent "
-                f"with provider '{self.llm_config.provider}' and model '{self.llm_config.model_name}': {e}\n"
-                f"Please ensure:\n"
-                f"1. The provider name '{self.llm_config.provider}' is correct for LangChain init_chat_model\n"
-                f"2. The model name '{self.llm_config.model_name}' is supported by the provider\n"
-                f"3. Required LangChain integration packages are installed\n"
-                f"4. API keys are properly configured in environment variables\n"
-                f"For supported provider formats, see: https://python.langchain.com/docs/integrations/chat/"
+                f"LLM configuration error for {self.agent_type.value} agent: {e}\n"
+                f"Provider: '{self.llm_config.provider}', Model: '{self.llm_config.model_name}'\n"
+                f"Please check your configuration and ensure the provider and model name are correct."
             )
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
+        except (ImportError, ModuleNotFoundError) as e:
+            # Handle missing LangChain integration packages - no retry needed
+            error_msg = (
+                f"Missing required package for {self.llm_config.provider} provider: {e}\n"
+                f"Please install the required LangChain integration package.\n"
+                f"Example: pip install langchain-{self.llm_config.provider.replace('_', '-')}"
+            )
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            # Handle API key errors and other authentication issues - no retry needed
+            error_type = type(e).__name__
+            if "authentication" in error_type.lower() or "auth" in str(e).lower():
+                error_msg = (
+                    f"Authentication failed for {self.llm_config.provider} provider: {e}\n"
+                    f"Please check your API key configuration."
+                )
+            else:
+                error_msg = (
+                    f"Failed to initialize LLM for {self.agent_type.value} agent "
+                    f"with provider '{self.llm_config.provider}' and model '{self.llm_config.model_name}': {e}\n"
+                    f"Error type: {error_type}"
+                )
             self.logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 

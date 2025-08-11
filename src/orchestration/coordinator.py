@@ -379,7 +379,7 @@ class DiversificationCoordinator:
             # Step 2: Analyze source code
             self.logger.info("Analyzing source code")
             source_analysis = await self.source_analyzer.analyze_project_source_code(
-                self.source_library
+                self.llm_config
             )
 
             if not source_analysis:
@@ -406,7 +406,7 @@ class DiversificationCoordinator:
                     doc_analysis=doc_analysis,
                     source_analysis=source_analysis,
                     output_dir=None,  # Use default location
-                    model_name=self.llm_config.model_name,
+                    llm_config=self.llm_config,
                     execute_tests=False,  # Don't execute during generation phase
                 )
             )
