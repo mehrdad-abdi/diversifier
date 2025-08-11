@@ -189,8 +189,6 @@ class DiversificationCoordinator:
             # Route to appropriate step handler
             if step_name == "initialize_environment":
                 result = await self._initialize_environment()
-            elif step_name == "analyze_project":
-                result = await self._analyze_project()
             elif step_name == "create_backup":
                 result = await self._create_backup()
             elif step_name == "generate_tests":
@@ -244,46 +242,6 @@ class DiversificationCoordinator:
                 "success": True,
                 "mcp_servers": server_results,
                 "available_servers": available_servers,
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    async def _analyze_project(self) -> Dict[str, Any]:
-        """Analyze project structure and library usage."""
-        try:
-            # Get analyzer agent
-            analyzer = self.agent_manager.get_agent(AgentType.ANALYZER)
-
-            # Analyze project structure
-            analysis_prompt = f"""
-            Please analyze the Python project at {self.project_path} for migration from {self.source_library} to {self.target_library}.
-            
-            I need you to:
-            1. Identify all Python files that use {self.source_library}
-            2. Analyze the API usage patterns
-            3. Assess the complexity of the migration
-            4. Identify potential compatibility issues
-            
-            Provide a detailed analysis report.
-            """
-
-            result = analyzer.invoke(analysis_prompt)
-
-            # Use filesystem MCP to get additional project info
-            project_info = await self.mcp_manager.call_tool(
-                MCPServerType.FILESYSTEM,
-                "find_python_files",
-                {"library_name": self.source_library},
-            )
-
-            return {
-                "success": True,
-                "analysis_report": result.get("output", ""),
-                "project_info": project_info,
-                "files_to_migrate": (
-                    project_info.get("matching_files", []) if project_info else []
-                ),
             }
 
         except Exception as e:

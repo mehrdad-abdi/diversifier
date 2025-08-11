@@ -631,7 +631,7 @@ class TestWorkflowState:
     def test_dependencies(self):
         """Test step dependencies."""
         # Try to start a step with unmet dependencies
-        success = self.workflow.start_step("analyze_project")
+        success = self.workflow.start_step("create_backup")
 
         assert success is False  # Should fail due to unmet dependencies
 
@@ -640,7 +640,7 @@ class TestWorkflowState:
         self.workflow.complete_step("initialize_environment")
 
         # Now it should succeed
-        success = self.workflow.start_step("analyze_project")
+        success = self.workflow.start_step("create_backup")
         assert success is True
 
     def test_workflow_summary(self):
@@ -650,8 +650,8 @@ class TestWorkflowState:
         self.workflow.complete_step("initialize_environment")
 
         # Fail another step
-        self.workflow.start_step("analyze_project")
-        self.workflow.fail_step("analyze_project", "Test error")
+        self.workflow.start_step("create_backup")
+        self.workflow.fail_step("create_backup", "Test error")
 
         summary = self.workflow.get_workflow_summary()
 
@@ -722,9 +722,6 @@ class TestDiversificationCoordinator:
         with (
             patch.object(
                 coordinator, "_initialize_environment", return_value={"success": True}
-            ),
-            patch.object(
-                coordinator, "_analyze_project", return_value={"success": True}
             ),
             patch.object(coordinator, "_create_backup", return_value={"success": True}),
             patch.object(
