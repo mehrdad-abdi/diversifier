@@ -228,6 +228,7 @@ dependencies = [
     { name = "langchain-google-genai" },
     { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "langsmith" },
     { name = "mcp" },
 ]
 
@@ -252,6 +253,7 @@ requires-dist = [
     { name = "langchain-google-genai", specifier = ">=2.1.9" },
     { name = "langchain-openai", specifier = ">=0.2.14" },
     { name = "langgraph", specifier = ">=0.6.4" },
+    { name = "langsmith", specifier = ">=0.2.32" },
     { name = "mcp", specifier = ">=1.1.0" },
 ]
 
