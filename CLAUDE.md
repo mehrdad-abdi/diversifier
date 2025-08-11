@@ -26,7 +26,7 @@ uv run diversifier <project_path> <remove_lib> <inject_lib>
 uv run black src/ main.py
 
 # Linting
-uv run flake8 --select F src/ main.py
+uv run ruff check src/ main.py
 
 # Type checking
 uv run mypy src/ main.py
@@ -82,7 +82,7 @@ The project is in early development phase with GitHub project management:
 ## Key Dependencies
 
 - **LangChain**: LLM integration for code analysis and migration
-- **Development Tools**: black (formatting), flake8 (linting), mypy (type checking), pytest (testing)
+- **Development Tools**: black (formatting), ruff (linting), mypy (type checking), pytest (testing)
 - **Python**: Requires Python >=3.13
 
 ## Development Guidelines
@@ -91,7 +91,7 @@ The project is in early development phase with GitHub project management:
 - **ALWAYS write unit tests** for every code change, new function, or feature
 - **MANDATORY pre-push checks**: Run these commands before every push to the repository:
   ```bash
-  uv run flake8 --select F src/ tests/ main.py    # Linting
+  uv run ruff check src/ tests/ main.py           # Linting
   uv run mypy src/ tests/ main.py      # Type checking
   uv run pytest                       # Unit tests
   uv run black src/ tests/ main.py     # Code formatting -- Important: Run as last check
