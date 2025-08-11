@@ -11,7 +11,7 @@ import pytest
 import git
 
 from src.mcp_servers.git.server import GitMCPServer
-from src.mcp_servers.git.launcher import GitMCPClient
+from src.mcp_servers.git.launcher import GitMCPClient, example_usage
 
 
 @pytest.fixture
@@ -429,8 +429,6 @@ class TestGitMCPClient:
 @pytest.mark.asyncio
 async def test_example_usage():
     """Test the example usage function runs without error."""
-    from src.mcp_servers.git.launcher import example_usage
-
     with patch("src.mcp_servers.git.launcher.GitMCPClient") as mock_client_class:
         mock_client = Mock()
         mock_client_class.return_value.__enter__.return_value = mock_client

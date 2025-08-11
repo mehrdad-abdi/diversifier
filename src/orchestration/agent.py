@@ -11,7 +11,7 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
-from .config import LLMConfig, get_config
+from .config import LLMConfig, get_config, get_task_temperature
 
 
 class AgentType(Enum):
@@ -66,9 +66,6 @@ class DiversificationAgent:
             model_id = f"{provider}:{self.llm_config.model_name}"
 
             # Initialize the LLM using init_chat_model with configuration
-            from typing import Any
-            from .config import get_task_temperature
-
             # Get task-specific temperature
             task_temperature = get_task_temperature(
                 self.agent_type.value, self.llm_config

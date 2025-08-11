@@ -2,6 +2,7 @@
 
 import sys
 import time
+import traceback
 from typing import Optional, List
 from contextlib import contextmanager
 from threading import Thread, Event
@@ -210,8 +211,6 @@ class UserFeedback:
         """
         if isinstance(exception, DiversifierError):
             # Create ErrorInfo from DiversifierError for consistent display
-            from src.orchestration.error_handling import ErrorInfo
-
             error_info = ErrorInfo(
                 category=exception.category,
                 severity=exception.severity,
@@ -225,8 +224,6 @@ class UserFeedback:
             # Display generic exception
             self.error(f"Unexpected error: {str(exception)}")
             if self.verbose:
-                import traceback
-
                 self.debug(f"Traceback:\n{traceback.format_exc()}")
 
     @contextmanager

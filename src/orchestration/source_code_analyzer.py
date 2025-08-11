@@ -2,10 +2,11 @@
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, replace, is_dataclass
 
 from langchain_core.tools import BaseTool, tool
 
@@ -155,9 +156,11 @@ class SourceCodeAnalyzer:
         llm_config = get_config().llm
         if model_name != llm_config.model_name:
             # Create a copy with the specified model name
-            from dataclasses import replace
-
-            llm_config = replace(llm_config, model_name=model_name)
+            if is_dataclass(llm_config):
+                llm_config = replace(llm_config, model_name=model_name)
+            else:
+                # For tests with Mock objects
+                llm_config.model_name = model_name
 
         analyzer_agent = DiversificationAgent(
             agent_type=AgentType.SOURCE_CODE_ANALYZER,
@@ -433,8 +436,6 @@ class SourceCodeAnalyzer:
 
             # Try to extract JSON from the response
             try:
-                import re
-
                 json_match = re.search(r"```json\n(.*?)\n```", response_text, re.DOTALL)
                 if json_match:
                     return json.loads(json_match.group(1))
@@ -501,8 +502,6 @@ class SourceCodeAnalyzer:
                 response_text = str(result)
 
             try:
-                import re
-
                 json_match = re.search(r"```json\n(.*?)\n```", response_text, re.DOTALL)
                 if json_match:
                     return json.loads(json_match.group(1))

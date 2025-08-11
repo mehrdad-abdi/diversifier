@@ -31,13 +31,36 @@ package = true
 [dependency-groups]
 dev = [
     "black>=25.1.0",
-    "flake8>=7.3.0",
+    "ruff>=0.8.0",
     "mypy>=1.17.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.0.0",
     "pytest-asyncio>=0.25.0",
     "pytest-timeout>=2.1.0",
     "types-docker>=7.1.0.20241217",
+]
+
+[tool.ruff]
+# Target Python 3.13
+target-version = "py313"
+# Same line length as black
+line-length = 88
+
+[tool.ruff.lint]
+# Enable F rules (Pyflakes) + PLC0415 for import in functions check + critical E/W rules
+select = [
+    "F",       # Pyflakes (replaces flake8 --select F)
+    "E4",      # Import related errors  
+    "E7",      # Statement errors
+    "E9",      # Runtime errors
+    "W6",      # Deprecation warnings
+    "PLC0415", # import-outside-top-level (import in functions check)
+]
+
+# Skip minor warnings, keep only high priority errors
+ignore = [
+    "E701",   # Multiple statements on one line (colon) - minor style
+    "E702",   # Multiple statements on one line (semicolon) - minor style  
 ]
 
 [tool.pytest.ini_options]

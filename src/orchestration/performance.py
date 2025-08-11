@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .config import PerformanceConfig
-from .logging_config import get_logger
+from .config import PerformanceConfig, get_config
+from .logging_config import get_logger, get_correlation_id
 
 
 @dataclass
@@ -148,8 +148,6 @@ class PerformanceMonitor:
         Yields:
             Operation context
         """
-        from .logging_config import get_correlation_id
-
         start_time = time.time()
         correlation_id = get_correlation_id()
         error_message = None
@@ -335,8 +333,6 @@ def get_performance_monitor(
     global _performance_monitor
     if _performance_monitor is None:
         if config is None:
-            from .config import get_config
-
             config = get_config().performance
         _performance_monitor = PerformanceMonitor(config)
     return _performance_monitor

@@ -7,6 +7,7 @@ from src.cli import (
     main,
     create_parser,
 )
+from src.orchestration.config import DiversifierConfig, LLMConfig
 
 
 class TestCreateParser:
@@ -79,7 +80,6 @@ class TestMainFunction:
         mock_coordinator_class,
         mock_get_config,
     ):
-        from src.orchestration.config import DiversifierConfig, LLMConfig
 
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
@@ -117,7 +117,6 @@ class TestMainFunction:
     def test_main_invalid_project(
         self, mock_print, mock_validate_python, mock_get_config
     ):
-        from src.orchestration.config import DiversifierConfig, LLMConfig
 
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
@@ -166,7 +165,6 @@ class TestMainFunction:
     def test_main_same_libraries(
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
-        from src.orchestration.config import DiversifierConfig, LLMConfig
 
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
@@ -196,7 +194,6 @@ class TestMainFunction:
     def test_main_invalid_library_name(
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
-        from src.orchestration.config import DiversifierConfig, LLMConfig
 
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)
@@ -234,7 +231,6 @@ class TestMainFunction:
         mock_coordinator_class,
         mock_get_config,
     ):
-        from src.orchestration.config import DiversifierConfig, LLMConfig
 
         # Mock LLM config
         mock_llm_config = Mock(spec=LLMConfig)

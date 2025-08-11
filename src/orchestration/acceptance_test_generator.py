@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from langchain_core.tools import BaseTool, tool
 
@@ -315,8 +315,6 @@ class AcceptanceTestGenerator:
             response_text = self._extract_response_text(result)
 
             # Parse JSON response
-            import re
-
             json_match = re.search(r"```json\n(.*?)\n```", response_text, re.DOTALL)
             if json_match:
                 config_data = json.loads(json_match.group(1))
@@ -657,8 +655,6 @@ class AcceptanceTestGenerator:
         """Parse LLM response into structured test scenarios."""
         try:
             # Try to extract JSON from response
-            import re
-
             json_match = re.search(r"```json\n(.*?)\n```", response_text, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group(1))
@@ -1449,8 +1445,6 @@ CMD ["python", "-m", "pytest", "tests/", "-v"]
             # Create LLM config from model_name if specified
             test_llm_config = get_config().llm
             if model_name != test_llm_config.model_name:
-                from dataclasses import replace
-
                 test_llm_config = replace(test_llm_config, model_name=model_name)
 
             generation_result = await self.generate_acceptance_tests(

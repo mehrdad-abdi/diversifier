@@ -4,12 +4,14 @@ import logging
 from typing import Dict, Any, Optional
 from pathlib import Path
 
+from langchain.chat_models import init_chat_model
+
 from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
 from .acceptance_test_generator import AcceptanceTestGenerator
-from .doc_analyzer import DocumentationAnalyzer
-from .source_code_analyzer import SourceCodeAnalyzer
+from .doc_analyzer import DocumentationAnalyzer, DocumentationAnalysisResult
+from .source_code_analyzer import SourceCodeAnalyzer, SourceCodeAnalysisResult
 from .config import LLMConfig
 
 
@@ -76,8 +78,6 @@ class DiversificationCoordinator:
             True if LLM config is valid, False otherwise
         """
         try:
-            from langchain.chat_models import init_chat_model
-
             # Create the model identifier for init_chat_model
             model_id = (
                 f"{self.llm_config.provider.lower()}:{self.llm_config.model_name}"
@@ -367,8 +367,6 @@ class DiversificationCoordinator:
                     "Documentation analysis failed, using minimal analysis"
                 )
                 # Create minimal doc analysis for fallback
-                from .doc_analyzer import DocumentationAnalysisResult
-
                 doc_analysis = DocumentationAnalysisResult(
                     external_interfaces=[],
                     docker_services=[],
@@ -389,8 +387,6 @@ class DiversificationCoordinator:
                     "Source code analysis failed, using minimal analysis"
                 )
                 # Create minimal source analysis for fallback
-                from .source_code_analyzer import SourceCodeAnalysisResult
-
                 source_analysis = SourceCodeAnalysisResult(
                     api_endpoints=[],
                     external_service_integrations=[],

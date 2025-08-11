@@ -2,6 +2,7 @@
 
 import contextvars
 import logging
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -108,8 +109,6 @@ class TestDiversifierFormatter:
         try:
             raise ValueError("Test exception")
         except ValueError:
-            import sys
-
             exc_info = sys.exc_info()
             record = logging.LogRecord(
                 name="test.logger",
@@ -251,7 +250,7 @@ class TestSetupLogging:
         assert isinstance(formatter, DiversifierFormatter)
         assert formatter.enable_correlation_ids is False
 
-    @patch("src.orchestration.config.get_config")
+    @patch("src.orchestration.logging_config.get_config")
     def test_setup_logging_no_config(self, mock_get_config):
         """Test setup logging without providing config."""
         mock_config = MagicMock()

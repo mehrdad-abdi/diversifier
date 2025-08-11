@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+import src.orchestration.config
+
 from src.orchestration.config import (
     ConfigManager,
     DiversifierConfig,
@@ -181,8 +183,6 @@ class TestConfigManager:
     def setup_method(self):
         """Set up test fixtures."""
         # Clear any existing global config manager
-        import src.orchestration.config
-
         src.orchestration.config._config_manager = None
 
     def test_init_with_required_config_path(self):
@@ -449,8 +449,6 @@ class TestGlobalFunctions:
     def setup_method(self):
         """Set up test fixtures."""
         # Clear any existing global config manager
-        import src.orchestration.config
-
         src.orchestration.config._config_manager = None
 
     def test_get_config_manager_singleton(self):

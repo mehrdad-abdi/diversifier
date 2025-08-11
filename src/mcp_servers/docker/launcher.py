@@ -1,5 +1,6 @@
 """Docker MCP Server launcher with subprocess management."""
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -71,8 +72,6 @@ class DockerMCPLauncher:
 
 def main():
     """Main entry point for launching Docker MCP Server."""
-    import argparse
-
     parser = argparse.ArgumentParser(description="Launch Docker MCP Server")
     parser.add_argument("--project-root", help="Root directory for Docker operations")
 

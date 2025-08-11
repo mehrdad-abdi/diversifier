@@ -1,8 +1,10 @@
 """Tests for coordinator test generation workflow integration."""
 
+import os
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 
+from src.orchestration.config import LLMConfig
 from src.orchestration.coordinator import DiversificationCoordinator
 from src.orchestration.acceptance_test_generator import (
     WorkflowExecutionResult,
@@ -17,9 +19,6 @@ class TestCoordinatorTestGeneration:
     @pytest.fixture
     def mock_coordinator(self):
         """Create a coordinator with mocked dependencies."""
-        import os
-        from src.orchestration.config import LLMConfig
-
         with (
             patch("src.orchestration.coordinator.AgentManager"),
             patch("src.orchestration.coordinator.MCPManager"),
