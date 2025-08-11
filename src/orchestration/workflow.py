@@ -130,16 +130,10 @@ class WorkflowState:
                 description="Initialize MCP servers and agents",
             ),
             WorkflowStep(
-                name="analyze_project",
-                stage=WorkflowStage.PROJECT_ANALYSIS,
-                description="Analyze project structure and library usage",
-                dependencies=["initialize_environment"],
-            ),
-            WorkflowStep(
                 name="create_backup",
                 stage=WorkflowStage.PROJECT_ANALYSIS,
                 description="Create backup of project before migration",
-                dependencies=["analyze_project"],
+                dependencies=["initialize_environment"],
             ),
             WorkflowStep(
                 name="generate_tests",
