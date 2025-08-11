@@ -12,7 +12,10 @@ from langchain_core.tools import BaseTool, tool
 
 from .agent import DiversificationAgent, AgentType
 from .mcp_manager import MCPManager, MCPServerType
-from .config import get_config, LLMConfig  # noqa: F401 (get_config needed for test patching)
+from .config import (
+    get_config,  # noqa: F401 (needed for test patching)
+    LLMConfig,
+)
 
 
 @dataclass
