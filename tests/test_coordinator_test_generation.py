@@ -10,12 +10,13 @@ from src.orchestration.test_generation import (
     EfficientTestGenerationResult,
     LibraryUsageSummary,
     TestDiscoveryResult,
-    TestGenerationResult
+    TestGenerationResult,
 )
 
 # Keep these for legacy test fixtures
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
+
 
 @dataclass
 class AcceptanceTestSuite:
@@ -24,7 +25,8 @@ class AcceptanceTestSuite:
     test_file_content: str
     docker_compose_content: Optional[str] = None
 
-@dataclass  
+
+@dataclass
 class AcceptanceTestGenerationResult:
     test_suites: List[AcceptanceTestSuite]
     test_scenarios: List[Any]
@@ -32,6 +34,7 @@ class AcceptanceTestGenerationResult:
     test_dependencies: List[str]
     coverage_analysis: Dict[str, Any]
     generation_confidence: float
+
 
 @dataclass
 class WorkflowExecutionResult:
@@ -114,27 +117,21 @@ class TestCoordinatorTestGeneration:
             focused_test_result=TestGenerationResult([], "requests", 5, 3, 0.6),
             total_execution_time=2.5,
             pipeline_success=True,
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
 
         # Mock efficient test generator
         mock_coordinator.efficient_test_generator.generate_efficient_tests = AsyncMock(
             return_value=mock_generation_result
         )
-        
+
         # Mock get_generation_summary
         mock_summary = {
             "success": True,
             "target_library": "requests",
             "execution_time": 2.5,
-            "library_usage": {
-                "total_usages": 5,
-                "affected_files": 3
-            },
-            "generated_tests": {
-                "tests_generated": 3,
-                "success_rate": 0.6
-            }
+            "library_usage": {"total_usages": 5, "affected_files": 3},
+            "generated_tests": {"tests_generated": 3, "success_rate": 0.6},
         }
         mock_coordinator.efficient_test_generator.get_generation_summary = Mock(
             return_value=mock_summary
@@ -159,7 +156,7 @@ class TestCoordinatorTestGeneration:
             focused_test_result=TestGenerationResult([], "requests", 0, 0, 0.0),
             total_execution_time=1.0,
             pipeline_success=False,  # Pipeline failed
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
 
         # Mock efficient test generator
@@ -198,9 +195,9 @@ class TestCoordinatorTestGeneration:
             focused_test_result=TestGenerationResult([], "requests", 5, 3, 0.6),
             total_execution_time=2.5,
             pipeline_success=True,
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
-        
+
         # Setup workflow state with test generation results
         mock_coordinator.workflow_state.steps["generate_tests"] = Mock()
         mock_coordinator.workflow_state.steps["generate_tests"].result = {
@@ -209,19 +206,17 @@ class TestCoordinatorTestGeneration:
 
         # Mock MCP manager to be available
         mock_coordinator.mcp_manager.is_server_available = Mock(return_value=True)
-        
+
         # Mock successful test execution
         test_results = {
             "success": True,
             "passed": 10,
             "failed": 0,
             "exit_code": 0,
-            "output": "===== 10 passed in 5.2s ====="
+            "output": "===== 10 passed in 5.2s =====",
         }
 
-        mock_coordinator.mcp_manager.call_tool = AsyncMock(
-            return_value=test_results
-        )
+        mock_coordinator.mcp_manager.call_tool = AsyncMock(return_value=test_results)
 
         result = await mock_coordinator._run_baseline_tests()
 
@@ -237,10 +232,12 @@ class TestCoordinatorTestGeneration:
         mock_generation_result = EfficientTestGenerationResult(
             library_usage_summary=LibraryUsageSummary("requests", 0),
             test_discovery_result=TestDiscoveryResult(0),
-            focused_test_result=TestGenerationResult([], "requests", 0, 0, 0.0),  # No tests generated
+            focused_test_result=TestGenerationResult(
+                [], "requests", 0, 0, 0.0
+            ),  # No tests generated
             total_execution_time=1.0,
             pipeline_success=True,
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
 
         # Setup workflow state
@@ -267,9 +264,9 @@ class TestCoordinatorTestGeneration:
             focused_test_result=TestGenerationResult([], "requests", 5, 3, 0.6),
             total_execution_time=2.5,
             pipeline_success=True,
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
-        
+
         # Setup workflow state
         mock_coordinator.workflow_state.steps["generate_tests"] = Mock()
         mock_coordinator.workflow_state.steps["generate_tests"].result = {
@@ -284,18 +281,16 @@ class TestCoordinatorTestGeneration:
 
         # Mock MCP manager and successful validation
         mock_coordinator.mcp_manager.is_server_available = Mock(return_value=True)
-        
+
         test_results = {
             "success": True,
             "passed": 10,
             "failed": 0,
             "exit_code": 0,
-            "output": "===== 10 passed in 6.1s ====="
+            "output": "===== 10 passed in 6.1s =====",
         }
 
-        mock_coordinator.mcp_manager.call_tool = AsyncMock(
-            return_value=test_results
-        )
+        mock_coordinator.mcp_manager.call_tool = AsyncMock(return_value=test_results)
 
         result = await mock_coordinator._validate_migration()
 
@@ -316,9 +311,9 @@ class TestCoordinatorTestGeneration:
             focused_test_result=TestGenerationResult([], "requests", 5, 3, 0.6),
             total_execution_time=2.5,
             pipeline_success=True,
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
-        
+
         # Setup workflow state
         mock_coordinator.workflow_state.steps["generate_tests"] = Mock()
         mock_coordinator.workflow_state.steps["generate_tests"].result = {
@@ -333,18 +328,16 @@ class TestCoordinatorTestGeneration:
 
         # Mock MCP manager and validation with failures
         mock_coordinator.mcp_manager.is_server_available = Mock(return_value=True)
-        
+
         test_results = {
             "success": True,
             "passed": 7,
             "failed": 3,
             "exit_code": 0,
-            "output": "===== 7 passed, 3 failed in 8.3s ====="
+            "output": "===== 7 passed, 3 failed in 8.3s =====",
         }
 
-        mock_coordinator.mcp_manager.call_tool = AsyncMock(
-            return_value=test_results
-        )
+        mock_coordinator.mcp_manager.call_tool = AsyncMock(return_value=test_results)
 
         result = await mock_coordinator._validate_migration()
 
@@ -366,9 +359,9 @@ class TestCoordinatorTestGeneration:
             focused_test_result=TestGenerationResult([], "requests", 5, 3, 0.6),
             total_execution_time=2.5,
             pipeline_success=True,
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
-        
+
         # Setup workflow state
         mock_coordinator.workflow_state.steps["generate_tests"] = Mock()
         mock_coordinator.workflow_state.steps["generate_tests"].result = {
@@ -383,18 +376,16 @@ class TestCoordinatorTestGeneration:
 
         # Mock MCP manager and validation with some failures
         mock_coordinator.mcp_manager.is_server_available = Mock(return_value=True)
-        
+
         test_results = {
             "success": True,
             "passed": 9,
             "failed": 1,
             "exit_code": 0,
-            "output": "===== 9 passed, 1 failed in 7.2s ====="
+            "output": "===== 9 passed, 1 failed in 7.2s =====",
         }
 
-        mock_coordinator.mcp_manager.call_tool = AsyncMock(
-            return_value=test_results
-        )
+        mock_coordinator.mcp_manager.call_tool = AsyncMock(return_value=test_results)
 
         result = await mock_coordinator._validate_migration()
 
@@ -417,9 +408,9 @@ class TestCoordinatorTestGeneration:
             focused_test_result=TestGenerationResult([], "requests", 5, 3, 0.6),
             total_execution_time=2.5,
             pipeline_success=True,
-            output_directory="/test/project/generated_library_tests"
+            output_directory="/test/project/generated_library_tests",
         )
-        
+
         # Setup workflow state
         mock_coordinator.workflow_state.steps["generate_tests"] = Mock()
         mock_coordinator.workflow_state.steps["generate_tests"].result = {

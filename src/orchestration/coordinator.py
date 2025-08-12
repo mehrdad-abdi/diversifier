@@ -308,33 +308,38 @@ class DiversificationCoordinator:
         """Generate efficient focused tests based on library usage analysis."""
         try:
             self.logger.info("Starting efficient test generation workflow")
-            
+
             # Use the new efficient test generation pipeline
             generation_result = await self.efficient_test_generator.generate_efficient_tests(
                 target_library=self.source_library,  # Analyze usage of the source library
                 llm_config=self.llm_config,
-                output_dir=None  # Use default location
+                output_dir=None,  # Use default location
             )
-            
+
             if not generation_result.pipeline_success:
-                return {"success": False, "error": "Efficient test generation pipeline failed"}
-            
+                return {
+                    "success": False,
+                    "error": "Efficient test generation pipeline failed",
+                }
+
             # Get generation summary
-            summary = self.efficient_test_generator.get_generation_summary(generation_result)
-            
+            summary = self.efficient_test_generator.get_generation_summary(
+                generation_result
+            )
+
             self.logger.info(
                 f"Generated {summary['generated_tests']['tests_generated']} focused tests "
                 f"covering {summary['library_usage']['total_usages']} library usages"
             )
-            
+
             return {
                 "success": True,
                 "generation_result": generation_result,
                 "summary": summary,
                 "output_directory": generation_result.output_directory,
-                "execution_time": generation_result.total_execution_time
+                "execution_time": generation_result.total_execution_time,
             }
-            
+
         except Exception as e:
             self.logger.error(f"Efficient test generation failed: {e}")
             return {"success": False, "error": str(e)}
@@ -358,39 +363,42 @@ class DiversificationCoordinator:
 
             # Check if tests were generated
             if generation_result.focused_test_result.tests_generated == 0:
-                self.logger.warning("No tests were generated, skipping baseline test execution")
+                self.logger.warning(
+                    "No tests were generated, skipping baseline test execution"
+                )
                 return {
                     "success": True,
-                    "test_results": {
-                        "note": "No tests available for execution"
-                    },
+                    "test_results": {"note": "No tests available for execution"},
                     "baseline_established": False,
                 }
 
             # Run the generated focused tests using pytest MCP server
             output_directory = generation_result.output_directory
-            
+
             if self.mcp_manager.is_server_available(MCPServerType.TESTING):
                 try:
                     self.logger.info(f"Running tests in {output_directory}")
-                    
+
                     test_results = await self.mcp_manager.call_tool(
                         MCPServerType.TESTING,
                         "run_tests",
                         {
                             "test_path": output_directory,
                             "verbose": True,
-                            "collect_coverage": True
-                        }
+                            "collect_coverage": True,
+                        },
                     )
-                    
+
+                    if test_results is None:
+                        test_results = {}
+
                     test_success = test_results.get("success", False)
                     passed = test_results.get("passed", 0)
                     failed = test_results.get("failed", 0)
                     total = passed + failed
                     exit_code = test_results.get("exit_code", 0)
                     output = test_results.get("output", "")
-                    
+
                     return {
                         "success": test_success,
                         "test_results": {
@@ -398,12 +406,14 @@ class DiversificationCoordinator:
                             "failed": failed,
                             "total": total,
                             "exit_code": exit_code,
-                            "output": output[:1000] if output else "",  # Truncate output
+                            "output": (
+                                output[:1000] if output else ""
+                            ),  # Truncate output
                         },
                         "baseline_established": test_success and exit_code == 0,
                         "test_execution_method": "pytest_mcp",
                     }
-                    
+
                 except Exception as e:
                     self.logger.error(f"Pytest MCP test execution failed: {e}")
                     return {
@@ -413,14 +423,16 @@ class DiversificationCoordinator:
                     }
             else:
                 # Fallback: no testing MCP server available
-                self.logger.warning("Testing MCP server not available, marking baseline as established")
+                self.logger.warning(
+                    "Testing MCP server not available, marking baseline as established"
+                )
                 return {
                     "success": True,
                     "test_results": {
                         "note": "Tests generated but not executed - Testing MCP server not available"
                     },
                     "baseline_established": True,  # Assume tests would pass
-                    "test_execution_method": "fallback"
+                    "test_execution_method": "fallback",
                 }
 
         except Exception as e:
@@ -486,28 +498,29 @@ class DiversificationCoordinator:
                 self.logger.warning("No tests available for migration validation")
                 return {
                     "success": True,
-                    "test_results": {
-                        "note": "No tests available for validation"
-                    },
+                    "test_results": {"note": "No tests available for validation"},
                     "validation_complete": True,
                 }
 
             # Run the generated focused tests for validation
             output_directory = generation_result.output_directory
-            
+
             if self.mcp_manager.is_server_available(MCPServerType.TESTING):
                 try:
                     self.logger.info(f"Running validation tests in {output_directory}")
-                    
+
                     test_results = await self.mcp_manager.call_tool(
                         MCPServerType.TESTING,
                         "run_tests",
                         {
                             "test_path": output_directory,
                             "verbose": True,
-                            "collect_coverage": True
-                        }
+                            "collect_coverage": True,
+                        },
                     )
+
+                    if test_results is None:
+                        test_results = {}
 
                     test_success = test_results.get("success", False)
                     passed = test_results.get("passed", 0)
@@ -515,7 +528,7 @@ class DiversificationCoordinator:
                     total = passed + failed
                     exit_code = test_results.get("exit_code", 0)
                     output = test_results.get("output", "")
-                    
+
                     # Get baseline results for comparison
                     baseline_step = self.workflow_state.steps.get("run_baseline_tests")
                     baseline_passed = 0
@@ -538,8 +551,12 @@ class DiversificationCoordinator:
                             "failed": failed,
                             "total": total,
                             "exit_code": exit_code,
-                            "output": output[:1000] if output else "",  # Truncate output
-                            "failures": ["test_failure_placeholder"] if failed > 0 else [],
+                            "output": (
+                                output[:1000] if output else ""
+                            ),  # Truncate output
+                            "failures": (
+                                ["test_failure_placeholder"] if failed > 0 else []
+                            ),
                             "baseline_comparison": {
                                 "baseline_passed": baseline_passed,
                                 "current_passed": passed,
@@ -549,7 +566,7 @@ class DiversificationCoordinator:
                         "validation_complete": True,
                         "test_execution_method": "pytest_mcp",
                     }
-                    
+
                 except Exception as e:
                     self.logger.error(f"Pytest MCP validation execution failed: {e}")
                     return {
@@ -559,7 +576,9 @@ class DiversificationCoordinator:
                     }
             else:
                 # Fallback: no testing MCP server available
-                self.logger.warning("Testing MCP server not available, using basic validation")
+                self.logger.warning(
+                    "Testing MCP server not available, using basic validation"
+                )
                 return {
                     "success": True,
                     "test_results": {
@@ -567,7 +586,7 @@ class DiversificationCoordinator:
                         "basic_validation": "passed",
                     },
                     "validation_complete": True,
-                    "test_execution_method": "fallback"
+                    "test_execution_method": "fallback",
                 }
 
         except Exception as e:
