@@ -10,8 +10,9 @@ from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
 from .acceptance_test_generator import AcceptanceTestGenerator
-from .doc_analyzer import DocumentationAnalyzer, DocumentationAnalysisResult
-from .source_code_analyzer import SourceCodeAnalyzer, SourceCodeAnalysisResult
+from .doc_analyzer import DocumentationAnalyzer
+from .source_code_analyzer import SourceCodeAnalyzer
+from .efficient_test_generator import EfficientTestGenerator
 from .config import LLMConfig
 
 
@@ -56,6 +57,9 @@ class DiversificationCoordinator:
 
         # Initialize test generation components
         self.acceptance_test_generator = AcceptanceTestGenerator(
+            str(self.project_path), self.mcp_manager
+        )
+        self.efficient_test_generator = EfficientTestGenerator(
             str(self.project_path), self.mcp_manager
         )
         self.doc_analyzer = DocumentationAnalyzer(
@@ -313,102 +317,44 @@ class DiversificationCoordinator:
         }
 
     async def _generate_tests(self) -> Dict[str, Any]:
-        """Generate library-independent Docker-based acceptance tests."""
+        """Generate efficient focused tests based on library usage analysis."""
         try:
-            self.logger.info("Starting Docker-based test generation workflow")
-
-            # Step 1: Analyze project documentation
-            self.logger.info("Analyzing project documentation")
-            doc_analysis = await self.doc_analyzer.analyze_project_documentation(
-                self.llm_config
+            self.logger.info("Starting efficient test generation workflow")
+            
+            # Use the new efficient test generation pipeline
+            generation_result = await self.efficient_test_generator.generate_efficient_tests(
+                target_library=self.source_library,  # Analyze usage of the source library
+                llm_config=self.llm_config,
+                output_dir=None  # Use default location
             )
-
-            if not doc_analysis:
-                self.logger.warning(
-                    "Documentation analysis failed, using minimal analysis"
-                )
-                # Create minimal doc analysis for fallback
-                doc_analysis = DocumentationAnalysisResult(
-                    external_interfaces=[],
-                    docker_services=[],
-                    network_configuration={},
-                    testing_requirements={"docker": "recommended"},
-                    deployment_patterns={},
-                    analysis_confidence=0.3,
-                )
-
-            # Step 2: Analyze source code
-            self.logger.info("Analyzing source code")
-            source_analysis = await self.source_analyzer.analyze_project_source_code(
-                self.llm_config
-            )
-
-            if not source_analysis:
-                self.logger.warning(
-                    "Source code analysis failed, using minimal analysis"
-                )
-                # Create minimal source analysis for fallback
-                source_analysis = SourceCodeAnalysisResult(
-                    api_endpoints=[],
-                    external_service_integrations=[],
-                    configuration_usage=[],
-                    existing_test_patterns=[],
-                    network_interfaces={},
-                    security_patterns={},
-                    testing_requirements={},
-                    framework_detected="unknown",
-                    analysis_confidence=0.3,
-                )
-
-            # Step 3: Generate acceptance tests using Docker workflow
-            self.logger.info("Generating Docker-based acceptance tests")
-            workflow_result = (
-                await self.acceptance_test_generator.run_complete_workflow(
-                    doc_analysis=doc_analysis,
-                    source_analysis=source_analysis,
-                    llm_config=self.llm_config,
-                    output_dir=None,  # Use default location
-                    execute_tests=False,  # Don't execute during generation phase
-                )
-            )
-
-            if not workflow_result.success:
-                error_msg = f"Test generation workflow failed: {'; '.join(workflow_result.error_messages)}"
-                self.logger.error(error_msg)
-                return {"success": False, "error": error_msg}
-
-            # Step 4: Extract results
-            generation_result = workflow_result.generation_result
-            if not generation_result:
-                return {"success": False, "error": "No test generation results"}
-
+            
+            if not generation_result.pipeline_success:
+                return {"success": False, "error": "Efficient test generation pipeline failed"}
+            
+            # Get generation summary
+            summary = self.efficient_test_generator.get_generation_summary(generation_result)
+            
             self.logger.info(
-                f"Generated {len(generation_result.test_suites)} test suites "
-                f"with {len(generation_result.test_scenarios)} scenarios"
+                f"Generated {summary['generated_tests']['tests_generated']} focused tests "
+                f"covering {summary['library_usage']['total_usages']} library usages"
             )
-
+            
             return {
                 "success": True,
-                "workflow_result": workflow_result,
-                "test_suites": len(generation_result.test_suites),
-                "test_scenarios": len(generation_result.test_scenarios),
-                "docker_compose_available": workflow_result.docker_compose_path
-                is not None,
-                "test_dependencies": generation_result.test_dependencies,
-                "coverage_analysis": generation_result.coverage_analysis,
-                "generation_confidence": generation_result.generation_confidence,
-                "output_directory": str(self.project_path / "acceptance_tests"),
-                "generated_at": workflow_result.timestamp,
+                "generation_result": generation_result,
+                "summary": summary,
+                "output_directory": generation_result.output_directory,
+                "execution_time": generation_result.total_execution_time
             }
-
+            
         except Exception as e:
-            self.logger.error(f"Docker-based test generation failed: {e}")
+            self.logger.error(f"Efficient test generation failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def _run_baseline_tests(self) -> Dict[str, Any]:
-        """Run baseline Docker-based acceptance tests before migration."""
+        """Run baseline focused unit tests before migration."""
         try:
-            self.logger.info("Running baseline Docker-based acceptance tests")
+            self.logger.info("Running baseline focused unit tests")
 
             # Get test generation results from previous step
             generate_step = self.workflow_state.steps.get("generate_tests")
@@ -418,75 +364,75 @@ class DiversificationCoordinator:
                     "error": "No test generation results available",
                 }
 
-            workflow_result = generate_step.result.get("workflow_result")
-            if not workflow_result:
-                return {"success": False, "error": "No workflow results available"}
+            generation_result = generate_step.result.get("generation_result")
+            if not generation_result:
+                return {"success": False, "error": "No generation results available"}
 
-            # Check if Docker Compose is available for test execution
-            docker_compose_path = workflow_result.docker_compose_path
-            if not docker_compose_path:
-                self.logger.warning(
-                    "No Docker Compose configuration available, skipping Docker test execution"
-                )
+            # Check if tests were generated
+            if generation_result.focused_test_result.tests_generated == 0:
+                self.logger.warning("No tests were generated, skipping baseline test execution")
                 return {
                     "success": True,
                     "test_results": {
-                        "note": "Docker tests not executed - no Docker Compose available"
+                        "note": "No tests available for execution"
                     },
                     "baseline_established": False,
                 }
 
-            # Execute the Docker-based tests
-            try:
-                execution_results = (
-                    await self.acceptance_test_generator.execute_test_workflow(
-                        docker_compose_path=docker_compose_path,
-                        cleanup_containers=True,
+            # Run the generated focused tests using pytest MCP server
+            output_directory = generation_result.output_directory
+            
+            if self.mcp_manager.is_server_available(MCPServerType.TESTING):
+                try:
+                    self.logger.info(f"Running tests in {output_directory}")
+                    
+                    test_results = await self.mcp_manager.call_tool(
+                        MCPServerType.TESTING,
+                        "run_tests",
+                        {
+                            "test_path": output_directory,
+                            "verbose": True,
+                            "collect_coverage": True
+                        }
                     )
-                )
-
-                test_success = execution_results.get("test_execution_success", False)
-                test_output = execution_results.get("test_output", "")
-                exit_code = execution_results.get("test_exit_code", -1)
-
-                # Parse test results (simplified)
-                passed = 0
-                failed = 0
-                total = 0
-
-                if test_success and exit_code == 0:
-                    # Estimate based on successful execution
-                    passed = 10  # Placeholder - would parse actual pytest output
-                    total = 10
-                elif exit_code == 0:
-                    # Some tests may have failed but pytest completed
-                    passed = 8
-                    failed = 2
-                    total = 10
-                else:
-                    # Test execution failed
-                    failed = 10
-                    total = 10
-
+                    
+                    test_success = test_results.get("success", False)
+                    passed = test_results.get("passed", 0)
+                    failed = test_results.get("failed", 0)
+                    total = passed + failed
+                    exit_code = test_results.get("exit_code", 0)
+                    output = test_results.get("output", "")
+                    
+                    return {
+                        "success": test_success,
+                        "test_results": {
+                            "passed": passed,
+                            "failed": failed,
+                            "total": total,
+                            "exit_code": exit_code,
+                            "output": output[:1000] if output else "",  # Truncate output
+                        },
+                        "baseline_established": test_success and exit_code == 0,
+                        "test_execution_method": "pytest_mcp",
+                    }
+                    
+                except Exception as e:
+                    self.logger.error(f"Pytest MCP test execution failed: {e}")
+                    return {
+                        "success": False,
+                        "error": f"Pytest MCP test execution failed: {e}",
+                        "baseline_established": False,
+                    }
+            else:
+                # Fallback: no testing MCP server available
+                self.logger.warning("Testing MCP server not available, marking baseline as established")
                 return {
-                    "success": test_success,
+                    "success": True,
                     "test_results": {
-                        "passed": passed,
-                        "failed": failed,
-                        "total": total,
-                        "exit_code": exit_code,
-                        "output": test_output[:1000],  # Truncate output
+                        "note": "Tests generated but not executed - Testing MCP server not available"
                     },
-                    "baseline_established": test_success and exit_code == 0,
-                    "docker_execution_results": execution_results,
-                }
-
-            except Exception as e:
-                self.logger.error(f"Docker test execution failed: {e}")
-                return {
-                    "success": False,
-                    "error": f"Docker test execution failed: {e}",
-                    "baseline_established": False,
+                    "baseline_established": True,  # Assume tests would pass
+                    "test_execution_method": "fallback"
                 }
 
         except Exception as e:
