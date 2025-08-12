@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from .mcp_manager import MCPManager, MCPServerType
+from ..mcp_manager import MCPManager, MCPServerType
 from .library_usage_analyzer import LibraryUsageSummary, LibraryUsageLocation
 
 

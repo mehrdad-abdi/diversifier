@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from .agent import DiversificationAgent, AgentType
-from .mcp_manager import MCPManager, MCPServerType
+from ..agent import DiversificationAgent, AgentType
+from ..mcp_manager import MCPManager, MCPServerType
 from .library_usage_analyzer import LibraryUsageSummary, LibraryUsageLocation
 from .test_discovery import TestDiscoveryResult
-from .config import LLMConfig
+from ..config import LLMConfig
 
 
 @dataclass

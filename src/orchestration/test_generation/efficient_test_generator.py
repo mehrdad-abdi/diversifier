@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Any
 
-from .mcp_manager import MCPManager, MCPServerType
+from ..mcp_manager import MCPManager, MCPServerType
 from .library_usage_analyzer import LibraryUsageAnalyzer, LibraryUsageSummary
 from .test_discovery import TestDiscoveryAnalyzer, TestDiscoveryResult
 from .focused_test_generator import FocusedTestGenerator, TestGenerationResult
-from .config import LLMConfig
+from ..config import LLMConfig
 
 
 @dataclass

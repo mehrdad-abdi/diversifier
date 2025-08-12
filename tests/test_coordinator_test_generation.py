@@ -6,15 +6,44 @@ from unittest.mock import Mock, patch, AsyncMock
 
 from src.orchestration.config import LLMConfig
 from src.orchestration.coordinator import DiversificationCoordinator
-from src.orchestration.acceptance_test_generator import (
-    WorkflowExecutionResult,
-    AcceptanceTestGenerationResult,
-    AcceptanceTestSuite,
+from src.orchestration.test_generation import (
+    EfficientTestGenerationResult,
+    LibraryUsageSummary,
+    TestDiscoveryResult,
+    TestGenerationResult
 )
-from src.orchestration.efficient_test_generator import EfficientTestGenerationResult
-from src.orchestration.library_usage_analyzer import LibraryUsageSummary
-from src.orchestration.test_discovery import TestDiscoveryResult
-from src.orchestration.focused_test_generator import TestGenerationResult
+
+# Keep these for legacy test fixtures
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
+
+@dataclass
+class AcceptanceTestSuite:
+    name: str
+    description: str
+    test_file_content: str
+    docker_compose_content: Optional[str] = None
+
+@dataclass  
+class AcceptanceTestGenerationResult:
+    test_suites: List[AcceptanceTestSuite]
+    test_scenarios: List[Any]
+    docker_configuration: Dict[str, Any]
+    test_dependencies: List[str]
+    coverage_analysis: Dict[str, Any]
+    generation_confidence: float
+
+@dataclass
+class WorkflowExecutionResult:
+    workflow_id: str
+    success: bool
+    generation_result: Optional[AcceptanceTestGenerationResult]
+    docker_compose_path: Optional[str]
+    test_image_id: Optional[str]
+    execution_logs: List[str]
+    error_messages: List[str]
+    execution_time_seconds: float
+    timestamp: str
 
 
 class TestCoordinatorTestGeneration:
@@ -26,7 +55,7 @@ class TestCoordinatorTestGeneration:
         with (
             patch("src.orchestration.coordinator.AgentManager"),
             patch("src.orchestration.coordinator.MCPManager"),
-            patch("src.orchestration.coordinator.EfficientTestGenerator"),
+            patch("src.orchestration.test_generation.EfficientTestGenerator"),
             patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False),
         ):
             mock_llm_config = LLMConfig(

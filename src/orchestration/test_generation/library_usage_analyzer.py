@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Any
 from enum import Enum
 
-from .mcp_manager import MCPManager, MCPServerType
+from ..mcp_manager import MCPManager, MCPServerType
 
 
 class LibraryUsageType(Enum):

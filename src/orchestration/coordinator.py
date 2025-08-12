@@ -9,7 +9,7 @@ from langchain.chat_models import init_chat_model
 from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
-from .efficient_test_generator import EfficientTestGenerator
+from .test_generation import EfficientTestGenerator
 from .config import LLMConfig
 
 
