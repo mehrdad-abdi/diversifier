@@ -329,7 +329,7 @@ class LibraryUsageAnalyzer:
         Returns:
             Dictionary mapping function names to their usage locations
         """
-        functions = {}
+        functions: Dict[str, List[LibraryUsageLocation]] = {}
         
         for usage in usage_summary.usage_locations:
             if usage.function_name:
@@ -352,8 +352,8 @@ class LibraryUsageAnalyzer:
         Returns:
             Dictionary with usage statistics
         """
-        usage_by_type = {}
-        usage_by_file = {}
+        usage_by_type: Dict[str, int] = {}
+        usage_by_file: Dict[str, int] = {}
         
         for usage in usage_summary.usage_locations:
             # Count by usage type

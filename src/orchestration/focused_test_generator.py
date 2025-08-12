@@ -72,9 +72,9 @@ class FocusedTestGenerator:
         """
         self.logger.info(f"Generating focused tests for {len(test_discovery.uncovered_usages)} uncovered usages")
         
-        # Create test generator agent
+        # Create test generator agent  
         generator_agent = DiversificationAgent(
-            agent_type=AgentType.CODE_MIGRATOR,  # Reuse existing agent type
+            agent_type=AgentType.MIGRATOR,  # Use correct agent type
             llm_config=llm_config
         )
         
@@ -358,7 +358,7 @@ Generate the focused unit test now:"""
         output_path = Path(output_dir)
         
         # Group tests by source file
-        tests_by_file = {}
+        tests_by_file: Dict[str, List[GeneratedTest]] = {}
         for test in generation_result.generated_tests:
             source_file = Path(test.usage_location.file_path).stem
             test_file_name = f"test_{source_file}_library_usage.py"
