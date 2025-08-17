@@ -489,14 +489,15 @@ class CallGraphTestDiscoveryAnalyzer:
 
         # Perform backward traversal to find test functions
         coverage_paths = []
-        visited = set()
 
         def traverse_backwards(current_node: CallGraphNode, path: List[CallGraphNode]):
             """Recursively traverse backwards to find test functions."""
-            if current_node.full_name in visited:
+            # Add current node to path
+            current_path = [current_node] + path
+            
+            # Check for cycles (prevents infinite loops)
+            if len(current_path) != len(set(node.full_name for node in current_path)):
                 return
-
-            visited.add(current_node.full_name)
 
             # If we reached a test function, create a coverage path
             if current_node.node_type == NodeType.TEST_FUNCTION:
@@ -504,7 +505,7 @@ class CallGraphTestDiscoveryAnalyzer:
                     TestCoveragePath(
                         test_node=current_node,
                         library_usage=usage_location,
-                        call_chain=path.copy(),
+                        call_chain=current_path.copy(),
                     )
                 )
                 return
@@ -513,10 +514,9 @@ class CallGraphTestDiscoveryAnalyzer:
             for caller_full_name in current_node.called_by:
                 if caller_full_name in self.call_graph:
                     caller_node = self.call_graph[caller_full_name]
-                    new_path = [caller_node] + path
-                    traverse_backwards(caller_node, new_path)
+                    traverse_backwards(caller_node, current_path)
 
         # Start traversal from the usage node
-        traverse_backwards(usage_node, [usage_node])
+        traverse_backwards(usage_node, [])
 
         return coverage_paths
