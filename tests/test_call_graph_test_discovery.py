@@ -577,3 +577,251 @@ class TestCallGraphTestDiscoveryAnalyzer:
             call_chain=[test_node, intermediate1, intermediate2],
         )
         assert indirect_path.depth == 3
+
+    @pytest.mark.asyncio
+    async def test_circular_call_graph_no_infinite_loop(self, analyzer):
+        """Test that circular call graphs don't cause infinite loops."""
+        # Create circular call graph: A → B → C → A with test entry point
+        circular_graph = {
+            "/src/a.py::func_a": CallGraphNode(
+                file_path="/src/a.py",
+                function_name="func_a",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.FUNCTION,
+                calls={"func_b"},
+                called_by={
+                    "/src/c.py::func_c",
+                    "/tests/test.py::test_func",
+                },  # Cycle + test entry
+            ),
+            "/src/b.py::func_b": CallGraphNode(
+                file_path="/src/b.py",
+                function_name="func_b",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.FUNCTION,
+                calls={"func_c"},
+                called_by={"/src/a.py::func_a"},
+            ),
+            "/src/c.py::func_c": CallGraphNode(
+                file_path="/src/c.py",
+                function_name="func_c",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.FUNCTION,
+                calls={"func_a"},  # Creates cycle back to A
+                called_by={"/src/b.py::func_b"},
+            ),
+            "/tests/test.py::test_func": CallGraphNode(
+                file_path="/tests/test.py",
+                function_name="test_func",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.TEST_FUNCTION,
+                calls={"func_a"},
+                called_by=set(),
+            ),
+        }
+
+        analyzer.call_graph = circular_graph
+
+        # Library usage in func_a (part of the cycle)
+        usage_location = LibraryUsageLocation(
+            file_path="/src/a.py",
+            line_number=7,
+            column_offset=4,
+            usage_type=LibraryUsageType.METHOD_CALL,
+            usage_context="requests.get('url')",
+            function_name="func_a",
+            class_name=None,
+        )
+
+        # This should NOT hang in infinite loop and should find the test
+        paths = await analyzer._find_test_coverage_paths(usage_location)
+
+        assert len(paths) == 1
+        assert paths[0].test_node.function_name == "test_func"
+        # Should contain the usage node in call chain
+        assert any(node.function_name == "func_a" for node in paths[0].call_chain)
+
+    @pytest.mark.asyncio
+    async def test_multiple_paths_shared_function_bug_fix(self, analyzer):
+        """Test fix for bug where shared visited set prevented multiple path discovery."""
+        # This tests the critical bug fix where multiple tests calling the same function
+        # were not all discovered due to shared visited set
+
+        shared_func_graph = {
+            "/src/shared.py::shared_func": CallGraphNode(
+                file_path="/src/shared.py",
+                function_name="shared_func",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.FUNCTION,
+                calls=set(),  # Library usage here
+                called_by={
+                    "/tests/test1.py::test_a",
+                    "/tests/test2.py::test_b",
+                    "/tests/test3.py::test_c",
+                },
+            ),
+            "/tests/test1.py::test_a": CallGraphNode(
+                file_path="/tests/test1.py",
+                function_name="test_a",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.TEST_FUNCTION,
+                calls={"shared_func"},
+                called_by=set(),
+            ),
+            "/tests/test2.py::test_b": CallGraphNode(
+                file_path="/tests/test2.py",
+                function_name="test_b",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.TEST_FUNCTION,
+                calls={"shared_func"},
+                called_by=set(),
+            ),
+            "/tests/test3.py::test_c": CallGraphNode(
+                file_path="/tests/test3.py",
+                function_name="test_c",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.TEST_FUNCTION,
+                calls={"shared_func"},
+                called_by=set(),
+            ),
+        }
+
+        analyzer.call_graph = shared_func_graph
+
+        usage_location = LibraryUsageLocation(
+            file_path="/src/shared.py",
+            line_number=7,
+            column_offset=4,
+            usage_type=LibraryUsageType.METHOD_CALL,
+            usage_context="requests.post('data')",
+            function_name="shared_func",
+            class_name=None,
+        )
+
+        paths = await analyzer._find_test_coverage_paths(usage_location)
+
+        # Should find ALL test functions, not just the first one
+        assert len(paths) == 3
+
+        test_names = {path.test_node.function_name for path in paths}
+        assert test_names == {"test_a", "test_b", "test_c"}
+
+        # All paths should have depth 2 (test → shared_func)
+        for path in paths:
+            assert path.depth == 2
+
+    @pytest.mark.asyncio
+    async def test_complex_multiple_entry_points(self, analyzer):
+        """Test complex scenario with multiple entry points at different call chain depths."""
+        # Complex graph testing multiple paths with different depths:
+        # test1 → high → mid → low (library usage) [depth 4]
+        # test2 → mid → low (library usage)         [depth 3]
+        # test3 → low (library usage)               [depth 2]
+
+        complex_graph = {
+            "/src/deep.py::low_level": CallGraphNode(
+                file_path="/src/deep.py",
+                function_name="low_level",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.FUNCTION,
+                calls=set(),  # Library usage here
+                called_by={"/src/deep.py::mid_level", "/tests/test3.py::test_direct"},
+            ),
+            "/src/deep.py::mid_level": CallGraphNode(
+                file_path="/src/deep.py",
+                function_name="mid_level",
+                class_name=None,
+                line_number=10,
+                node_type=NodeType.FUNCTION,
+                calls={"low_level"},
+                called_by={"/src/deep.py::high_level", "/tests/test2.py::test_mid"},
+            ),
+            "/src/deep.py::high_level": CallGraphNode(
+                file_path="/src/deep.py",
+                function_name="high_level",
+                class_name=None,
+                line_number=15,
+                node_type=NodeType.FUNCTION,
+                calls={"mid_level"},
+                called_by={"/tests/test1.py::test_high"},
+            ),
+            "/tests/test1.py::test_high": CallGraphNode(
+                file_path="/tests/test1.py",
+                function_name="test_high",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.TEST_FUNCTION,
+                calls={"high_level"},
+                called_by=set(),
+            ),
+            "/tests/test2.py::test_mid": CallGraphNode(
+                file_path="/tests/test2.py",
+                function_name="test_mid",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.TEST_FUNCTION,
+                calls={"mid_level"},
+                called_by=set(),
+            ),
+            "/tests/test3.py::test_direct": CallGraphNode(
+                file_path="/tests/test3.py",
+                function_name="test_direct",
+                class_name=None,
+                line_number=5,
+                node_type=NodeType.TEST_FUNCTION,
+                calls={"low_level"},
+                called_by=set(),
+            ),
+        }
+
+        analyzer.call_graph = complex_graph
+
+        usage_location = LibraryUsageLocation(
+            file_path="/src/deep.py",
+            line_number=7,
+            column_offset=4,
+            usage_type=LibraryUsageType.METHOD_CALL,
+            usage_context="requests.get('deep')",
+            function_name="low_level",
+            class_name=None,
+        )
+
+        paths = await analyzer._find_test_coverage_paths(usage_location)
+
+        # Should find all 3 test functions with different depths
+        assert len(paths) == 3
+
+        test_names = {path.test_node.function_name for path in paths}
+        assert test_names == {"test_high", "test_mid", "test_direct"}
+
+        # Verify depths are correct
+        depths = {path.test_node.function_name: path.depth for path in paths}
+        assert depths["test_direct"] == 2  # test_direct → low_level
+        assert depths["test_mid"] == 3  # test_mid → mid_level → low_level
+        assert (
+            depths["test_high"] == 4
+        )  # test_high → high_level → mid_level → low_level
+
+        # Verify call chains are correct
+        for path in paths:
+            if path.test_node.function_name == "test_high":
+                expected_chain = ["test_high", "high_level", "mid_level", "low_level"]
+                actual_chain = [node.function_name for node in path.call_chain]
+                assert actual_chain == expected_chain
+            elif path.test_node.function_name == "test_mid":
+                expected_chain = ["test_mid", "mid_level", "low_level"]
+                actual_chain = [node.function_name for node in path.call_chain]
+                assert actual_chain == expected_chain
+            elif path.test_node.function_name == "test_direct":
+                expected_chain = ["test_direct", "low_level"]
+                actual_chain = [node.function_name for node in path.call_chain]
+                assert actual_chain == expected_chain
