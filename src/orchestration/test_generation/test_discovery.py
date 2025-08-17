@@ -96,7 +96,7 @@ class TestDiscoveryAnalyzer:
         )
 
         # Identify uncovered usages
-        covered_usages = {cov.usage_location for cov in coverage_analysis}
+        covered_usages = [cov.usage_location for cov in coverage_analysis]
         uncovered_usages = [
             usage
             for usage in library_usage.usage_locations
@@ -111,9 +111,11 @@ class TestDiscoveryAnalyzer:
         )
 
         # Filter relevant tests (tests that actually cover some library usage)
-        relevant_tests = list(
-            {test for coverage in coverage_analysis for test in coverage.covering_tests}
-        )
+        relevant_tests = []
+        for coverage in coverage_analysis:
+            for test in coverage.covering_tests:
+                if test not in relevant_tests:
+                    relevant_tests.append(test)
 
         result = TestDiscoveryResult(
             total_tests_found=len(all_test_functions),
@@ -239,7 +241,7 @@ class TestDiscoveryAnalyzer:
                     return (
                         name.startswith("test_")
                         or name.endswith("_test")
-                        or "test" in name.lower()
+                        or name.startswith("Test")
                     )
 
                 def _get_function_source(self, node: ast.AST, file_content: str) -> str:
