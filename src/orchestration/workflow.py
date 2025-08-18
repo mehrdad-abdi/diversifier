@@ -136,16 +136,16 @@ class WorkflowState:
                 dependencies=["initialize_environment"],
             ),
             WorkflowStep(
-                name="generate_tests",
+                name="select_tests",
                 stage=WorkflowStage.TEST_GENERATION,
-                description="Generate library-independent tests",
+                description="Select existing tests that cover library usage",
                 dependencies=["create_backup"],
             ),
             WorkflowStep(
                 name="run_baseline_tests",
                 stage=WorkflowStage.TEST_GENERATION,
                 description="Run baseline tests before migration",
-                dependencies=["generate_tests"],
+                dependencies=["select_tests"],
             ),
             WorkflowStep(
                 name="migrate_code",
