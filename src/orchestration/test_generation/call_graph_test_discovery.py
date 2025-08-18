@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Set
 from enum import Enum
 
 from ..mcp_manager import MCPManager, MCPServerType
-from .library_usage_analyzer import LibraryUsageSummary, LibraryUsageLocation
+from .library_usage_analyzer import LibraryUsageSummary, LibraryUsageLocation, LibraryUsageType
 
 
 class NodeType(Enum):
@@ -533,10 +533,20 @@ class CallGraphTestDiscoveryAnalyzer:
                 break
 
         if not usage_node:
-            self.logger.warning(
-                f"Could not find call graph node for usage: {usage_location.usage_context}"
-            )
-            return []
+            # For module-level imports, find coverage through actual library usage in functions
+            if usage_location.function_name is None and usage_location.usage_type in [
+                LibraryUsageType.IMPORT, LibraryUsageType.FROM_IMPORT
+            ]:
+                self.logger.debug(
+                    f"Module-level import detected: {usage_location.usage_context}. "
+                    f"Coverage will be tracked through actual function usage."
+                )
+                return []
+            else:
+                self.logger.warning(
+                    f"Could not find call graph node for usage: {usage_location.usage_context}"
+                )
+                return []
 
         # Perform backward traversal to find test functions
         coverage_paths = []
