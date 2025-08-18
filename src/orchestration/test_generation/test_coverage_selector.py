@@ -27,20 +27,26 @@ class TestCoverageSelectionResult:
 class TestCoverageSelector:
     """Main pipeline for selecting tests that cover library usage based on call graph analysis."""
 
-    def __init__(self, project_root: str, mcp_manager: MCPManager):
+    def __init__(
+        self, project_root: str, mcp_manager: MCPManager, test_path: str = "tests/"
+    ):
         """Initialize the test coverage selection pipeline.
 
         Args:
             project_root: Root directory of the project
             mcp_manager: MCP manager for operations
+            test_path: Relative path to test directory (e.g., "tests/" or "app/tests/")
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
+        self.test_path = test_path
         self.logger = logging.getLogger("diversifier.test_coverage_selector")
 
         # Initialize components
         self.usage_analyzer = LibraryUsageAnalyzer(project_root, mcp_manager)
-        self.test_discovery = CallGraphTestDiscoveryAnalyzer(project_root, mcp_manager)
+        self.test_discovery = CallGraphTestDiscoveryAnalyzer(
+            project_root, mcp_manager, test_path
+        )
 
     async def select_test_coverage(
         self,

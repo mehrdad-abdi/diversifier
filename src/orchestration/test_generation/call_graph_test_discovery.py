@@ -70,17 +70,57 @@ class CallGraphTestDiscoveryResult:
 class CallGraphBuilder:
     """Builds a call graph from Python source code using AST analysis."""
 
-    def __init__(self, project_root: str, mcp_manager: MCPManager):
+    def __init__(
+        self, project_root: str, mcp_manager: MCPManager, test_path: str = "tests/"
+    ):
         """Initialize the call graph builder.
 
         Args:
             project_root: Root directory of the project
             mcp_manager: MCP manager for file system operations
+            test_path: Relative path to test directory (e.g., "tests/" or "app/tests/")
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
+        self.test_path = test_path.rstrip(
+            "/"
+        )  # Remove trailing slash for consistent comparison
         self.logger = logging.getLogger("diversifier.call_graph_builder")
         self.nodes: Dict[str, CallGraphNode] = {}  # full_name -> CallGraphNode
+
+    def _is_test_file(self, file_path: str) -> bool:
+        """Check if a file is within the configured test directory.
+
+        Args:
+            file_path: Path to the file (relative to project root or absolute)
+
+        Returns:
+            True if the file is in the test directory
+        """
+        # Convert to Path for proper path operations
+        path = Path(file_path)
+
+        # If path is absolute, try to make it relative to project root
+        if path.is_absolute():
+            try:
+                path = path.relative_to(self.project_root)
+            except ValueError:
+                # If can't make relative to project root, use the path as-is for testing
+                # This handles test cases with fake absolute paths like "/tests/test_api.py"
+                path_str = str(path)
+                return (
+                    path_str.startswith("/" + self.test_path + "/")
+                    or path_str.startswith(self.test_path + "/")
+                    or str(path.parent) == "/" + self.test_path
+                    or str(path.parent) == self.test_path
+                )
+
+        # Check if the file is within the test directory
+        path_str = str(path)
+        return (
+            path_str.startswith(self.test_path + "/")
+            or str(path.parent) == self.test_path
+        )
 
     async def build_call_graph(self) -> Dict[str, CallGraphNode]:
         """Build the complete call graph for the project.
@@ -171,7 +211,8 @@ class CallGraphBuilder:
 
                 def _is_test_function(self, name: str) -> bool:
                     """Check if a function name indicates it's a test function."""
-                    return (
+                    # Must be in a test file AND have test naming convention
+                    return self.builder._is_test_file(file_path) and (
                         name.startswith("test_")
                         or name.endswith("_test")
                         or name.startswith("Test")
@@ -363,17 +404,21 @@ class CallGraphBuilder:
 class CallGraphTestDiscoveryAnalyzer:
     """Analyzes test coverage using call graph backward traversal."""
 
-    def __init__(self, project_root: str, mcp_manager: MCPManager):
+    def __init__(
+        self, project_root: str, mcp_manager: MCPManager, test_path: str = "tests/"
+    ):
         """Initialize the call graph test discovery analyzer.
 
         Args:
             project_root: Root directory of the project
             mcp_manager: MCP manager for file system operations
+            test_path: Relative path to test directory (e.g., "tests/" or "app/tests/")
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
+        self.test_path = test_path
         self.logger = logging.getLogger("diversifier.call_graph_test_discovery")
-        self.call_graph_builder = CallGraphBuilder(project_root, mcp_manager)
+        self.call_graph_builder = CallGraphBuilder(project_root, mcp_manager, test_path)
         self.call_graph: Dict[str, CallGraphNode] = {}
 
     async def discover_test_coverage(
