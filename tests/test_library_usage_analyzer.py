@@ -270,16 +270,22 @@ def test():
         """Test getting Python files using MCP server."""
         analyzer.mcp_manager.is_server_available.return_value = True
         analyzer.mcp_manager.call_tool.return_value = {
-            "files": ["/test/file1.py", "/test/file2.py"]
+            "result": {
+                "content": [{"text": '{"files": [{"path": "file1.py"}, {"path": "file2.py"}]}'}]
+            }
         }
 
         files = await analyzer._get_python_files()
 
-        assert files == ["/test/file1.py", "/test/file2.py"]
+        expected_files = [
+            str(analyzer.project_root / "file1.py"),
+            str(analyzer.project_root / "file2.py")
+        ]
+        assert files == expected_files
         analyzer.mcp_manager.call_tool.assert_called_once_with(
             MCPServerType.FILESYSTEM,
-            "find_files",
-            {"pattern": "**/*.py", "directory": str(analyzer.project_root)},
+            "find_python_files",
+            {},
         )
 
     @pytest.mark.asyncio
@@ -321,7 +327,9 @@ def test():
         """Test reading file using MCP server."""
         analyzer.mcp_manager.is_server_available.return_value = True
         analyzer.mcp_manager.call_tool.return_value = {
-            "result": [{"text": "import requests"}]
+            "result": {
+                "content": [{"text": "import requests"}]
+            }
         }
 
         content = await analyzer._read_file("/test/file.py")

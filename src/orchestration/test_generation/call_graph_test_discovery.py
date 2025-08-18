@@ -1,6 +1,7 @@
 """Call graph-based test discovery for finding test coverage of library usage points."""
 
 import ast
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -115,11 +116,13 @@ class CallGraphBuilder:
                 )
 
                 if result and "result" in result and "content" in result["result"]:
-                    import json
                     content = result["result"]["content"][0]["text"]
                     data = json.loads(content)
                     if "files" in data:
-                        return [str(self.project_root / file_info["path"]) for file_info in data["files"]]
+                        return [
+                            str(self.project_root / file_info["path"])
+                            for file_info in data["files"]
+                        ]
 
             # Fallback to manual discovery
             return [str(p) for p in self.project_root.rglob("*.py") if p.is_file()]
