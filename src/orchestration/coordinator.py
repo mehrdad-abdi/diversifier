@@ -9,7 +9,7 @@ from langchain.chat_models import init_chat_model
 from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
-from .test_generation import EfficientTestGenerator
+from .test_generation import TestCoverageSelector
 from .config import LLMConfig
 
 
@@ -52,8 +52,8 @@ class DiversificationCoordinator:
         )
         self.workflow_state = WorkflowState(context)
 
-        # Initialize test generation components
-        self.efficient_test_generator = EfficientTestGenerator(
+        # Initialize test coverage selection components
+        self.test_coverage_selector = TestCoverageSelector(
             str(self.project_path), self.mcp_manager
         )
 
@@ -305,41 +305,41 @@ class DiversificationCoordinator:
         }
 
     async def _generate_tests(self) -> Dict[str, Any]:
-        """Generate efficient focused tests based on library usage analysis."""
+        """Select existing tests that cover library usage based on call graph analysis."""
         try:
-            self.logger.info("Starting efficient test generation workflow")
+            self.logger.info("Starting test coverage selection workflow")
 
-            # Use the efficient test discovery pipeline
-            generation_result = await self.efficient_test_generator.discover_test_coverage(
+            # Use the test coverage selection pipeline
+            selection_result = await self.test_coverage_selector.select_test_coverage(
                 target_library=self.source_library,  # Analyze usage of the source library
             )
 
-            if not generation_result.pipeline_success:
+            if not selection_result.pipeline_success:
                 return {
                     "success": False,
-                    "error": "Efficient test generation pipeline failed",
+                    "error": "Test coverage selection pipeline failed",
                 }
 
-            # Get discovery summary
-            summary = self.efficient_test_generator.get_discovery_summary(
-                generation_result
+            # Get selection summary
+            summary = self.test_coverage_selector.get_selection_summary(
+                selection_result
             )
 
             self.logger.info(
-                f"Discovered {summary['test_coverage']['covered_usages']} covered "
+                f"Selected {summary['test_coverage']['covered_usages']} covered "
                 f"and {summary['test_coverage']['uncovered_usages']} uncovered "
                 f"library usages ({summary['test_coverage']['coverage_percentage']:.1f}% coverage)"
             )
 
             return {
                 "success": True,
-                "discovery_result": generation_result,
+                "selection_result": selection_result,
                 "summary": summary,
-                "execution_time": generation_result.total_execution_time,
+                "execution_time": selection_result.total_execution_time,
             }
 
         except Exception as e:
-            self.logger.error(f"Efficient test generation failed: {e}")
+            self.logger.error(f"Test coverage selection failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def _run_baseline_tests(self) -> Dict[str, Any]:
@@ -347,26 +347,26 @@ class DiversificationCoordinator:
         try:
             self.logger.info("Running baseline focused unit tests")
 
-            # Get test generation results from previous step
+            # Get test selection results from previous step
             generate_step = self.workflow_state.steps.get("generate_tests")
             if not generate_step or not generate_step.result:
                 return {
                     "success": False,
-                    "error": "No test generation results available",
+                    "error": "No test selection results available",
                 }
 
-            generation_result = generate_step.result.get("discovery_result")
-            if not generation_result:
-                return {"success": False, "error": "No discovery results available"}
+            selection_result = generate_step.result.get("selection_result")
+            if not selection_result:
+                return {"success": False, "error": "No selection results available"}
 
-            # Since we only do test discovery now, skip test execution
+            # Since we only do test selection now, skip test execution
             self.logger.info(
-                "Test discovery completed - no test generation in this version"
+                "Test coverage selection completed - no test generation in this version"
             )
             return {
                 "success": True,
                 "test_results": {
-                    "note": "Test discovery only - no tests generated to execute"
+                    "note": "Test coverage selection only - no tests generated to execute"
                 },
             }
 
@@ -381,8 +381,8 @@ class DiversificationCoordinator:
                     "baseline_established": False,
                 }
 
-            # Run the generated focused tests using pytest MCP server
-            output_directory = generation_result.output_directory
+            # Run the selected tests using pytest MCP server
+            output_directory = selection_result.output_directory
 
             if self.mcp_manager.is_server_available(MCPServerType.TESTING):
                 try:
@@ -487,29 +487,29 @@ class DiversificationCoordinator:
         try:
             self.logger.info("Validating migration with focused unit tests")
 
-            # Get test generation results from previous step
+            # Get test selection results from previous step
             generate_step = self.workflow_state.steps.get("generate_tests")
             if not generate_step or not generate_step.result:
                 return {
                     "success": False,
-                    "error": "No test generation results available for validation",
+                    "error": "No test selection results available for validation",
                 }
 
-            generation_result = generate_step.result.get("discovery_result")
-            if not generation_result:
+            selection_result = generate_step.result.get("selection_result")
+            if not selection_result:
                 return {
                     "success": False,
-                    "error": "No discovery results available for validation",
+                    "error": "No selection results available for validation",
                 }
 
-            # Since we only do test discovery now, skip validation
+            # Since we only do test selection now, skip validation
             self.logger.info(
-                "Test discovery completed - no test generation for validation"
+                "Test coverage selection completed - no test generation for validation"
             )
             return {
                 "success": True,
                 "test_results": {
-                    "note": "Test discovery only - no tests generated to validate"
+                    "note": "Test coverage selection only - no tests generated to validate"
                 },
             }
 
@@ -521,8 +521,8 @@ class DiversificationCoordinator:
                     "validation_complete": True,
                 }
 
-            # Run the generated focused tests for validation
-            output_directory = generation_result.output_directory
+            # Run the selected tests for validation
+            output_directory = selection_result.output_directory
 
             if self.mcp_manager.is_server_available(MCPServerType.TESTING):
                 try:

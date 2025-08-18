@@ -1,4 +1,4 @@
-"""Efficient test discovery pipeline focusing on library usage points."""
+"""Test coverage selector pipeline focusing on library usage points."""
 
 import logging
 import time
@@ -15,8 +15,8 @@ from .call_graph_test_discovery import (
 
 
 @dataclass
-class EfficientTestDiscoveryResult:
-    """Results of the efficient test discovery pipeline."""
+class TestCoverageSelectionResult:
+    """Results of the test coverage selection pipeline."""
 
     library_usage_summary: LibraryUsageSummary
     test_discovery_result: CallGraphTestDiscoveryResult
@@ -24,11 +24,11 @@ class EfficientTestDiscoveryResult:
     pipeline_success: bool
 
 
-class EfficientTestGenerator:
-    """Main pipeline for efficient test discovery based on library usage analysis."""
+class TestCoverageSelector:
+    """Main pipeline for selecting tests that cover library usage based on call graph analysis."""
 
     def __init__(self, project_root: str, mcp_manager: MCPManager):
-        """Initialize the efficient test discovery pipeline.
+        """Initialize the test coverage selection pipeline.
 
         Args:
             project_root: Root directory of the project
@@ -36,28 +36,28 @@ class EfficientTestGenerator:
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
-        self.logger = logging.getLogger("diversifier.efficient_test_generator")
+        self.logger = logging.getLogger("diversifier.test_coverage_selector")
 
         # Initialize components
         self.usage_analyzer = LibraryUsageAnalyzer(project_root, mcp_manager)
         self.test_discovery = CallGraphTestDiscoveryAnalyzer(project_root, mcp_manager)
 
-    async def discover_test_coverage(
+    async def select_test_coverage(
         self,
         target_library: str,
-    ) -> EfficientTestDiscoveryResult:
-        """Run the efficient test discovery pipeline.
+    ) -> TestCoverageSelectionResult:
+        """Run the test coverage selection pipeline.
 
         Args:
             target_library: Library to analyze test coverage for
 
         Returns:
-            Test discovery results
+            Test coverage selection results
         """
         start_time = time.time()
 
         self.logger.info(
-            f"Starting efficient test discovery pipeline for {target_library}"
+            f"Starting test coverage selection pipeline for {target_library}"
         )
 
         try:
@@ -94,7 +94,7 @@ class EfficientTestGenerator:
 
             execution_time = time.time() - start_time
 
-            result = EfficientTestDiscoveryResult(
+            result = TestCoverageSelectionResult(
                 library_usage_summary=library_usage,
                 test_discovery_result=test_discovery,
                 total_execution_time=execution_time,
@@ -102,16 +102,16 @@ class EfficientTestGenerator:
             )
 
             self.logger.info(
-                f"Efficient test discovery completed successfully in {execution_time:.2f}s"
+                f"Test coverage selection completed successfully in {execution_time:.2f}s"
             )
 
             return result
 
         except Exception as e:
             execution_time = time.time() - start_time
-            self.logger.error(f"Efficient test discovery pipeline failed: {e}")
+            self.logger.error(f"Test coverage selection pipeline failed: {e}")
 
-            return EfficientTestDiscoveryResult(
+            return TestCoverageSelectionResult(
                 library_usage_summary=LibraryUsageSummary(target_library, 0),
                 test_discovery_result=CallGraphTestDiscoveryResult(
                     total_nodes=0,
@@ -127,9 +127,9 @@ class EfficientTestGenerator:
 
     def _create_empty_result(
         self, target_library: str, execution_time: float
-    ) -> EfficientTestDiscoveryResult:
+    ) -> TestCoverageSelectionResult:
         """Create an empty result when no library usage is found."""
-        return EfficientTestDiscoveryResult(
+        return TestCoverageSelectionResult(
             library_usage_summary=LibraryUsageSummary(target_library, 0),
             test_discovery_result=CallGraphTestDiscoveryResult(
                 total_nodes=0,
@@ -143,10 +143,10 @@ class EfficientTestGenerator:
             pipeline_success=True,
         )
 
-    def get_discovery_summary(
-        self, result: EfficientTestDiscoveryResult
+    def get_selection_summary(
+        self, result: TestCoverageSelectionResult
     ) -> Dict[str, Any]:
-        """Get a summary of the discovery results.
+        """Get a summary of the selection results.
 
         Args:
             result: Pipeline results

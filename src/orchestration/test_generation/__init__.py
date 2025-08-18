@@ -1,8 +1,8 @@
-"""Test generation components for efficient library migration testing."""
+"""Test coverage selection components for library migration testing."""
 
-from .efficient_test_generator import (
-    EfficientTestGenerator,
-    EfficientTestDiscoveryResult,
+from .test_coverage_selector import (
+    TestCoverageSelector,
+    TestCoverageSelectionResult,
 )
 from .library_usage_analyzer import (
     LibraryUsageAnalyzer,
@@ -19,8 +19,8 @@ from .call_graph_test_discovery import (
 )
 
 __all__ = [
-    "EfficientTestGenerator",
-    "EfficientTestDiscoveryResult",
+    "TestCoverageSelector",
+    "TestCoverageSelectionResult",
     "LibraryUsageAnalyzer",
     "LibraryUsageSummary",
     "LibraryUsageLocation",
