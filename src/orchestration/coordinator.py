@@ -183,7 +183,7 @@ class DiversificationCoordinator:
                 result = await self._initialize_environment()
             elif step_name == "create_backup":
                 result = await self._create_backup()
-            elif step_name == "generate_tests":
+            elif step_name == "select_tests":
                 result = await self._select_tests()
             elif step_name == "run_baseline_tests":
                 result = await self._run_baseline_tests()
@@ -348,7 +348,7 @@ class DiversificationCoordinator:
             self.logger.info("Running baseline focused unit tests")
 
             # Get test selection results from previous step
-            generate_step = self.workflow_state.steps.get("generate_tests")
+            generate_step = self.workflow_state.steps.get("select_tests")
             if not generate_step or not generate_step.result:
                 return {
                     "success": False,
@@ -414,7 +414,7 @@ class DiversificationCoordinator:
             self.logger.info("Validating migration with focused unit tests")
 
             # Get test selection results from previous step
-            generate_step = self.workflow_state.steps.get("generate_tests")
+            generate_step = self.workflow_state.steps.get("select_tests")
             if not generate_step or not generate_step.result:
                 return {
                     "success": False,
