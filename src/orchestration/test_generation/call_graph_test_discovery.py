@@ -110,12 +110,16 @@ class CallGraphBuilder:
             if self.mcp_manager.is_server_available(MCPServerType.FILESYSTEM):
                 result = await self.mcp_manager.call_tool(
                     MCPServerType.FILESYSTEM,
-                    "find_files",
-                    {"pattern": "**/*.py", "directory": str(self.project_root)},
+                    "find_python_files",
+                    {},
                 )
 
-                if result and "files" in result:
-                    return result["files"]
+                if result and "result" in result and "content" in result["result"]:
+                    import json
+                    content = result["result"]["content"][0]["text"]
+                    data = json.loads(content)
+                    if "files" in data:
+                        return [str(self.project_root / file_info["path"]) for file_info in data["files"]]
 
             # Fallback to manual discovery
             return [str(p) for p in self.project_root.rglob("*.py") if p.is_file()]
@@ -348,8 +352,8 @@ class CallGraphBuilder:
                     MCPServerType.FILESYSTEM, "read_file", {"file_path": file_path}
                 )
 
-                if result and "result" in result:
-                    return result["result"][0]["text"]
+                if result and "result" in result and "content" in result["result"]:
+                    return result["result"]["content"][0]["text"]
 
             # Fallback to direct file reading
             with open(file_path, "r", encoding="utf-8") as f:
