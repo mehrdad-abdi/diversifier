@@ -271,7 +271,9 @@ def test():
         analyzer.mcp_manager.is_server_available.return_value = True
         analyzer.mcp_manager.call_tool.return_value = {
             "result": {
-                "content": [{"text": '{"files": [{"path": "file1.py"}, {"path": "file2.py"}]}'}]
+                "content": [
+                    {"text": '{"files": [{"path": "file1.py"}, {"path": "file2.py"}]}'}
+                ]
             }
         }
 
@@ -279,7 +281,7 @@ def test():
 
         expected_files = [
             str(analyzer.project_root / "file1.py"),
-            str(analyzer.project_root / "file2.py")
+            str(analyzer.project_root / "file2.py"),
         ]
         assert files == expected_files
         analyzer.mcp_manager.call_tool.assert_called_once_with(
@@ -327,9 +329,7 @@ def test():
         """Test reading file using MCP server."""
         analyzer.mcp_manager.is_server_available.return_value = True
         analyzer.mcp_manager.call_tool.return_value = {
-            "result": {
-                "content": [{"text": "import requests"}]
-            }
+            "result": {"content": [{"text": "import requests"}]}
         }
 
         content = await analyzer._read_file("/test/file.py")
