@@ -93,9 +93,11 @@ class TestCoverageSelector:
                 library_usage
             )
 
+            covered_usages = len(set(path.library_usage for path in test_discovery.coverage_paths))
             self.logger.info(
-                f"Test coverage: {len(test_discovery.coverage_paths)}/{library_usage.total_usages} "
-                f"usages covered ({test_discovery.coverage_percentage:.1f}%)"
+                f"Static analysis found {len(test_discovery.coverage_paths)} test paths "
+                f"covering {covered_usages}/{library_usage.total_usages} library usages "
+                f"({test_discovery.coverage_percentage:.1f}%)"
             )
 
             execution_time = time.time() - start_time

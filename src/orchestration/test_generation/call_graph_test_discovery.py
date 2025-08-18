@@ -455,12 +455,12 @@ class CallGraphTestDiscoveryAnalyzer:
             paths = await self._find_test_coverage_paths(usage_location)
             coverage_paths.extend(paths)
 
-        # Identify uncovered usages
-        covered_usages = [path.library_usage for path in coverage_paths]
+        # Identify covered and uncovered usages
+        unique_covered_usages = set(path.library_usage for path in coverage_paths)
         uncovered_usages = [
             usage
             for usage in library_usage.usage_locations
-            if usage not in covered_usages
+            if usage not in unique_covered_usages
         ]
 
         # Calculate statistics
@@ -470,7 +470,7 @@ class CallGraphTestDiscoveryAnalyzer:
             if node.node_type == NodeType.TEST_FUNCTION
         ]
         coverage_percentage = (
-            len(covered_usages) / len(library_usage.usage_locations) * 100
+            len(unique_covered_usages) / len(library_usage.usage_locations) * 100
             if library_usage.usage_locations
             else 0
         )
@@ -485,8 +485,9 @@ class CallGraphTestDiscoveryAnalyzer:
         )
 
         self.logger.info(
-            f"Call graph analysis complete: {len(coverage_paths)} coverage paths found, "
-            f"{coverage_percentage:.1f}% coverage"
+            f"Call graph analysis complete: {len(coverage_paths)} test paths found "
+            f"covering {len(unique_covered_usages)}/{len(library_usage.usage_locations)} "
+            f"library usages ({coverage_percentage:.1f}%)"
         )
 
         return result
