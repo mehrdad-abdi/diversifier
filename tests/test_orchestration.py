@@ -724,9 +724,7 @@ class TestDiversificationCoordinator:
                 coordinator, "_initialize_environment", return_value={"success": True}
             ),
             patch.object(coordinator, "_create_backup", return_value={"success": True}),
-            patch.object(
-                coordinator, "_generate_tests", return_value={"success": True}
-            ),
+            patch.object(coordinator, "_select_tests", return_value={"success": True}),
             patch.object(
                 coordinator, "_run_baseline_tests", return_value={"success": True}
             ),

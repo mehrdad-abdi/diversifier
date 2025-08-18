@@ -184,7 +184,7 @@ class DiversificationCoordinator:
             elif step_name == "create_backup":
                 result = await self._create_backup()
             elif step_name == "generate_tests":
-                result = await self._generate_tests()
+                result = await self._select_tests()
             elif step_name == "run_baseline_tests":
                 result = await self._run_baseline_tests()
             elif step_name == "migrate_code":
@@ -304,7 +304,7 @@ class DiversificationCoordinator:
             "backup_method": "copy",
         }
 
-    async def _generate_tests(self) -> Dict[str, Any]:
+    async def _select_tests(self) -> Dict[str, Any]:
         """Select existing tests that cover library usage based on call graph analysis."""
         try:
             self.logger.info("Starting test coverage selection workflow")
