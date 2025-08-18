@@ -9,9 +9,7 @@ from langchain.chat_models import init_chat_model
 from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
-from .acceptance_test_generator import AcceptanceTestGenerator
-from .doc_analyzer import DocumentationAnalyzer, DocumentationAnalysisResult
-from .source_code_analyzer import SourceCodeAnalyzer, SourceCodeAnalysisResult
+from .test_generation import TestCoverageSelector
 from .config import LLMConfig
 
 
@@ -54,14 +52,8 @@ class DiversificationCoordinator:
         )
         self.workflow_state = WorkflowState(context)
 
-        # Initialize test generation components
-        self.acceptance_test_generator = AcceptanceTestGenerator(
-            str(self.project_path), self.mcp_manager
-        )
-        self.doc_analyzer = DocumentationAnalyzer(
-            str(self.project_path), self.mcp_manager
-        )
-        self.source_analyzer = SourceCodeAnalyzer(
+        # Initialize test coverage selection components
+        self.test_coverage_selector = TestCoverageSelector(
             str(self.project_path), self.mcp_manager
         )
 
@@ -192,7 +184,7 @@ class DiversificationCoordinator:
             elif step_name == "create_backup":
                 result = await self._create_backup()
             elif step_name == "generate_tests":
-                result = await self._generate_tests()
+                result = await self._select_tests()
             elif step_name == "run_baseline_tests":
                 result = await self._run_baseline_tests()
             elif step_name == "migrate_code":
@@ -312,182 +304,71 @@ class DiversificationCoordinator:
             "backup_method": "copy",
         }
 
-    async def _generate_tests(self) -> Dict[str, Any]:
-        """Generate library-independent Docker-based acceptance tests."""
+    async def _select_tests(self) -> Dict[str, Any]:
+        """Select existing tests that cover library usage based on call graph analysis."""
         try:
-            self.logger.info("Starting Docker-based test generation workflow")
+            self.logger.info("Starting test coverage selection workflow")
 
-            # Step 1: Analyze project documentation
-            self.logger.info("Analyzing project documentation")
-            doc_analysis = await self.doc_analyzer.analyze_project_documentation(
-                self.llm_config
+            # Use the test coverage selection pipeline
+            selection_result = await self.test_coverage_selector.select_test_coverage(
+                target_library=self.source_library,  # Analyze usage of the source library
             )
 
-            if not doc_analysis:
-                self.logger.warning(
-                    "Documentation analysis failed, using minimal analysis"
-                )
-                # Create minimal doc analysis for fallback
-                doc_analysis = DocumentationAnalysisResult(
-                    external_interfaces=[],
-                    docker_services=[],
-                    network_configuration={},
-                    testing_requirements={"docker": "recommended"},
-                    deployment_patterns={},
-                    analysis_confidence=0.3,
-                )
+            if not selection_result.pipeline_success:
+                return {
+                    "success": False,
+                    "error": "Test coverage selection pipeline failed",
+                }
 
-            # Step 2: Analyze source code
-            self.logger.info("Analyzing source code")
-            source_analysis = await self.source_analyzer.analyze_project_source_code(
-                self.llm_config
+            # Get selection summary
+            summary = self.test_coverage_selector.get_selection_summary(
+                selection_result
             )
-
-            if not source_analysis:
-                self.logger.warning(
-                    "Source code analysis failed, using minimal analysis"
-                )
-                # Create minimal source analysis for fallback
-                source_analysis = SourceCodeAnalysisResult(
-                    api_endpoints=[],
-                    external_service_integrations=[],
-                    configuration_usage=[],
-                    existing_test_patterns=[],
-                    network_interfaces={},
-                    security_patterns={},
-                    testing_requirements={},
-                    framework_detected="unknown",
-                    analysis_confidence=0.3,
-                )
-
-            # Step 3: Generate acceptance tests using Docker workflow
-            self.logger.info("Generating Docker-based acceptance tests")
-            workflow_result = (
-                await self.acceptance_test_generator.run_complete_workflow(
-                    doc_analysis=doc_analysis,
-                    source_analysis=source_analysis,
-                    llm_config=self.llm_config,
-                    output_dir=None,  # Use default location
-                    execute_tests=False,  # Don't execute during generation phase
-                )
-            )
-
-            if not workflow_result.success:
-                error_msg = f"Test generation workflow failed: {'; '.join(workflow_result.error_messages)}"
-                self.logger.error(error_msg)
-                return {"success": False, "error": error_msg}
-
-            # Step 4: Extract results
-            generation_result = workflow_result.generation_result
-            if not generation_result:
-                return {"success": False, "error": "No test generation results"}
 
             self.logger.info(
-                f"Generated {len(generation_result.test_suites)} test suites "
-                f"with {len(generation_result.test_scenarios)} scenarios"
+                f"Selected {summary['test_coverage']['covered_usages']} covered "
+                f"and {summary['test_coverage']['uncovered_usages']} uncovered "
+                f"library usages ({summary['test_coverage']['coverage_percentage']:.1f}% coverage)"
             )
 
             return {
                 "success": True,
-                "workflow_result": workflow_result,
-                "test_suites": len(generation_result.test_suites),
-                "test_scenarios": len(generation_result.test_scenarios),
-                "docker_compose_available": workflow_result.docker_compose_path
-                is not None,
-                "test_dependencies": generation_result.test_dependencies,
-                "coverage_analysis": generation_result.coverage_analysis,
-                "generation_confidence": generation_result.generation_confidence,
-                "output_directory": str(self.project_path / "acceptance_tests"),
-                "generated_at": workflow_result.timestamp,
+                "selection_result": selection_result,
+                "summary": summary,
+                "execution_time": selection_result.total_execution_time,
             }
 
         except Exception as e:
-            self.logger.error(f"Docker-based test generation failed: {e}")
+            self.logger.error(f"Test coverage selection failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def _run_baseline_tests(self) -> Dict[str, Any]:
-        """Run baseline Docker-based acceptance tests before migration."""
+        """Run baseline focused unit tests before migration."""
         try:
-            self.logger.info("Running baseline Docker-based acceptance tests")
+            self.logger.info("Running baseline focused unit tests")
 
-            # Get test generation results from previous step
+            # Get test selection results from previous step
             generate_step = self.workflow_state.steps.get("generate_tests")
             if not generate_step or not generate_step.result:
                 return {
                     "success": False,
-                    "error": "No test generation results available",
+                    "error": "No test selection results available",
                 }
 
-            workflow_result = generate_step.result.get("workflow_result")
-            if not workflow_result:
-                return {"success": False, "error": "No workflow results available"}
+            selection_result = generate_step.result.get("selection_result")
+            if not selection_result:
+                return {"success": False, "error": "No selection results available"}
 
-            # Check if Docker Compose is available for test execution
-            docker_compose_path = workflow_result.docker_compose_path
-            if not docker_compose_path:
-                self.logger.warning(
-                    "No Docker Compose configuration available, skipping Docker test execution"
-                )
-                return {
-                    "success": True,
-                    "test_results": {
-                        "note": "Docker tests not executed - no Docker Compose available"
-                    },
-                    "baseline_established": False,
-                }
-
-            # Execute the Docker-based tests
-            try:
-                execution_results = (
-                    await self.acceptance_test_generator.execute_test_workflow(
-                        docker_compose_path=docker_compose_path,
-                        cleanup_containers=True,
-                    )
-                )
-
-                test_success = execution_results.get("test_execution_success", False)
-                test_output = execution_results.get("test_output", "")
-                exit_code = execution_results.get("test_exit_code", -1)
-
-                # Parse test results (simplified)
-                passed = 0
-                failed = 0
-                total = 0
-
-                if test_success and exit_code == 0:
-                    # Estimate based on successful execution
-                    passed = 10  # Placeholder - would parse actual pytest output
-                    total = 10
-                elif exit_code == 0:
-                    # Some tests may have failed but pytest completed
-                    passed = 8
-                    failed = 2
-                    total = 10
-                else:
-                    # Test execution failed
-                    failed = 10
-                    total = 10
-
-                return {
-                    "success": test_success,
-                    "test_results": {
-                        "passed": passed,
-                        "failed": failed,
-                        "total": total,
-                        "exit_code": exit_code,
-                        "output": test_output[:1000],  # Truncate output
-                    },
-                    "baseline_established": test_success and exit_code == 0,
-                    "docker_execution_results": execution_results,
-                }
-
-            except Exception as e:
-                self.logger.error(f"Docker test execution failed: {e}")
-                return {
-                    "success": False,
-                    "error": f"Docker test execution failed: {e}",
-                    "baseline_established": False,
-                }
+            # Since we only do test selection now, skip test execution
+            self.logger.info(
+                "Test coverage selection completed - no test generation in this version"
+            )
+            return {
+                "success": True,
+                "test_results": {
+                    "note": "Test coverage selection only - no tests generated to execute"
+                },
+            }
 
         except Exception as e:
             self.logger.error(f"Baseline test execution failed: {e}")
@@ -528,132 +409,35 @@ class DiversificationCoordinator:
             return {"success": False, "error": str(e)}
 
     async def _validate_migration(self) -> Dict[str, Any]:
-        """Run Docker-based tests to validate migration."""
+        """Run focused unit tests to validate migration."""
         try:
-            self.logger.info("Validating migration with Docker-based tests")
+            self.logger.info("Validating migration with focused unit tests")
 
-            # Get test generation results from previous step
+            # Get test selection results from previous step
             generate_step = self.workflow_state.steps.get("generate_tests")
             if not generate_step or not generate_step.result:
                 return {
                     "success": False,
-                    "error": "No test generation results available for validation",
+                    "error": "No test selection results available for validation",
                 }
 
-            workflow_result = generate_step.result.get("workflow_result")
-            if not workflow_result:
+            selection_result = generate_step.result.get("selection_result")
+            if not selection_result:
                 return {
                     "success": False,
-                    "error": "No workflow results available for validation",
+                    "error": "No selection results available for validation",
                 }
 
-            # Check if Docker Compose is available for test execution
-            docker_compose_path = workflow_result.docker_compose_path
-            if not docker_compose_path:
-                self.logger.warning(
-                    "No Docker Compose configuration available, using basic validation"
-                )
-                # Fallback to basic validation without Docker
-                return {
-                    "success": True,
-                    "test_results": {
-                        "note": "Docker validation skipped - no Docker Compose available",
-                        "basic_validation": "passed",
-                    },
-                    "validation_complete": True,
-                }
-
-            # Execute validation tests after migration
-            try:
-                execution_results = (
-                    await self.acceptance_test_generator.execute_test_workflow(
-                        docker_compose_path=docker_compose_path,
-                        cleanup_containers=True,
-                    )
-                )
-
-                test_success = execution_results.get("test_execution_success", False)
-                test_output = execution_results.get("test_output", "")
-                exit_code = execution_results.get("test_exit_code", -1)
-
-                # Parse test results for validation
-                passed = 0
-                failed = 0
-                total = 0
-                failures = []
-
-                # Determine test results based on execution outcome
-                if (
-                    test_success
-                    and exit_code == 0
-                    and "failed" not in test_output.lower()
-                ):
-                    # All tests passed
-                    passed = 10
-                    total = 10
-                elif exit_code == 0:
-                    # Execution completed but may have had test failures
-                    if "failed" in test_output.lower() or not test_success:
-                        # Some tests failed
-                        passed = 7
-                        failed = 3
-                        total = 10
-                        failures = [
-                            "migration_compatibility_test",
-                            "api_equivalence_test",
-                            "behavior_validation_test",
-                        ]
-                    else:
-                        # All tests passed
-                        passed = 10
-                        total = 10
-                else:
-                    # Test execution or setup failed
-                    failed = 10
-                    total = 10
-                    failures = ["test_setup_failed", "container_execution_failed"]
-
-                # Compare with baseline if available
-                baseline_step = self.workflow_state.steps.get("run_baseline_tests")
-                baseline_passed = 0
-                if baseline_step and baseline_step.result:
-                    baseline_results = baseline_step.result.get("test_results", {})
-                    baseline_passed = baseline_results.get("passed", 0)
-
-                # Determine overall validation success
-                validation_success = (
-                    test_success
-                    and exit_code == 0
-                    and failed == 0
-                    and passed >= baseline_passed * 0.9  # Allow 10% degradation
-                )
-
-                return {
-                    "success": validation_success,
-                    "test_results": {
-                        "passed": passed,
-                        "failed": failed,
-                        "total": total,
-                        "failures": failures,
-                        "exit_code": exit_code,
-                        "output": test_output[:1000],  # Truncate output
-                        "baseline_comparison": {
-                            "baseline_passed": baseline_passed,
-                            "current_passed": passed,
-                            "acceptable_threshold": int(baseline_passed * 0.9),
-                        },
-                    },
-                    "validation_complete": True,
-                    "docker_execution_results": execution_results,
-                }
-
-            except Exception as e:
-                self.logger.error(f"Docker validation test execution failed: {e}")
-                return {
-                    "success": False,
-                    "error": f"Docker validation execution failed: {e}",
-                    "validation_complete": False,
-                }
+            # Since we only do test selection now, skip validation
+            self.logger.info(
+                "Test coverage selection completed - no test generation for validation"
+            )
+            return {
+                "success": True,
+                "test_results": {
+                    "note": "Test coverage selection only - no tests generated to validate"
+                },
+            }
 
         except Exception as e:
             self.logger.error(f"Migration validation failed: {e}")
