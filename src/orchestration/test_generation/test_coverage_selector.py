@@ -93,7 +93,13 @@ class TestCoverageSelector:
                 library_usage
             )
 
-            covered_usages = len(set(path.library_usage for path in test_discovery.coverage_paths))
+            # Count unique covered usages using a safe approach (avoid hashing dataclass objects)
+            covered_usage_ids = set()
+            for path in test_discovery.coverage_paths:
+                usage = path.library_usage
+                usage_id = (usage.file_path, usage.line_number, usage.column_offset, usage.usage_context)
+                covered_usage_ids.add(usage_id)
+            covered_usages = len(covered_usage_ids)
             self.logger.info(
                 f"Static analysis found {len(test_discovery.coverage_paths)} test paths "
                 f"covering {covered_usages}/{library_usage.total_usages} library usages "
