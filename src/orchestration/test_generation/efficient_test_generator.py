@@ -1,35 +1,34 @@
-"""Efficient test generation pipeline focusing on library usage points."""
+"""Efficient test discovery pipeline focusing on library usage points."""
 
 import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Dict, Any
 
-from ..mcp_manager import MCPManager, MCPServerType
+from ..mcp_manager import MCPManager
 from .library_usage_analyzer import LibraryUsageAnalyzer, LibraryUsageSummary
-from .test_discovery import TestDiscoveryAnalyzer, TestDiscoveryResult
-from .focused_test_generator import FocusedTestGenerator, TestGenerationResult
-from ..config import LLMConfig
+from .call_graph_test_discovery import (
+    CallGraphTestDiscoveryAnalyzer,
+    CallGraphTestDiscoveryResult,
+)
 
 
 @dataclass
-class EfficientTestGenerationResult:
-    """Results of the efficient test generation pipeline."""
+class EfficientTestDiscoveryResult:
+    """Results of the efficient test discovery pipeline."""
 
     library_usage_summary: LibraryUsageSummary
-    test_discovery_result: TestDiscoveryResult
-    focused_test_result: TestGenerationResult
+    test_discovery_result: CallGraphTestDiscoveryResult
     total_execution_time: float
     pipeline_success: bool
-    output_directory: str
 
 
 class EfficientTestGenerator:
-    """Main pipeline for efficient test generation based on library usage analysis."""
+    """Main pipeline for efficient test discovery based on library usage analysis."""
 
     def __init__(self, project_root: str, mcp_manager: MCPManager):
-        """Initialize the efficient test generator pipeline.
+        """Initialize the efficient test discovery pipeline.
 
         Args:
             project_root: Root directory of the project
@@ -41,29 +40,24 @@ class EfficientTestGenerator:
 
         # Initialize components
         self.usage_analyzer = LibraryUsageAnalyzer(project_root, mcp_manager)
-        self.test_discovery = TestDiscoveryAnalyzer(project_root, mcp_manager)
-        self.focused_generator = FocusedTestGenerator(project_root, mcp_manager)
+        self.test_discovery = CallGraphTestDiscoveryAnalyzer(project_root, mcp_manager)
 
-    async def generate_efficient_tests(
+    async def discover_test_coverage(
         self,
         target_library: str,
-        llm_config: LLMConfig,
-        output_dir: Optional[str] = None,
-    ) -> EfficientTestGenerationResult:
-        """Run the complete efficient test generation pipeline.
+    ) -> EfficientTestDiscoveryResult:
+        """Run the efficient test discovery pipeline.
 
         Args:
-            target_library: Library to analyze and generate tests for
-            llm_config: LLM configuration for test generation
-            output_dir: Optional output directory for generated tests
+            target_library: Library to analyze test coverage for
 
         Returns:
-            Complete pipeline results
+            Test discovery results
         """
         start_time = time.time()
 
         self.logger.info(
-            f"Starting efficient test generation pipeline for {target_library}"
+            f"Starting efficient test discovery pipeline for {target_library}"
         )
 
         try:
@@ -86,126 +80,73 @@ class EfficientTestGenerator:
             )
 
             # Step 2: Discover existing tests that cover library usage points
-            self.logger.info("Step 2: Discovering existing test coverage...")
+            self.logger.info(
+                "Step 2: Discovering existing test coverage using call graph analysis..."
+            )
             test_discovery = await self.test_discovery.discover_test_coverage(
-                library_usage, target_library
+                library_usage
             )
 
             self.logger.info(
-                f"Test coverage: {len(test_discovery.usage_coverage)}/{library_usage.total_usages} "
+                f"Test coverage: {len(test_discovery.coverage_paths)}/{library_usage.total_usages} "
                 f"usages covered ({test_discovery.coverage_percentage:.1f}%)"
             )
 
-            # Step 3: Generate focused tests for uncovered usage points
-            self.logger.info("Step 3: Generating focused unit tests...")
-            focused_tests = await self.focused_generator.generate_focused_tests(
-                library_usage, test_discovery, target_library, llm_config
-            )
-
-            self.logger.info(
-                f"Generated {focused_tests.tests_generated} new focused tests"
-            )
-
-            # Step 4: Export generated tests
-            if output_dir is None:
-                output_dir = str(self.project_root / "generated_library_tests")
-
-            self.logger.info("Step 4: Exporting generated tests...")
-            final_output_dir = await self.focused_generator.export_generated_tests(
-                focused_tests, output_dir
-            )
-
-            # Step 5: Run tests to validate they work (optional)
-            if focused_tests.tests_generated > 0:
-                await self._validate_generated_tests(final_output_dir)
-
             execution_time = time.time() - start_time
 
-            result = EfficientTestGenerationResult(
+            result = EfficientTestDiscoveryResult(
                 library_usage_summary=library_usage,
                 test_discovery_result=test_discovery,
-                focused_test_result=focused_tests,
                 total_execution_time=execution_time,
                 pipeline_success=True,
-                output_directory=final_output_dir,
             )
 
             self.logger.info(
-                f"Efficient test generation completed successfully in {execution_time:.2f}s"
+                f"Efficient test discovery completed successfully in {execution_time:.2f}s"
             )
 
             return result
 
         except Exception as e:
             execution_time = time.time() - start_time
-            self.logger.error(f"Efficient test generation pipeline failed: {e}")
+            self.logger.error(f"Efficient test discovery pipeline failed: {e}")
 
-            return EfficientTestGenerationResult(
+            return EfficientTestDiscoveryResult(
                 library_usage_summary=LibraryUsageSummary(target_library, 0),
-                test_discovery_result=TestDiscoveryResult(0),
-                focused_test_result=TestGenerationResult([], target_library, 0, 0, 0.0),
+                test_discovery_result=CallGraphTestDiscoveryResult(
+                    total_nodes=0,
+                    test_nodes=0,
+                    library_usage_nodes=0,
+                    coverage_paths=[],
+                    uncovered_usages=[],
+                    coverage_percentage=0.0,
+                ),
                 total_execution_time=execution_time,
                 pipeline_success=False,
-                output_directory=output_dir
-                or str(self.project_root / "generated_library_tests"),
             )
 
     def _create_empty_result(
         self, target_library: str, execution_time: float
-    ) -> EfficientTestGenerationResult:
+    ) -> EfficientTestDiscoveryResult:
         """Create an empty result when no library usage is found."""
-        return EfficientTestGenerationResult(
+        return EfficientTestDiscoveryResult(
             library_usage_summary=LibraryUsageSummary(target_library, 0),
-            test_discovery_result=TestDiscoveryResult(0),
-            focused_test_result=TestGenerationResult([], target_library, 0, 0, 0.0),
+            test_discovery_result=CallGraphTestDiscoveryResult(
+                total_nodes=0,
+                test_nodes=0,
+                library_usage_nodes=0,
+                coverage_paths=[],
+                uncovered_usages=[],
+                coverage_percentage=0.0,
+            ),
             total_execution_time=execution_time,
             pipeline_success=True,
-            output_directory=str(self.project_root / "generated_library_tests"),
         )
 
-    async def _validate_generated_tests(self, test_dir: str) -> bool:
-        """Validate that generated tests can be executed with pytest.
-
-        Args:
-            test_dir: Directory containing generated tests
-
-        Returns:
-            True if tests pass validation, False otherwise
-        """
-        if not self.mcp_manager.is_server_available(MCPServerType.TESTING):
-            self.logger.info(
-                "Testing MCP server not available, skipping test validation"
-            )
-            return True
-
-        try:
-            self.logger.info("Validating generated tests with pytest...")
-
-            result = await self.mcp_manager.call_tool(
-                MCPServerType.TESTING,
-                "run_tests",
-                {
-                    "test_path": test_dir,
-                    "collect_only": True,  # Only check if tests can be collected
-                    "verbose": True,
-                },
-            )
-
-            if result and result.get("success"):
-                self.logger.info("Generated tests passed validation")
-                return True
-            else:
-                self.logger.warning(f"Generated tests failed validation: {result}")
-                return False
-
-        except Exception as e:
-            self.logger.warning(f"Error validating generated tests: {e}")
-            return False
-
-    def get_generation_summary(
-        self, result: EfficientTestGenerationResult
+    def get_discovery_summary(
+        self, result: EfficientTestDiscoveryResult
     ) -> Dict[str, Any]:
-        """Get a summary of the generation results.
+        """Get a summary of the discovery results.
 
         Args:
             result: Pipeline results
@@ -231,17 +172,19 @@ class EfficientTestGenerator:
                 "used_functions": len(result.library_usage_summary.used_functions),
                 "used_classes": len(result.library_usage_summary.used_classes),
             },
-            "existing_test_coverage": {
-                "total_tests_found": result.test_discovery_result.total_tests_found,
-                "relevant_tests": len(result.test_discovery_result.relevant_tests),
+            "test_coverage": {
+                "total_tests_found": result.test_discovery_result.test_nodes,
+                "total_nodes": result.test_discovery_result.total_nodes,
                 "coverage_percentage": result.test_discovery_result.coverage_percentage,
-                "covered_usages": len(result.test_discovery_result.usage_coverage),
+                "covered_usages": len(result.test_discovery_result.coverage_paths),
                 "uncovered_usages": len(result.test_discovery_result.uncovered_usages),
+                "coverage_paths": [
+                    {
+                        "test_function": f"{path.test_node.file_path}::{path.test_node.function_name}",
+                        "usage_location": f"{path.library_usage.file_path}::{path.library_usage.function_name}",
+                        "call_chain_depth": path.depth,
+                    }
+                    for path in result.test_discovery_result.coverage_paths
+                ],
             },
-            "generated_tests": {
-                "tests_generated": result.focused_test_result.tests_generated,
-                "success_rate": result.focused_test_result.generation_success_rate,
-                "total_usage_points_targeted": result.focused_test_result.total_usage_points,
-            },
-            "output_directory": result.output_directory,
         }

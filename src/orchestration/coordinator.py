@@ -309,11 +309,9 @@ class DiversificationCoordinator:
         try:
             self.logger.info("Starting efficient test generation workflow")
 
-            # Use the new efficient test generation pipeline
-            generation_result = await self.efficient_test_generator.generate_efficient_tests(
+            # Use the efficient test discovery pipeline
+            generation_result = await self.efficient_test_generator.discover_test_coverage(
                 target_library=self.source_library,  # Analyze usage of the source library
-                llm_config=self.llm_config,
-                output_dir=None,  # Use default location
             )
 
             if not generation_result.pipeline_success:
@@ -322,21 +320,21 @@ class DiversificationCoordinator:
                     "error": "Efficient test generation pipeline failed",
                 }
 
-            # Get generation summary
-            summary = self.efficient_test_generator.get_generation_summary(
+            # Get discovery summary
+            summary = self.efficient_test_generator.get_discovery_summary(
                 generation_result
             )
 
             self.logger.info(
-                f"Generated {summary['generated_tests']['tests_generated']} focused tests "
-                f"covering {summary['library_usage']['total_usages']} library usages"
+                f"Discovered {summary['test_coverage']['covered_usages']} covered "
+                f"and {summary['test_coverage']['uncovered_usages']} uncovered "
+                f"library usages ({summary['test_coverage']['coverage_percentage']:.1f}% coverage)"
             )
 
             return {
                 "success": True,
-                "generation_result": generation_result,
+                "discovery_result": generation_result,
                 "summary": summary,
-                "output_directory": generation_result.output_directory,
                 "execution_time": generation_result.total_execution_time,
             }
 
@@ -357,12 +355,23 @@ class DiversificationCoordinator:
                     "error": "No test generation results available",
                 }
 
-            generation_result = generate_step.result.get("generation_result")
+            generation_result = generate_step.result.get("discovery_result")
             if not generation_result:
-                return {"success": False, "error": "No generation results available"}
+                return {"success": False, "error": "No discovery results available"}
 
-            # Check if tests were generated
-            if generation_result.focused_test_result.tests_generated == 0:
+            # Since we only do test discovery now, skip test execution
+            self.logger.info(
+                "Test discovery completed - no test generation in this version"
+            )
+            return {
+                "success": True,
+                "test_results": {
+                    "note": "Test discovery only - no tests generated to execute"
+                },
+            }
+
+            # Old logic kept for reference (tests_generated no longer exists)
+            if False:
                 self.logger.warning(
                     "No tests were generated, skipping baseline test execution"
                 )
@@ -486,16 +495,26 @@ class DiversificationCoordinator:
                     "error": "No test generation results available for validation",
                 }
 
-            generation_result = generate_step.result.get("generation_result")
+            generation_result = generate_step.result.get("discovery_result")
             if not generation_result:
                 return {
                     "success": False,
-                    "error": "No generation results available for validation",
+                    "error": "No discovery results available for validation",
                 }
 
-            # Check if tests were generated
-            if generation_result.focused_test_result.tests_generated == 0:
-                self.logger.warning("No tests available for migration validation")
+            # Since we only do test discovery now, skip validation
+            self.logger.info(
+                "Test discovery completed - no test generation for validation"
+            )
+            return {
+                "success": True,
+                "test_results": {
+                    "note": "Test discovery only - no tests generated to validate"
+                },
+            }
+
+            # Old logic kept for reference (tests_generated no longer exists)
+            if False:
                 return {
                     "success": True,
                     "test_results": {"note": "No tests available for validation"},

@@ -40,7 +40,7 @@ class CallGraphNode:
 
 
 @dataclass
-class TestCoveragePath:
+class CoveragePath:
     """Represents a path from a test function to library usage."""
 
     test_node: CallGraphNode
@@ -62,7 +62,7 @@ class CallGraphTestDiscoveryResult:
     total_nodes: int
     test_nodes: int
     library_usage_nodes: int
-    coverage_paths: List[TestCoveragePath] = field(default_factory=list)
+    coverage_paths: List[CoveragePath] = field(default_factory=list)
     uncovered_usages: List[LibraryUsageLocation] = field(default_factory=list)
     coverage_percentage: float = 0.0
 
@@ -377,13 +377,12 @@ class CallGraphTestDiscoveryAnalyzer:
         self.call_graph: Dict[str, CallGraphNode] = {}
 
     async def discover_test_coverage(
-        self, library_usage: LibraryUsageSummary, target_library: str
+        self, library_usage: LibraryUsageSummary
     ) -> CallGraphTestDiscoveryResult:
         """Discover test coverage using call graph analysis.
 
         Args:
             library_usage: Summary of library usage in the project
-            target_library: Name of the target library
 
         Returns:
             Test discovery results with call graph analysis
@@ -461,14 +460,14 @@ class CallGraphTestDiscoveryAnalyzer:
 
     async def _find_test_coverage_paths(
         self, usage_location: LibraryUsageLocation
-    ) -> List[TestCoveragePath]:
+    ) -> List[CoveragePath]:
         """Find all paths from test functions to a library usage location.
 
         Args:
             usage_location: Library usage location to find coverage for
 
         Returns:
-            List of test coverage paths
+            List of coverage paths
         """
         # Find the node containing this usage
         usage_node = None
@@ -494,7 +493,7 @@ class CallGraphTestDiscoveryAnalyzer:
             """Recursively traverse backwards to find test functions."""
             # Add current node to path
             current_path = [current_node] + path
-            
+
             # Check for cycles (prevents infinite loops)
             if len(current_path) != len(set(node.full_name for node in current_path)):
                 return
@@ -502,7 +501,7 @@ class CallGraphTestDiscoveryAnalyzer:
             # If we reached a test function, create a coverage path
             if current_node.node_type == NodeType.TEST_FUNCTION:
                 coverage_paths.append(
-                    TestCoveragePath(
+                    CoveragePath(
                         test_node=current_node,
                         library_usage=usage_location,
                         call_chain=current_path.copy(),

@@ -9,7 +9,7 @@ from src.orchestration.test_generation.call_graph_test_discovery import (
     CallGraphBuilder,
     CallGraphNode,
     NodeType,
-    TestCoveragePath,
+    CoveragePath,
 )
 from src.orchestration.test_generation.library_usage_analyzer import (
     LibraryUsageSummary,
@@ -321,9 +321,7 @@ class TestCallGraphTestDiscoveryAnalyzer:
             "build_call_graph",
             return_value=sample_call_graph,
         ):
-            result = await analyzer.discover_test_coverage(
-                sample_library_usage, "requests"
-            )
+            result = await analyzer.discover_test_coverage(sample_library_usage)
 
         # Should find one coverage path: test_fetch_data -> fetch_data -> make_request (library usage)
         assert len(result.coverage_paths) == 1
@@ -537,8 +535,8 @@ class TestCallGraphTestDiscoveryAnalyzer:
         )
         assert method_node.full_name == "/src/api.py::APIClient::fetch"
 
-    def test_test_coverage_path_depth(self):
-        """Test TestCoveragePath depth calculation."""
+    def test_coverage_path_depth(self):
+        """Test CoveragePath depth calculation."""
         test_node = CallGraphNode(
             file_path="/tests/test.py",
             function_name="test_func",
@@ -558,7 +556,7 @@ class TestCallGraphTestDiscoveryAnalyzer:
         )
 
         # Direct call (depth 1)
-        direct_path = TestCoveragePath(
+        direct_path = CoveragePath(
             test_node=test_node, library_usage=usage_location, call_chain=[test_node]
         )
         assert direct_path.depth == 1
@@ -571,7 +569,7 @@ class TestCallGraphTestDiscoveryAnalyzer:
             "/src/mid2.py", "func2", None, 12, NodeType.FUNCTION
         )
 
-        indirect_path = TestCoveragePath(
+        indirect_path = CoveragePath(
             test_node=test_node,
             library_usage=usage_location,
             call_chain=[test_node, intermediate1, intermediate2],

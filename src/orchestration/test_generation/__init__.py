@@ -2,7 +2,7 @@
 
 from .efficient_test_generator import (
     EfficientTestGenerator,
-    EfficientTestGenerationResult,
+    EfficientTestDiscoveryResult,
 )
 from .library_usage_analyzer import (
     LibraryUsageAnalyzer,
@@ -10,30 +10,24 @@ from .library_usage_analyzer import (
     LibraryUsageLocation,
     LibraryUsageType,
 )
-from .test_discovery import (
-    TestDiscoveryAnalyzer,
-    TestDiscoveryResult,
-    TestFunction,
-    TestCoverage,
-)
-from .focused_test_generator import (
-    FocusedTestGenerator,
-    TestGenerationResult,
-    GeneratedTest,
+from .call_graph_test_discovery import (
+    CallGraphTestDiscoveryAnalyzer,
+    CallGraphTestDiscoveryResult,
+    CoveragePath,
+    CallGraphNode,
+    NodeType,
 )
 
 __all__ = [
     "EfficientTestGenerator",
-    "EfficientTestGenerationResult",
+    "EfficientTestDiscoveryResult",
     "LibraryUsageAnalyzer",
     "LibraryUsageSummary",
     "LibraryUsageLocation",
     "LibraryUsageType",
-    "TestDiscoveryAnalyzer",
-    "TestDiscoveryResult",
-    "TestFunction",
-    "TestCoverage",
-    "FocusedTestGenerator",
-    "TestGenerationResult",
-    "GeneratedTest",
+    "CallGraphTestDiscoveryAnalyzer",
+    "CallGraphTestDiscoveryResult",
+    "CoveragePath",
+    "CallGraphNode",
+    "NodeType",
 ]
