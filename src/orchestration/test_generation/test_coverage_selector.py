@@ -27,20 +27,26 @@ class TestCoverageSelectionResult:
 class TestCoverageSelector:
     """Main pipeline for selecting tests that cover library usage based on call graph analysis."""
 
-    def __init__(self, project_root: str, mcp_manager: MCPManager):
+    def __init__(
+        self, project_root: str, mcp_manager: MCPManager, test_path: str = "tests/"
+    ):
         """Initialize the test coverage selection pipeline.
 
         Args:
             project_root: Root directory of the project
             mcp_manager: MCP manager for operations
+            test_path: Relative path to test directory (e.g., "tests/" or "app/tests/")
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
+        self.test_path = test_path
         self.logger = logging.getLogger("diversifier.test_coverage_selector")
 
         # Initialize components
         self.usage_analyzer = LibraryUsageAnalyzer(project_root, mcp_manager)
-        self.test_discovery = CallGraphTestDiscoveryAnalyzer(project_root, mcp_manager)
+        self.test_discovery = CallGraphTestDiscoveryAnalyzer(
+            project_root, mcp_manager, test_path
+        )
 
     async def select_test_coverage(
         self,
@@ -87,9 +93,22 @@ class TestCoverageSelector:
                 library_usage
             )
 
+            # Count unique covered usages using a safe approach (avoid hashing dataclass objects)
+            covered_usage_ids = set()
+            for path in test_discovery.coverage_paths:
+                usage = path.library_usage
+                usage_id = (
+                    usage.file_path,
+                    usage.line_number,
+                    usage.column_offset,
+                    usage.usage_context,
+                )
+                covered_usage_ids.add(usage_id)
+            covered_usages = len(covered_usage_ids)
             self.logger.info(
-                f"Test coverage: {len(test_discovery.coverage_paths)}/{library_usage.total_usages} "
-                f"usages covered ({test_discovery.coverage_percentage:.1f}%)"
+                f"Static analysis found {len(test_discovery.coverage_paths)} test paths "
+                f"covering {covered_usages}/{library_usage.total_usages} library usages "
+                f"({test_discovery.coverage_percentage:.1f}%)"
             )
 
             execution_time = time.time() - start_time

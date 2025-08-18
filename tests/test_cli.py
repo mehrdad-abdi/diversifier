@@ -81,10 +81,13 @@ class TestMainFunction:
         mock_get_config,
     ):
 
-        # Mock LLM config
+        # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
+        mock_migration_config = Mock()
+        mock_migration_config.test_path = "tests/"
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
+        mock_config.migration = mock_migration_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (True, [])
@@ -118,10 +121,13 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_get_config
     ):
 
-        # Mock LLM config
+        # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
+        mock_migration_config = Mock()
+        mock_migration_config.test_path = "tests/"
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
+        mock_config.migration = mock_migration_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (
@@ -166,10 +172,13 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
 
-        # Mock LLM config
+        # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
+        mock_migration_config = Mock()
+        mock_migration_config.test_path = "tests/"
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
+        mock_config.migration = mock_migration_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (True, [])
@@ -195,10 +204,13 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
 
-        # Mock LLM config
+        # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
+        mock_migration_config = Mock()
+        mock_migration_config.test_path = "tests/"
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
+        mock_config.migration = mock_migration_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (True, [])
@@ -232,10 +244,13 @@ class TestMainFunction:
         mock_get_config,
     ):
 
-        # Mock LLM config
+        # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
+        mock_migration_config = Mock()
+        mock_migration_config.test_path = "tests/"
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
+        mock_config.migration = mock_migration_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (True, [])

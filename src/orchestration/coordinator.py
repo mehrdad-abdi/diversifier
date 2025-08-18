@@ -10,7 +10,7 @@ from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
 from .test_generation import TestCoverageSelector
-from .config import LLMConfig
+from .config import LLMConfig, MigrationConfig
 
 
 class DiversificationCoordinator:
@@ -22,6 +22,7 @@ class DiversificationCoordinator:
         source_library: str,
         target_library: str,
         llm_config: Optional[LLMConfig] = None,
+        migration_config: Optional["MigrationConfig"] = None,
     ):
         """Initialize the diversification coordinator.
 
@@ -30,6 +31,7 @@ class DiversificationCoordinator:
             source_library: Library to migrate from
             target_library: Library to migrate to
             llm_config: LLM configuration to use. If None, uses global config.
+            migration_config: Migration configuration including test_path. If None, uses defaults.
         """
         self.project_path = Path(project_path).resolve()
         self.source_library = source_library
@@ -39,6 +41,11 @@ class DiversificationCoordinator:
                 "llm_config is required - no default configuration available"
             )
         self.llm_config = llm_config
+
+        # Use provided migration config or create default
+        if migration_config is None:
+            migration_config = MigrationConfig()
+        self.migration_config = migration_config
 
         # Initialize components
         self.agent_manager = AgentManager(llm_config=self.llm_config)
@@ -54,7 +61,7 @@ class DiversificationCoordinator:
 
         # Initialize test coverage selection components
         self.test_coverage_selector = TestCoverageSelector(
-            str(self.project_path), self.mcp_manager
+            str(self.project_path), self.mcp_manager, self.migration_config.test_path
         )
 
         self.logger = logging.getLogger("diversifier.coordinator")

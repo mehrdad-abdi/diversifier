@@ -85,12 +85,47 @@ def TestClassExample():
         async_node = builder.nodes["/src/example.py::MyClass::async_method"]
         assert async_node.node_type == NodeType.METHOD
 
-        # Check test function nodes
+        # Check test-named functions in source (should be regular functions, not test functions)
         test_node = builder.nodes["/src/example.py::test_something"]
-        assert test_node.node_type == NodeType.TEST_FUNCTION
+        assert (
+            test_node.node_type == NodeType.FUNCTION
+        )  # Not TEST_FUNCTION because not in test dir
 
         test_class_node = builder.nodes["/src/example.py::TestClassExample"]
+        assert (
+            test_class_node.node_type == NodeType.FUNCTION
+        )  # Not TEST_FUNCTION because not in test dir
+
+    @pytest.mark.asyncio
+    async def test_create_nodes_from_test_file(self, builder):
+        """Test creating nodes from a file in the test directory."""
+        test_file_content = """
+def test_function():
+    assert True
+
+def TestClass():
+    pass
+    
+def regular_function():
+    return "not a test"
+"""
+
+        with patch.object(builder, "_read_file", return_value=test_file_content):
+            await builder._create_nodes_from_file("/tests/test_module.py")
+
+        # Should create 3 nodes
+        assert len(builder.nodes) == 3
+
+        # Check test function is identified as TEST_FUNCTION
+        test_node = builder.nodes["/tests/test_module.py::test_function"]
+        assert test_node.node_type == NodeType.TEST_FUNCTION
+
+        test_class_node = builder.nodes["/tests/test_module.py::TestClass"]
         assert test_class_node.node_type == NodeType.TEST_FUNCTION
+
+        # Regular function should still be FUNCTION even in test directory
+        regular_node = builder.nodes["/tests/test_module.py::regular_function"]
+        assert regular_node.node_type == NodeType.FUNCTION
 
     @pytest.mark.asyncio
     async def test_establish_call_relationships_simple(self, builder):
@@ -823,3 +858,23 @@ class TestCallGraphTestDiscoveryAnalyzer:
                 expected_chain = ["test_direct", "low_level"]
                 actual_chain = [node.function_name for node in path.call_chain]
                 assert actual_chain == expected_chain
+
+    def test_configurable_test_path(self, mock_mcp_manager, tmp_path):
+        """Test that CallGraphTestDiscoveryAnalyzer uses configurable test path."""
+        # Test with custom test path
+        custom_test_path = "app/tests"
+        analyzer = CallGraphTestDiscoveryAnalyzer(
+            str(tmp_path), mock_mcp_manager, custom_test_path
+        )
+
+        assert analyzer.test_path == custom_test_path
+        assert analyzer.call_graph_builder.test_path == custom_test_path
+
+        # Test _is_test_file method
+        assert analyzer.call_graph_builder._is_test_file("app/tests/test_module.py")
+        assert analyzer.call_graph_builder._is_test_file(
+            "app/tests/subfolder/test_utils.py"
+        )
+        assert not analyzer.call_graph_builder._is_test_file("tests/test_module.py")
+        assert not analyzer.call_graph_builder._is_test_file("src/module.py")
+        assert not analyzer.call_graph_builder._is_test_file("app/src/utils.py")

@@ -42,6 +42,7 @@ class MigrationConfig:
     validate_syntax: bool = True
     require_test_coverage: bool = True
     min_test_coverage: float = 0.8
+    test_path: str = "tests/"  # Relative path to test directory
     allowed_library_pairs: List[tuple] = field(
         default_factory=lambda: [
             ("requests", "httpx"),
@@ -404,6 +405,7 @@ backup_original = true
 validate_syntax = true
 require_test_coverage = true
 min_test_coverage = 0.8
+test_path = "tests/"
 
 [performance]
 enable_metrics = true

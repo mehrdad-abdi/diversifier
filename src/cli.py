@@ -98,6 +98,7 @@ async def run_diversification(args) -> int:
             source_library=args.remove_lib,
             target_library=args.inject_lib,
             llm_config=config.llm,
+            migration_config=config.migration,
         )
 
         # Execute workflow
