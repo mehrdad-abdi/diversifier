@@ -97,7 +97,12 @@ class TestCoverageSelector:
             covered_usage_ids = set()
             for path in test_discovery.coverage_paths:
                 usage = path.library_usage
-                usage_id = (usage.file_path, usage.line_number, usage.column_offset, usage.usage_context)
+                usage_id = (
+                    usage.file_path,
+                    usage.line_number,
+                    usage.column_offset,
+                    usage.usage_context,
+                )
                 covered_usage_ids.add(usage_id)
             covered_usages = len(covered_usage_ids)
             self.logger.info(

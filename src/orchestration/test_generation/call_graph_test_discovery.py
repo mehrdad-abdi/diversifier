@@ -9,7 +9,11 @@ from typing import Dict, List, Optional, Set
 from enum import Enum
 
 from ..mcp_manager import MCPManager, MCPServerType
-from .library_usage_analyzer import LibraryUsageSummary, LibraryUsageLocation, LibraryUsageType
+from .library_usage_analyzer import (
+    LibraryUsageSummary,
+    LibraryUsageLocation,
+    LibraryUsageType,
+)
 
 
 class NodeType(Enum):
@@ -460,12 +464,22 @@ class CallGraphTestDiscoveryAnalyzer:
         for path in coverage_paths:
             usage = path.library_usage
             # Create a unique identifier for each usage location
-            usage_id = (usage.file_path, usage.line_number, usage.column_offset, usage.usage_context)
+            usage_id = (
+                usage.file_path,
+                usage.line_number,
+                usage.column_offset,
+                usage.usage_context,
+            )
             covered_usage_ids.add(usage_id)
-        
+
         uncovered_usages = []
         for usage in library_usage.usage_locations:
-            usage_id = (usage.file_path, usage.line_number, usage.column_offset, usage.usage_context)
+            usage_id = (
+                usage.file_path,
+                usage.line_number,
+                usage.column_offset,
+                usage.usage_context,
+            )
             if usage_id not in covered_usage_ids:
                 uncovered_usages.append(usage)
 
@@ -542,7 +556,8 @@ class CallGraphTestDiscoveryAnalyzer:
         if not usage_node:
             # For module-level imports, find coverage through actual library usage in functions
             if usage_location.function_name is None and usage_location.usage_type in [
-                LibraryUsageType.IMPORT, LibraryUsageType.FROM_IMPORT
+                LibraryUsageType.IMPORT,
+                LibraryUsageType.FROM_IMPORT,
             ]:
                 self.logger.debug(
                     f"Module-level import detected: {usage_location.usage_context}. "
