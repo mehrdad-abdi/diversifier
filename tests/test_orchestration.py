@@ -1,6 +1,7 @@
 """Tests for orchestration system components."""
 
 import pytest
+import subprocess
 import tempfile
 import logging
 import os
@@ -937,62 +938,59 @@ class TestDiversificationCoordinator:
 
     def test_mcp_manager_emergency_shutdown(self):
         """Test emergency shutdown of MCP manager."""
-        from unittest.mock import Mock, patch
-        
+
         # Create a mock MCP manager with connections
         mcp_manager = MCPManager(project_root=".")
-        
+
         # Create mock connection with process
         mock_process = Mock()
         mock_client = Mock()
         mock_client.process = mock_process
-        
+
         mock_connection = Mock()
-        mock_connection.is_connected = True  
+        mock_connection.is_connected = True
         mock_connection.client = mock_client
-        
+
         # Add mock connection to manager
         mcp_manager.connections[MCPServerType.FILESYSTEM] = mock_connection
-        
+
         # Test emergency shutdown
         mcp_manager.emergency_shutdown()
-        
+
         # Verify process was terminated
         mock_process.terminate.assert_called_once()
         mock_process.wait.assert_called_once_with(timeout=2)
-        
+
         # Verify connections were cleared
         assert len(mcp_manager.connections) == 0
 
     def test_mcp_manager_emergency_shutdown_with_kill(self):
         """Test emergency shutdown when terminate times out."""
-        from unittest.mock import Mock, patch
-        import subprocess
-        
+
         # Create a mock MCP manager with connections
         mcp_manager = MCPManager(project_root=".")
-        
+
         # Create mock connection with process that times out
         mock_process = Mock()
         mock_process.wait.side_effect = subprocess.TimeoutExpired("cmd", 2)
         mock_client = Mock()
         mock_client.process = mock_process
-        
+
         mock_connection = Mock()
         mock_connection.is_connected = True
         mock_connection.client = mock_client
-        
+
         # Add mock connection to manager
         mcp_manager.connections[MCPServerType.GIT] = mock_connection
-        
+
         # Test emergency shutdown
         mcp_manager.emergency_shutdown()
-        
+
         # Verify process was terminated then killed
         mock_process.terminate.assert_called_once()
         mock_process.wait.assert_called_once_with(timeout=2)
         mock_process.kill.assert_called_once()
-        
+
         # Verify connections were cleared
         assert len(mcp_manager.connections) == 0
 

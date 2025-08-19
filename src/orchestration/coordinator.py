@@ -1,5 +1,6 @@
 """High-level workflow orchestration coordinator."""
 
+import json
 import logging
 import subprocess
 import time
@@ -417,30 +418,45 @@ class DiversificationCoordinator:
                     MCPServerType.TESTING,
                     "run_specific_tests",
                     {
-                        "project_path": str(self.project_path),
                         "test_specs": list(test_functions),
+                        "verbose": True,
                         "capture_output": True,
                     },
                 )
 
-                if test_result and test_result.get("status") == "success":
-                    results = test_result.get("results", {})
-                    self.logger.info(
-                        f"Baseline tests completed: {results.get('passed', 0)} passed, "
-                        f"{results.get('failed', 0)} failed"
-                    )
+                if test_result and "result" in test_result:
+                    # Parse JSON response from MCP server
+                    try:
+                        response_text = test_result["result"][0]["text"]
+                        parsed_result = json.loads(response_text)
 
-                    return {
-                        "success": True,
-                        "test_results": {
-                            "tests_executed": results.get("total", len(test_functions)),
-                            "passed": results.get("passed", 0),
-                            "failed": results.get("failed", 0),
-                            "duration": results.get("duration", 0.0),
-                            "selected_tests": list(test_functions),
-                            "output": results.get("output", ""),
-                        },
-                    }
+                        if parsed_result.get("status") == "success":
+                            results = parsed_result.get("results", {})
+                            self.logger.info(
+                                f"Baseline tests completed: {results.get('passed', 0)} passed, "
+                                f"{results.get('failed', 0)} failed"
+                            )
+
+                            return {
+                                "success": True,
+                                "test_results": {
+                                    "tests_executed": results.get(
+                                        "total", len(test_functions)
+                                    ),
+                                    "passed": results.get("passed", 0),
+                                    "failed": results.get("failed", 0),
+                                    "duration": results.get("duration", 0.0),
+                                    "selected_tests": list(test_functions),
+                                    "output": parsed_result.get("output", ""),
+                                },
+                            }
+                        else:
+                            self.logger.error(
+                                f"MCP test execution failed: {parsed_result.get('error', 'Unknown error')}"
+                            )
+                    except (json.JSONDecodeError, KeyError, IndexError) as e:
+                        self.logger.error(f"Failed to parse MCP server response: {e}")
+                        self.logger.debug(f"Raw MCP response: {test_result}")
                 else:
                     self.logger.warning(
                         "Testing MCP server failed, using fallback execution"
