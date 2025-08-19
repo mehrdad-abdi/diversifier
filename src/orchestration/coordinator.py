@@ -1,6 +1,9 @@
 """High-level workflow orchestration coordinator."""
 
 import logging
+import subprocess
+import time
+import re
 from typing import Dict, Any, Optional
 from pathlib import Path
 
@@ -366,20 +369,187 @@ class DiversificationCoordinator:
             if not selection_result:
                 return {"success": False, "error": "No selection results available"}
 
-            # Since we only do test selection now, skip test execution
+            # Extract test functions that cover library usage
+            coverage_paths = selection_result.test_discovery_result.coverage_paths
+            if not coverage_paths:
+                self.logger.info("No test coverage found for the selected library")
+                return {
+                    "success": True,
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": 0,
+                        "note": "No tests cover the selected library usage",
+                    },
+                }
+
+            # Collect unique test functions to execute
+            test_functions = set()
+            for path in coverage_paths:
+                test_node = path.test_node
+                # Format as pytest can understand: file_path::function_name
+                test_spec = f"{test_node.file_path}::{test_node.function_name}"
+                test_functions.add(test_spec)
+
             self.logger.info(
-                "Test coverage selection completed - no test generation in this version"
+                f"Found {len(test_functions)} unique tests covering library usage"
             )
-            return {
-                "success": True,
-                "test_results": {
-                    "note": "Test coverage selection only - no tests generated to execute"
-                },
-            }
+
+            if self.dry_run:
+                self.logger.info("Dry run: Skipping actual test execution")
+                return {
+                    "success": True,
+                    "test_results": {
+                        "tests_executed": len(test_functions),
+                        "passed": len(test_functions),
+                        "failed": 0,
+                        "note": "Dry run - tests not actually executed",
+                        "selected_tests": list(test_functions),
+                    },
+                }
+
+            # Use Testing MCP server if available, otherwise fallback to direct execution
+            if self.mcp_manager.is_server_available(MCPServerType.TESTING):
+                self.logger.info("Using Testing MCP server to execute tests")
+
+                # Execute tests via MCP server
+                test_result = await self.mcp_manager.call_tool(
+                    MCPServerType.TESTING,
+                    "run_specific_tests",
+                    {
+                        "project_path": str(self.project_path),
+                        "test_specs": list(test_functions),
+                        "capture_output": True,
+                    },
+                )
+
+                if test_result and test_result.get("status") == "success":
+                    results = test_result.get("results", {})
+                    self.logger.info(
+                        f"Baseline tests completed: {results.get('passed', 0)} passed, "
+                        f"{results.get('failed', 0)} failed"
+                    )
+
+                    return {
+                        "success": True,
+                        "test_results": {
+                            "tests_executed": results.get("total", len(test_functions)),
+                            "passed": results.get("passed", 0),
+                            "failed": results.get("failed", 0),
+                            "duration": results.get("duration", 0.0),
+                            "selected_tests": list(test_functions),
+                            "output": results.get("output", ""),
+                        },
+                    }
+                else:
+                    self.logger.warning(
+                        "Testing MCP server failed, using fallback execution"
+                    )
+
+            # Fallback: direct pytest execution
+            self.logger.info("Using direct pytest execution as fallback")
+            return await self._run_tests_directly(test_functions)
 
         except Exception as e:
             self.logger.error(f"Baseline test execution failed: {e}")
             return {"success": False, "error": str(e)}
+
+    async def _run_tests_directly(self, test_functions: set) -> Dict[str, Any]:
+        """Run tests directly using subprocess as fallback.
+
+        Args:
+            test_functions: Set of test specifications to run
+
+        Returns:
+            Test results dictionary
+        """
+        try:
+            self.logger.info(
+                f"Running {len(test_functions)} tests directly with pytest"
+            )
+
+            # Create pytest command with specific test functions
+            cmd = ["python", "-m", "pytest", "-v"]
+            cmd.extend(list(test_functions))
+
+            start_time = time.time()
+
+            # Run pytest and capture output
+            result = subprocess.run(
+                cmd,
+                cwd=str(self.project_path),
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout
+            )
+
+            duration = time.time() - start_time
+
+            # Parse pytest output to extract results
+            output_lines = result.stdout.split("\n")
+            passed = failed = 0
+
+            # Look for pytest summary line (e.g., "2 passed, 1 failed in 1.23s")
+            for line in reversed(output_lines):
+                if "passed" in line or "failed" in line:
+                    # Extract numbers from summary line
+                    passed_match = re.search(r"(\d+) passed", line)
+                    failed_match = re.search(r"(\d+) failed", line)
+
+                    if passed_match:
+                        passed = int(passed_match.group(1))
+                    if failed_match:
+                        failed = int(failed_match.group(1))
+                    break
+
+            total_executed = passed + failed
+
+            self.logger.info(
+                f"Direct test execution completed: {passed} passed, {failed} failed "
+                f"in {duration:.2f}s"
+            )
+
+            # Determine success based on whether any tests failed
+            success = result.returncode == 0 and failed == 0
+
+            return {
+                "success": success,
+                "test_results": {
+                    "tests_executed": total_executed,
+                    "passed": passed,
+                    "failed": failed,
+                    "duration": duration,
+                    "selected_tests": list(test_functions),
+                    "output": result.stdout,
+                    "stderr": result.stderr,
+                    "return_code": result.returncode,
+                },
+            }
+
+        except subprocess.TimeoutExpired:
+            self.logger.error("Test execution timed out after 5 minutes")
+            return {
+                "success": False,
+                "error": "Test execution timed out",
+                "test_results": {
+                    "tests_executed": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "selected_tests": list(test_functions),
+                },
+            }
+        except Exception as e:
+            self.logger.error(f"Direct test execution failed: {e}")
+            return {
+                "success": False,
+                "error": f"Direct test execution failed: {e}",
+                "test_results": {
+                    "tests_executed": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "selected_tests": list(test_functions),
+                },
+            }
 
     async def _migrate_code(self) -> Dict[str, Any]:
         """Migrate from source to target library."""

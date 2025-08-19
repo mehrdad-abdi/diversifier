@@ -18,6 +18,17 @@ from src.orchestration.workflow import (
 )
 from src.orchestration.coordinator import DiversificationCoordinator
 from src.orchestration.error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from src.orchestration.test_generation import (
+    TestCoverageSelectionResult,
+    CallGraphTestDiscoveryResult,
+    CoveragePath,
+    CallGraphNode,
+    NodeType,
+    LibraryUsageLocation,
+    LibraryUsageType,
+    LibraryUsageSummary,
+)
+from src.orchestration.workflow import WorkflowStep
 from src.orchestration.logging_config import setup_logging, get_logger
 
 
@@ -765,6 +776,164 @@ class TestDiversificationCoordinator:
         assert "context" in status
         assert "current_stage" in status
         assert "total_steps" in status
+
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
+    @pytest.mark.asyncio
+    async def test_run_baseline_tests_with_coverage(self):
+        """Test _run_baseline_tests with test coverage results."""
+
+        llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+        coordinator = DiversificationCoordinator(
+            project_path=self.project_path,
+            source_library="requests",
+            target_library="httpx",
+            llm_config=llm_config,
+        )
+
+        # Mock test selection results with coverage paths
+        # Create mock test node
+        test_node = CallGraphNode(
+            file_path="tests/test_api.py",
+            function_name="test_get_request",
+            class_name=None,
+            line_number=10,
+            node_type=NodeType.TEST_FUNCTION,
+        )
+
+        # Create mock library usage location
+        library_usage = LibraryUsageLocation(
+            file_path="src/api.py",
+            line_number=20,
+            column_offset=8,
+            function_name="make_request",
+            usage_type=LibraryUsageType.FUNCTION_CALL,
+            usage_context="requests.get",
+        )
+
+        # Create coverage path
+        coverage_path = CoveragePath(
+            test_node=test_node,
+            library_usage=library_usage,
+            call_chain=[],
+        )
+
+        # Create test discovery result with coverage
+        test_discovery_result = CallGraphTestDiscoveryResult(
+            total_nodes=10,
+            test_nodes=3,
+            library_usage_nodes=5,
+            coverage_paths=[coverage_path],
+            uncovered_usages=[],
+            coverage_percentage=80.0,
+        )
+
+        # Create selection result
+        selection_result = TestCoverageSelectionResult(
+            library_usage_summary=LibraryUsageSummary("requests", 5),
+            test_discovery_result=test_discovery_result,
+            total_execution_time=1.5,
+            pipeline_success=True,
+        )
+
+        # Set up workflow state with mock select_tests step result
+        step = WorkflowStep(
+            name="select_tests",
+            stage=WorkflowStage.TEST_GENERATION,
+            description="Select existing tests that cover library usage",
+        )
+        step.complete({"selection_result": selection_result})
+
+        coordinator.workflow_state.steps["select_tests"] = step
+
+        # Mock direct test execution to avoid subprocess call
+        async def mock_run_tests_directly(test_functions):
+            return {
+                "success": True,
+                "test_results": {
+                    "tests_executed": 1,
+                    "passed": 1,
+                    "failed": 0,
+                    "duration": 0.5,
+                    "selected_tests": list(test_functions),
+                    "output": "test_get_request PASSED",
+                },
+            }
+
+        coordinator._run_tests_directly = mock_run_tests_directly
+
+        # Test the method
+        result = await coordinator._run_baseline_tests()
+
+        assert result["success"] is True
+        assert result["test_results"]["tests_executed"] == 1
+        assert result["test_results"]["passed"] == 1
+        assert result["test_results"]["failed"] == 0
+        assert (
+            "tests/test_api.py::test_get_request"
+            in result["test_results"]["selected_tests"]
+        )
+
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
+    @pytest.mark.asyncio
+    async def test_run_baseline_tests_no_coverage(self):
+        """Test _run_baseline_tests when no test coverage is found."""
+
+        llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+        coordinator = DiversificationCoordinator(
+            project_path=self.project_path,
+            source_library="requests",
+            target_library="httpx",
+            llm_config=llm_config,
+        )
+
+        # Mock test selection results with no coverage paths
+        # Create test discovery result without coverage
+        test_discovery_result = CallGraphTestDiscoveryResult(
+            total_nodes=10,
+            test_nodes=3,
+            library_usage_nodes=5,
+            coverage_paths=[],  # No coverage paths
+            uncovered_usages=[],
+            coverage_percentage=0.0,
+        )
+
+        # Create selection result
+        selection_result = TestCoverageSelectionResult(
+            library_usage_summary=LibraryUsageSummary("requests", 5),
+            test_discovery_result=test_discovery_result,
+            total_execution_time=1.5,
+            pipeline_success=True,
+        )
+
+        # Set up workflow state with mock select_tests step result
+        step = WorkflowStep(
+            name="select_tests",
+            stage=WorkflowStage.TEST_GENERATION,
+            description="Select existing tests that cover library usage",
+        )
+        step.complete({"selection_result": selection_result})
+
+        coordinator.workflow_state.steps["select_tests"] = step
+
+        # Test the method
+        result = await coordinator._run_baseline_tests()
+
+        assert result["success"] is True
+        assert result["test_results"]["tests_executed"] == 0
+        assert result["test_results"]["passed"] == 0
+        assert result["test_results"]["failed"] == 0
+        assert (
+            "No tests cover the selected library usage"
+            in result["test_results"]["note"]
+        )
 
 
 class TestErrorHandler:
