@@ -392,7 +392,7 @@ class TestMCPManager:
 
         with (
             patch.object(manager, "initialize_filesystem_server", return_value=True),
-            patch.object(manager, "initialize_testing_server", return_value=True),
+            patch.object(manager, "initialize_command_server", return_value=True),
             patch.object(manager, "initialize_git_server", return_value=True),
             patch.object(manager, "initialize_docker_server", return_value=True),
         ):
@@ -850,8 +850,8 @@ class TestDiversificationCoordinator:
 
         coordinator.workflow_state.steps["select_tests"] = step
 
-        # Mock direct test execution to avoid subprocess call
-        async def mock_run_tests_directly(test_functions):
+        # Mock LLM test execution to avoid actual test execution
+        async def mock_run_tests_with_llm(test_functions):
             return {
                 "success": True,
                 "test_results": {
@@ -861,10 +861,11 @@ class TestDiversificationCoordinator:
                     "duration": 0.5,
                     "selected_tests": list(test_functions),
                     "output": "test_get_request PASSED",
+                    "llm_powered": True,
                 },
             }
 
-        coordinator._run_tests_directly = mock_run_tests_directly
+        coordinator._run_tests_with_llm = mock_run_tests_with_llm
 
         # Test the method
         result = await coordinator._run_baseline_tests()
