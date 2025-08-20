@@ -1,8 +1,6 @@
 """High-level workflow orchestration coordinator."""
 
 import logging
-import subprocess
-import time
 import re
 from typing import Dict, Any, Optional
 from pathlib import Path
@@ -411,162 +409,11 @@ class DiversificationCoordinator:
 
             # Use LLM-powered test running for intelligent test execution
             self.logger.info("Using LLM-powered test runner to execute tests")
-            try:
-                result = await self._run_tests_with_llm(test_functions)
-                if result["success"]:
-                    return result
-                else:
-                    self.logger.warning(
-                        "LLM test execution failed, falling back to direct execution"
-                    )
-            except Exception as e:
-                self.logger.warning(
-                    f"LLM test execution error: {e}, falling back to direct execution"
-                )
-
-            # Fallback: direct pytest execution
-            self.logger.info("Using direct pytest execution as fallback")
-            return await self._run_tests_directly(test_functions)
+            return await self._run_tests_with_llm(test_functions)
 
         except Exception as e:
             self.logger.error(f"Baseline test execution failed: {e}")
             return {"success": False, "error": str(e)}
-
-    async def _run_tests_directly(self, test_functions: set) -> Dict[str, Any]:
-        """Run tests directly using subprocess as fallback.
-
-        Args:
-            test_functions: Set of test specifications to run
-
-        Returns:
-            Test results dictionary
-        """
-        try:
-            self.logger.info(
-                f"Running {len(test_functions)} tests directly with pytest"
-            )
-
-            # Create pytest command with specific test functions
-            cmd = ["python", "-m", "pytest", "-v"]
-            cmd.extend(list(test_functions))
-
-            start_time = time.time()
-
-            # Run pytest and capture output
-            result = subprocess.run(
-                cmd,
-                cwd=str(self.project_path),
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
-            )
-
-            duration = time.time() - start_time
-
-            # Parse pytest output to extract results
-            output_lines = result.stdout.split("\n")
-            passed = failed = skipped = 0
-
-            # Debug: Log the full output to understand the format
-            self.logger.debug(f"Pytest output:\n{result.stdout}")
-            if result.stderr:
-                self.logger.debug(f"Pytest stderr:\n{result.stderr}")
-
-            # Look for pytest summary line with multiple patterns
-
-            for line in output_lines:
-                line_lower = line.lower().strip()
-
-                # Look for the final summary line (usually has "=" characters)
-                if ("passed" in line_lower or "failed" in line_lower) and (
-                    "=" in line or "in " in line_lower
-                ):
-                    self.logger.debug(f"Found summary line: {line}")
-
-                    # Extract all numbers from this line
-                    passed_match = re.search(r"(\d+) passed", line_lower)
-                    failed_match = re.search(r"(\d+) failed", line_lower)
-                    error_match = re.search(r"(\d+) error", line_lower)
-                    skipped_match = re.search(r"(\d+) skipped", line_lower)
-
-                    if passed_match:
-                        passed = int(passed_match.group(1))
-                    if failed_match:
-                        failed = int(failed_match.group(1))
-                    if error_match:
-                        failed += int(error_match.group(1))  # Count errors as failed
-                    if skipped_match:
-                        skipped = int(skipped_match.group(1))
-                    break
-
-            # If we still haven't found results, try counting individual test results
-            if passed == 0 and failed == 0:
-                for line in output_lines:
-                    if " PASSED " in line:
-                        passed += 1
-                    elif " FAILED " in line or " ERROR " in line:
-                        failed += 1
-
-            total_executed = passed + failed
-
-            self.logger.info(
-                f"Direct test execution completed: {passed} passed, {failed} failed "
-                f"in {duration:.2f}s"
-            )
-
-            # Log additional debugging info
-            self.logger.info(f"Pytest return code: {result.returncode}")
-            self.logger.info(
-                f"Parsed results: {passed} passed, {failed} failed, {skipped} skipped"
-            )
-
-            # Determine success based on:
-            # 1. Pytest exit code is 0 (no test failures or errors)
-            # 2. No failed tests detected
-            # Note: It's okay if 0 tests were executed due to parsing issues,
-            # as long as pytest itself succeeded
-            success = result.returncode == 0
-
-            return {
-                "success": success,
-                "test_results": {
-                    "tests_executed": total_executed,
-                    "passed": passed,
-                    "failed": failed,
-                    "skipped": skipped,
-                    "duration": duration,
-                    "selected_tests": list(test_functions),
-                    "output": result.stdout,
-                    "stderr": result.stderr,
-                    "return_code": result.returncode,
-                    "test_specs_count": len(test_functions),  # For debugging
-                },
-            }
-
-        except subprocess.TimeoutExpired:
-            self.logger.error("Test execution timed out after 5 minutes")
-            return {
-                "success": False,
-                "error": "Test execution timed out",
-                "test_results": {
-                    "tests_executed": 0,
-                    "passed": 0,
-                    "failed": 0,
-                    "selected_tests": list(test_functions),
-                },
-            }
-        except Exception as e:
-            self.logger.error(f"Direct test execution failed: {e}")
-            return {
-                "success": False,
-                "error": f"Direct test execution failed: {e}",
-                "test_results": {
-                    "tests_executed": 0,
-                    "passed": 0,
-                    "failed": 0,
-                    "selected_tests": list(test_functions),
-                },
-            }
 
     async def _run_tests_with_llm(self, test_functions: set) -> Dict[str, Any]:
         """Run tests using LLM-powered intelligent test runner.
