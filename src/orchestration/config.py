@@ -43,6 +43,28 @@ class MigrationConfig:
     require_test_coverage: bool = True
     min_test_coverage: float = 0.8
     test_path: str = "tests/"  # Relative path to test directory
+    common_project_files: List[str] = field(
+        default_factory=lambda: [
+            "pyproject.toml",
+            "setup.py",
+            "requirements.txt",
+            "requirements-dev.txt",
+            "Pipfile",
+            "poetry.lock",
+            "package.json",
+            "Cargo.toml",
+            "go.mod",
+            "README.md",
+            "README.rst",
+            "tox.ini",
+            "pytest.ini",
+            ".pytest.ini",
+            "setup.cfg",
+            "Makefile",
+            "docker-compose.yml",
+            "Dockerfile",
+        ]
+    )
     allowed_library_pairs: List[tuple] = field(
         default_factory=lambda: [
             ("requests", "httpx"),

@@ -11,17 +11,20 @@ from langchain.chat_models import init_chat_model
 
 from ...mcp_servers.command.client import CommandMCPClient
 from ...mcp_servers.filesystem.client import FilesystemMCPClient
-from ..config import get_config
+from ..config import get_config, MigrationConfig
 
 
 class LLMTestRunner:
     """LLM-powered test runner that uses MCP servers for project analysis and test execution."""
 
-    def __init__(self, project_path: str):
+    def __init__(
+        self, project_path: str, migration_config: Optional[MigrationConfig] = None
+    ):
         """Initialize the LLM test runner.
 
         Args:
             project_path: Path to the target project
+            migration_config: Migration configuration. If None, uses defaults from global config.
         """
         self.project_path = Path(project_path).resolve()
 
@@ -35,6 +38,9 @@ class LLMTestRunner:
             max_tokens=config.llm.max_tokens,
             **config.llm.additional_params,
         )
+
+        # Store migration config for test analysis configuration
+        self.migration_config = migration_config or config.migration
 
         # MCP clients for different operations
         self.command_client: Optional[CommandMCPClient] = None
@@ -55,28 +61,9 @@ class LLMTestRunner:
         if not self.command_client or not self.filesystem_client:
             raise ValueError("MCP clients not initialized")
 
-        # Find common project files
+        # Find common project files from configuration
         project_files = []
-        common_files = [
-            "pyproject.toml",
-            "setup.py",
-            "requirements.txt",
-            "requirements-dev.txt",
-            "Pipfile",
-            "poetry.lock",
-            "package.json",
-            "Cargo.toml",
-            "go.mod",
-            "README.md",
-            "README.rst",
-            "tox.ini",
-            "pytest.ini",
-            ".pytest.ini",
-            "setup.cfg",
-            "Makefile",
-            "docker-compose.yml",
-            "Dockerfile",
-        ]
+        common_files = self.migration_config.common_project_files
 
         for filename in common_files:
             result = self.command_client.call_tool(
@@ -92,17 +79,17 @@ class LLMTestRunner:
                         }
                     )
 
-        # Find test directories
+        # Find test directories using configured test path
         test_dirs = []
-        common_test_dirs = ["tests", "test", "testing", "spec", "specs"]
+        test_path = self.migration_config.test_path.rstrip("/")
 
-        for dirname in common_test_dirs:
-            result = await self.command_client.call_tool(
-                "check_file_exists", {"path": dirname}
-            )
-            check_result = json.loads(result[0].text)
-            if check_result["exists"] and check_result["is_directory"]:
-                test_dirs.append(dirname)
+        # Check if the configured test path exists
+        result = await self.command_client.call_tool(
+            "check_file_exists", {"path": test_path}
+        )
+        check_result = json.loads(result[0].text)
+        if check_result["exists"] and check_result["is_directory"]:
+            test_dirs.append(test_path)
 
         # Find test files in project root
         result = await self.command_client.call_tool(

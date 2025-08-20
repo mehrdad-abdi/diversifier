@@ -10,13 +10,13 @@ from typing import Dict, Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain.chat_models import init_chat_model
 
-from ..config import get_config
+from ..config import get_config, MigrationConfig
 
 
 class SimpleLLMTestRunner:
     """Simplified LLM-powered test runner."""
 
-    def __init__(self, project_path: str):
+    def __init__(self, project_path: str, migration_config: MigrationConfig = None):
         """Initialize the simple test runner."""
         self.project_path = Path(project_path).resolve()
 
@@ -31,20 +31,14 @@ class SimpleLLMTestRunner:
             **config.llm.additional_params,
         )
 
+        # Store migration config for test analysis configuration
+        self.migration_config = migration_config or config.migration
+
     def analyze_project_structure(self) -> Dict[str, Any]:
         """Analyze project structure using simple file operations."""
-        # Find common project files
+        # Find common project files from configuration
         project_files = []
-        common_files = [
-            "pyproject.toml",
-            "setup.py",
-            "requirements.txt",
-            "requirements-dev.txt",
-            "README.md",
-            "README.rst",
-            "pytest.ini",
-            "setup.cfg",
-        ]
+        common_files = self.migration_config.common_project_files
 
         for filename in common_files:
             file_path = self.project_path / filename
@@ -56,14 +50,12 @@ class SimpleLLMTestRunner:
                     }
                 )
 
-        # Find test directories
+        # Find test directories using configured test path
         test_dirs = []
-        common_test_dirs = ["tests", "test", "testing"]
-
-        for dirname in common_test_dirs:
-            dir_path = self.project_path / dirname
-            if dir_path.exists() and dir_path.is_dir():
-                test_dirs.append(dirname)
+        test_path = self.migration_config.test_path.rstrip("/")
+        dir_path = self.project_path / test_path
+        if dir_path.exists() and dir_path.is_dir():
+            test_dirs.append(test_path)
 
         # Find test files
         test_files = []

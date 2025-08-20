@@ -430,7 +430,7 @@ class DiversificationCoordinator:
             )
 
             # Initialize LLM test runner for the target project
-            runner = SimpleLLMTestRunner(str(self.project_path))
+            runner = SimpleLLMTestRunner(str(self.project_path), self.migration_config)
 
             # Analyze target project structure to understand its environment
             project_structure = runner.analyze_project_structure()
