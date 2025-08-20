@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import subprocess
 import time
 from typing import Dict, Any, Optional, List, Union
 from enum import Enum
@@ -569,3 +570,34 @@ class MCPManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         asyncio.run(self.shutdown_all_servers())
+
+    def emergency_shutdown(self) -> None:
+        """Emergency synchronous shutdown for signal handlers.
+
+        This method forcefully terminates all MCP server processes without
+        waiting for graceful disconnection. Use only when normal async
+        shutdown is not possible (e.g., in signal handlers).
+        """
+        for server_type, connection in list(self.connections.items()):
+            if connection.is_connected and hasattr(connection, "client"):
+                client = connection.client
+                if hasattr(client, "process") and client.process:
+                    try:
+                        # Terminate the process immediately
+                        client.process.terminate()
+                        try:
+                            client.process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            # If terminate doesn't work, force kill
+                            client.process.kill()
+                        self.logger.info(
+                            f"Emergency shutdown of {server_type.value} server"
+                        )
+                    except Exception as e:
+                        self.logger.error(
+                            f"Error during emergency shutdown of {server_type.value}: {e}"
+                        )
+
+        # Clear all connections
+        self.connections.clear()
+        self.logger.info("Emergency shutdown completed")

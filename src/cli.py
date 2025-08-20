@@ -1,6 +1,9 @@
 import argparse
 import asyncio
+import atexit
+import signal
 import sys
+from typing import Optional
 
 from .validation import (
     validate_python_project,
@@ -11,6 +14,54 @@ from .orchestration.coordinator import DiversificationCoordinator
 from .orchestration.config import LoggingConfig, get_config, ConfigManager
 from .orchestration.logging_config import setup_logging
 from .orchestration.langsmith_config import setup_langsmith_tracing
+
+# Global reference to coordinator for signal handler cleanup
+_coordinator: Optional[DiversificationCoordinator] = None
+
+
+def _cleanup_on_exit() -> None:
+    """Cleanup coordinator resources synchronously for signal handling."""
+    if _coordinator:
+        print("🧹 Cleaning up MCP servers and resources...")
+        try:
+            # Use the emergency shutdown method for synchronous cleanup
+            if hasattr(_coordinator, "mcp_manager") and _coordinator.mcp_manager:
+                _coordinator.mcp_manager.emergency_shutdown()
+                print("  ✓ All MCP servers terminated")
+
+            # Clear agent memories if possible
+            if hasattr(_coordinator, "agent_manager") and _coordinator.agent_manager:
+                try:
+                    _coordinator.agent_manager.clear_all_memories()
+                    print("  ✓ Agent memories cleared")
+                except Exception:
+                    pass  # Not critical for emergency shutdown
+
+        except Exception as e:
+            print(f"⚠️  Error during cleanup: {e}")
+
+
+def _signal_handler(signum: int, frame) -> None:
+    """Handle termination signals by cleaning up coordinator resources."""
+    signal_name = signal.Signals(signum).name
+    print(f"\n🛑 Received {signal_name}, shutting down gracefully...")
+
+    _cleanup_on_exit()
+
+    print("👋 Shutdown complete")
+    sys.exit(130)  # Standard exit code for SIGINT
+
+
+def _setup_signal_handlers() -> None:
+    """Setup signal handlers for graceful shutdown."""
+    try:
+        signal.signal(signal.SIGINT, _signal_handler)  # Ctrl+C
+        signal.signal(signal.SIGTERM, _signal_handler)  # Termination request
+        # Also register cleanup for normal exit
+        atexit.register(_cleanup_on_exit)
+    except (ValueError, OSError):
+        # Some signals might not be available on all platforms
+        pass
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -82,6 +133,8 @@ Examples:
 
 async def run_diversification(args) -> int:
     """Run the diversification workflow."""
+    global _coordinator
+
     # Setup logging
     log_level = "DEBUG" if args.verbose else args.log_level
     logging_config = LoggingConfig(
@@ -101,6 +154,9 @@ async def run_diversification(args) -> int:
             migration_config=config.migration,
         )
 
+        # Set global coordinator for signal handling
+        _coordinator = coordinator
+
         # Execute workflow
         success = await coordinator.execute_workflow(
             dry_run=args.dry_run, auto_proceed=True  # For now, auto-proceed in CLI mode
@@ -116,11 +172,17 @@ async def run_diversification(args) -> int:
     except Exception as e:
         print(f"❌ Diversification failed with error: {e}")
         return 1
+    finally:
+        # Clear global coordinator reference
+        _coordinator = None
 
 
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
+
+    # Setup signal handlers for graceful shutdown
+    _setup_signal_handlers()
 
     # Setup LangSmith tracing if configured
     setup_langsmith_tracing()

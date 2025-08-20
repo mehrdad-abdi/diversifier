@@ -1,6 +1,7 @@
 """Tests for orchestration system components."""
 
 import pytest
+import subprocess
 import tempfile
 import logging
 import os
@@ -18,6 +19,17 @@ from src.orchestration.workflow import (
 )
 from src.orchestration.coordinator import DiversificationCoordinator
 from src.orchestration.error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from src.orchestration.test_generation import (
+    TestCoverageSelectionResult,
+    CallGraphTestDiscoveryResult,
+    CoveragePath,
+    CallGraphNode,
+    NodeType,
+    LibraryUsageLocation,
+    LibraryUsageType,
+    LibraryUsageSummary,
+)
+from src.orchestration.workflow import WorkflowStep
 from src.orchestration.logging_config import setup_logging, get_logger
 
 
@@ -765,6 +777,222 @@ class TestDiversificationCoordinator:
         assert "context" in status
         assert "current_stage" in status
         assert "total_steps" in status
+
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
+    @pytest.mark.asyncio
+    async def test_run_baseline_tests_with_coverage(self):
+        """Test _run_baseline_tests with test coverage results."""
+
+        llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+        coordinator = DiversificationCoordinator(
+            project_path=self.project_path,
+            source_library="requests",
+            target_library="httpx",
+            llm_config=llm_config,
+        )
+
+        # Mock test selection results with coverage paths
+        # Create mock test node
+        test_node = CallGraphNode(
+            file_path="tests/test_api.py",
+            function_name="test_get_request",
+            class_name=None,
+            line_number=10,
+            node_type=NodeType.TEST_FUNCTION,
+        )
+
+        # Create mock library usage location
+        library_usage = LibraryUsageLocation(
+            file_path="src/api.py",
+            line_number=20,
+            column_offset=8,
+            function_name="make_request",
+            usage_type=LibraryUsageType.FUNCTION_CALL,
+            usage_context="requests.get",
+        )
+
+        # Create coverage path
+        coverage_path = CoveragePath(
+            test_node=test_node,
+            library_usage=library_usage,
+            call_chain=[],
+        )
+
+        # Create test discovery result with coverage
+        test_discovery_result = CallGraphTestDiscoveryResult(
+            total_nodes=10,
+            test_nodes=3,
+            library_usage_nodes=5,
+            coverage_paths=[coverage_path],
+            uncovered_usages=[],
+            coverage_percentage=80.0,
+        )
+
+        # Create selection result
+        selection_result = TestCoverageSelectionResult(
+            library_usage_summary=LibraryUsageSummary("requests", 5),
+            test_discovery_result=test_discovery_result,
+            total_execution_time=1.5,
+            pipeline_success=True,
+        )
+
+        # Set up workflow state with mock select_tests step result
+        step = WorkflowStep(
+            name="select_tests",
+            stage=WorkflowStage.TEST_GENERATION,
+            description="Select existing tests that cover library usage",
+        )
+        step.complete({"selection_result": selection_result})
+
+        coordinator.workflow_state.steps["select_tests"] = step
+
+        # Mock direct test execution to avoid subprocess call
+        async def mock_run_tests_directly(test_functions):
+            return {
+                "success": True,
+                "test_results": {
+                    "tests_executed": 1,
+                    "passed": 1,
+                    "failed": 0,
+                    "duration": 0.5,
+                    "selected_tests": list(test_functions),
+                    "output": "test_get_request PASSED",
+                },
+            }
+
+        coordinator._run_tests_directly = mock_run_tests_directly
+
+        # Test the method
+        result = await coordinator._run_baseline_tests()
+
+        assert result["success"] is True
+        assert result["test_results"]["tests_executed"] == 1
+        assert result["test_results"]["passed"] == 1
+        assert result["test_results"]["failed"] == 0
+        assert (
+            "tests/test_api.py::test_get_request"
+            in result["test_results"]["selected_tests"]
+        )
+
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
+    @pytest.mark.asyncio
+    async def test_run_baseline_tests_no_coverage(self):
+        """Test _run_baseline_tests when no test coverage is found."""
+
+        llm_config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-sonnet",
+            api_key_env_var="TEST_API_KEY",
+        )
+        coordinator = DiversificationCoordinator(
+            project_path=self.project_path,
+            source_library="requests",
+            target_library="httpx",
+            llm_config=llm_config,
+        )
+
+        # Mock test selection results with no coverage paths
+        # Create test discovery result without coverage
+        test_discovery_result = CallGraphTestDiscoveryResult(
+            total_nodes=10,
+            test_nodes=3,
+            library_usage_nodes=5,
+            coverage_paths=[],  # No coverage paths
+            uncovered_usages=[],
+            coverage_percentage=0.0,
+        )
+
+        # Create selection result
+        selection_result = TestCoverageSelectionResult(
+            library_usage_summary=LibraryUsageSummary("requests", 5),
+            test_discovery_result=test_discovery_result,
+            total_execution_time=1.5,
+            pipeline_success=True,
+        )
+
+        # Set up workflow state with mock select_tests step result
+        step = WorkflowStep(
+            name="select_tests",
+            stage=WorkflowStage.TEST_GENERATION,
+            description="Select existing tests that cover library usage",
+        )
+        step.complete({"selection_result": selection_result})
+
+        coordinator.workflow_state.steps["select_tests"] = step
+
+        # Test the method
+        result = await coordinator._run_baseline_tests()
+
+        assert result["success"] is True
+        assert result["test_results"]["tests_executed"] == 0
+        assert result["test_results"]["passed"] == 0
+        assert result["test_results"]["failed"] == 0
+        assert (
+            "No tests cover the selected library usage"
+            in result["test_results"]["note"]
+        )
+
+    def test_mcp_manager_emergency_shutdown(self):
+        """Test emergency shutdown of MCP manager."""
+
+        # Create a mock MCP manager with connections
+        mcp_manager = MCPManager(project_root=".")
+
+        # Create mock connection with process
+        mock_process = Mock()
+        mock_client = Mock()
+        mock_client.process = mock_process
+
+        mock_connection = Mock()
+        mock_connection.is_connected = True
+        mock_connection.client = mock_client
+
+        # Add mock connection to manager
+        mcp_manager.connections[MCPServerType.FILESYSTEM] = mock_connection
+
+        # Test emergency shutdown
+        mcp_manager.emergency_shutdown()
+
+        # Verify process was terminated
+        mock_process.terminate.assert_called_once()
+        mock_process.wait.assert_called_once_with(timeout=2)
+
+        # Verify connections were cleared
+        assert len(mcp_manager.connections) == 0
+
+    def test_mcp_manager_emergency_shutdown_with_kill(self):
+        """Test emergency shutdown when terminate times out."""
+
+        # Create a mock MCP manager with connections
+        mcp_manager = MCPManager(project_root=".")
+
+        # Create mock connection with process that times out
+        mock_process = Mock()
+        mock_process.wait.side_effect = subprocess.TimeoutExpired("cmd", 2)
+        mock_client = Mock()
+        mock_client.process = mock_process
+
+        mock_connection = Mock()
+        mock_connection.is_connected = True
+        mock_connection.client = mock_client
+
+        # Add mock connection to manager
+        mcp_manager.connections[MCPServerType.GIT] = mock_connection
+
+        # Test emergency shutdown
+        mcp_manager.emergency_shutdown()
+
+        # Verify process was terminated then killed
+        mock_process.terminate.assert_called_once()
+        mock_process.wait.assert_called_once_with(timeout=2)
+        mock_process.kill.assert_called_once()
+
+        # Verify connections were cleared
+        assert len(mcp_manager.connections) == 0
 
 
 class TestErrorHandler:

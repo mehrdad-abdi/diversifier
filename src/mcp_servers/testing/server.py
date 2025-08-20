@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -88,6 +89,31 @@ class TestingMCPServer:
                                 "default": "no",
                             },
                         },
+                    },
+                ),
+                Tool(
+                    name="run_specific_tests",
+                    description="Execute specific test functions using pytest specifications",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "test_specs": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of pytest test specifications (e.g., 'tests/test_api.py::test_get_request')",
+                            },
+                            "verbose": {
+                                "type": "boolean",
+                                "description": "Enable verbose output",
+                                "default": True,
+                            },
+                            "capture_output": {
+                                "type": "boolean",
+                                "description": "Capture test output",
+                                "default": True,
+                            },
+                        },
+                        "required": ["test_specs"],
                     },
                 ),
                 Tool(
@@ -216,6 +242,12 @@ class TestingMCPServer:
                         arguments.get("test_filter"),
                         arguments.get("verbose", True),
                         arguments.get("capture", "no"),
+                    )
+                elif name == "run_specific_tests":
+                    return await self._run_specific_tests(
+                        arguments["test_specs"],
+                        arguments.get("verbose", True),
+                        arguments.get("capture_output", True),
                     )
                 elif name == "run_tests_with_coverage":
                     return await self._run_tests_with_coverage(
@@ -556,6 +588,161 @@ class TestingMCPServer:
                         coverage_info["files"].append(file_info)
 
         return coverage_info
+
+    async def _run_specific_tests(
+        self,
+        test_specs: List[str],
+        verbose: bool,
+        capture_output: bool,
+    ) -> list[TextContent]:
+        """Execute specific test functions using pytest specifications."""
+        cmd = [sys.executable, "-m", "pytest"]
+
+        # Add all test specifications to the command
+        cmd.extend(test_specs)
+
+        if verbose:
+            cmd.append("-v")
+
+        # Set capture mode
+        if not capture_output:
+            cmd.append("-s")  # Don't capture output
+
+        # Add JSON output for structured results
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json_output_file = f.name
+
+        cmd.extend(["--json-report", f"--json-report-file={json_output_file}"])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+
+            # Parse results
+            test_results = {
+                "command": " ".join(cmd),
+                "exit_code": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "success": result.returncode == 0,
+                "test_specs": test_specs,
+            }
+
+            # Try to read JSON report if available
+            try:
+                with open(json_output_file, "r") as f:
+                    json_report = json.load(f)
+
+                test_results["json_report"] = json_report
+
+                # Extract summary from JSON report
+                if "summary" in json_report:
+                    summary = json_report["summary"]
+                    test_results["results"] = {
+                        "total": summary.get("total", 0),
+                        "passed": summary.get("passed", 0),
+                        "failed": summary.get("failed", 0),
+                        "skipped": summary.get("skipped", 0),
+                        "duration": json_report.get("duration", 0),
+                    }
+
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                test_results["json_error"] = str(e)
+
+                # Fallback: parse from stdout
+                test_results["results"] = self._parse_pytest_output(result.stdout)
+
+            finally:
+                # Clean up temp file
+                try:
+                    Path(json_output_file).unlink()
+                except Exception:
+                    pass
+
+            # Return formatted response
+            status = "success" if test_results["success"] else "failed"
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "status": status,
+                            "results": test_results.get("results", {}),
+                            "output": test_results["stdout"],
+                            "error": (
+                                test_results["stderr"]
+                                if test_results["stderr"]
+                                else None
+                            ),
+                            "command": test_results["command"],
+                        },
+                        indent=2,
+                    ),
+                )
+            ]
+
+        except subprocess.TimeoutExpired:
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "status": "timeout",
+                            "error": "Test execution timed out after 5 minutes",
+                            "command": " ".join(cmd),
+                        },
+                        indent=2,
+                    ),
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "status": "error",
+                            "error": str(e),
+                            "command": " ".join(cmd),
+                        },
+                        indent=2,
+                    ),
+                )
+            ]
+
+    def _parse_pytest_output(self, stdout: str) -> Dict[str, int]:
+        """Parse pytest output to extract test counts as fallback."""
+
+        passed = failed = skipped = 0
+
+        # Look for summary line
+        for line in stdout.split("\n"):
+            if "passed" in line or "failed" in line:
+                passed_match = re.search(r"(\d+) passed", line)
+                failed_match = re.search(r"(\d+) failed", line)
+                skipped_match = re.search(r"(\d+) skipped", line)
+
+                if passed_match:
+                    passed = int(passed_match.group(1))
+                if failed_match:
+                    failed = int(failed_match.group(1))
+                if skipped_match:
+                    skipped = int(skipped_match.group(1))
+
+                break
+
+        return {
+            "total": passed + failed + skipped,
+            "passed": passed,
+            "failed": failed,
+            "skipped": skipped,
+            "duration": 0,
+        }
 
     async def _analyze_test_results(
         self, output_file: Optional[str], output_text: Optional[str]
