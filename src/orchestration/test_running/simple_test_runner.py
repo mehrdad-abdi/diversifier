@@ -8,16 +8,28 @@ from pathlib import Path
 from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_anthropic import ChatAnthropic
+from langchain.chat_models import init_chat_model
+
+from ..config import get_config
 
 
 class SimpleLLMTestRunner:
     """Simplified LLM-powered test runner."""
 
-    def __init__(self, project_path: str, llm_model: str = "claude-3-haiku-20240307"):
+    def __init__(self, project_path: str):
         """Initialize the simple test runner."""
         self.project_path = Path(project_path).resolve()
-        self.llm = ChatAnthropic(model_name=llm_model, temperature=0)
+
+        # Use consistent LLM initialization pattern from config
+        config = get_config()
+        model_id = f"{config.llm.provider.lower()}:{config.llm.model_name}"
+
+        self.llm = init_chat_model(
+            model=model_id,
+            temperature=0,  # Use low temperature for consistent test analysis
+            max_tokens=config.llm.max_tokens,
+            **config.llm.additional_params,
+        )
 
     def analyze_project_structure(self) -> Dict[str, Any]:
         """Analyze project structure using simple file operations."""

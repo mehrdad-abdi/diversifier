@@ -7,24 +7,34 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_anthropic import ChatAnthropic
+from langchain.chat_models import init_chat_model
 
 from ...mcp_servers.command.client import CommandMCPClient
 from ...mcp_servers.filesystem.client import FilesystemMCPClient
+from ..config import get_config
 
 
 class LLMTestRunner:
     """LLM-powered test runner that uses MCP servers for project analysis and test execution."""
 
-    def __init__(self, project_path: str, llm_model: str = "claude-3-haiku-20240307"):
+    def __init__(self, project_path: str):
         """Initialize the LLM test runner.
 
         Args:
             project_path: Path to the target project
-            llm_model: LLM model to use for analysis
         """
         self.project_path = Path(project_path).resolve()
-        self.llm = ChatAnthropic(model_name=llm_model, temperature=0)
+
+        # Use consistent LLM initialization pattern from config
+        config = get_config()
+        model_id = f"{config.llm.provider.lower()}:{config.llm.model_name}"
+
+        self.llm = init_chat_model(
+            model=model_id,
+            temperature=0,  # Use low temperature for consistent test analysis
+            max_tokens=config.llm.max_tokens,
+            **config.llm.additional_params,
+        )
 
         # MCP clients for different operations
         self.command_client: Optional[CommandMCPClient] = None
