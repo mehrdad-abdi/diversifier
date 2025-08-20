@@ -1,1 +1,0 @@
-"""Testing MCP Server package."""
