@@ -14,7 +14,7 @@ from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
 from .test_generation import TestCoverageSelector
 from .config import LLMConfig, MigrationConfig
-from ..test_running.simple_test_runner import SimpleLLMTestRunner
+from .test_running.simple_test_runner import SimpleLLMTestRunner
 
 
 class DiversificationCoordinator:
