@@ -72,58 +72,6 @@ class CommandMCPServer:
                     },
                 ),
                 Tool(
-                    name="check_file_exists",
-                    description="Check if a file or directory exists",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "path": {
-                                "type": "string",
-                                "description": "Path to check (relative to project root)",
-                            },
-                        },
-                        "required": ["path"],
-                    },
-                ),
-                Tool(
-                    name="list_directory",
-                    description="List contents of a directory",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "path": {
-                                "type": "string",
-                                "description": "Directory path (relative to project root, default: '.')",
-                                "default": ".",
-                            },
-                            "include_hidden": {
-                                "type": "boolean",
-                                "description": "Include hidden files and directories",
-                                "default": False,
-                            },
-                        },
-                    },
-                ),
-                Tool(
-                    name="read_file_content",
-                    description="Read the content of a text file",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "path": {
-                                "type": "string",
-                                "description": "File path (relative to project root)",
-                            },
-                            "max_lines": {
-                                "type": "number",
-                                "description": "Maximum number of lines to read (default: 1000)",
-                                "default": 1000,
-                            },
-                        },
-                        "required": ["path"],
-                    },
-                ),
-                Tool(
                     name="find_files",
                     description="Find files matching a pattern",
                     inputSchema={
@@ -154,18 +102,6 @@ class CommandMCPServer:
                         arguments.get("working_directory"),
                         arguments.get("timeout", 300),
                         arguments.get("capture_output", True),
-                    )
-                elif name == "check_file_exists":
-                    return await self._check_file_exists(arguments["path"])
-                elif name == "list_directory":
-                    return await self._list_directory(
-                        arguments.get("path", "."),
-                        arguments.get("include_hidden", False),
-                    )
-                elif name == "read_file_content":
-                    return await self._read_file_content(
-                        arguments["path"],
-                        arguments.get("max_lines", 1000),
                     )
                 elif name == "find_files":
                     return await self._find_files(
@@ -272,107 +208,6 @@ class CommandMCPServer:
                     ),
                 )
             ]
-
-    async def _check_file_exists(self, path: str) -> list[TextContent]:
-        """Check if a file or directory exists."""
-        try:
-            full_path = self._validate_path(path)
-            exists = full_path.exists()
-            is_file = full_path.is_file() if exists else None
-            is_dir = full_path.is_dir() if exists else None
-
-            result = {
-                "path": str(full_path.relative_to(self.project_root)),
-                "exists": exists,
-                "is_file": is_file,
-                "is_directory": is_dir,
-            }
-
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-
-        except Exception as e:
-            return [TextContent(type="text", text=f"Error checking path: {str(e)}")]
-
-    async def _list_directory(
-        self, path: str, include_hidden: bool
-    ) -> list[TextContent]:
-        """List contents of a directory."""
-        try:
-            dir_path = self._validate_path(path)
-
-            if not dir_path.exists():
-                raise ValueError(f"Directory {path} does not exist")
-
-            if not dir_path.is_dir():
-                raise ValueError(f"Path {path} is not a directory")
-
-            contents = []
-            for item in dir_path.iterdir():
-                if not include_hidden and item.name.startswith("."):
-                    continue
-
-                item_info = {
-                    "name": item.name,
-                    "path": str(item.relative_to(self.project_root)),
-                    "is_file": item.is_file(),
-                    "is_directory": item.is_dir(),
-                }
-
-                if item.is_file():
-                    try:
-                        item_info["size"] = item.stat().st_size
-                    except Exception:
-                        pass
-
-                contents.append(item_info)
-
-            # Sort by type (directories first) then by name
-            contents.sort(key=lambda x: (not x["is_directory"], x["name"]))
-
-            result = {
-                "directory": str(dir_path.relative_to(self.project_root)),
-                "contents": contents,
-                "total_items": len(contents),
-            }
-
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-
-        except Exception as e:
-            return [TextContent(type="text", text=f"Error listing directory: {str(e)}")]
-
-    async def _read_file_content(self, path: str, max_lines: int) -> list[TextContent]:
-        """Read the content of a text file."""
-        try:
-            file_path = self._validate_path(path)
-
-            if not file_path.exists():
-                raise ValueError(f"File {path} does not exist")
-
-            if not file_path.is_file():
-                raise ValueError(f"Path {path} is not a file")
-
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = []
-                for i, line in enumerate(f):
-                    if i >= max_lines:
-                        break
-                    lines.append(line.rstrip("\n\r"))
-
-            result = {
-                "file": str(file_path.relative_to(self.project_root)),
-                "lines_read": len(lines),
-                "truncated": len(lines) == max_lines,
-                "content": lines,
-            }
-
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-
-        except UnicodeDecodeError:
-            return [
-                TextContent(type="text", text=f"Error: File {path} is not a text file")
-            ]
-        except Exception as e:
-            return [TextContent(type="text", text=f"Error reading file: {str(e)}")]
 
     async def _find_files(self, pattern: str, directory: str) -> list[TextContent]:
         """Find files matching a pattern."""
