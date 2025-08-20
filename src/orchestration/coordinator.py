@@ -432,14 +432,8 @@ class DiversificationCoordinator:
             # Initialize LLM test runner
             runner = SimpleLLMTestRunner(str(self.project_path))
 
-            # Run only project structure analysis since we already have specific tests to run
-            project_structure = runner.analyze_project_structure()
-            self.logger.info(
-                f"Analyzed project: found {len(project_structure['test_files'])} test files"
-            )
-
-            # Create a minimal requirements object for test execution
-            # Since we have specific test functions, we'll use pytest directly
+            # Create requirements object for focused test execution
+            # We have specific test functions so we skip project analysis and run them directly
             requirements = {
                 "testing_framework": "pytest",
                 "dev_dependencies": ["pytest"],
