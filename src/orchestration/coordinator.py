@@ -429,22 +429,47 @@ class DiversificationCoordinator:
                 f"Running {len(test_functions)} tests using LLM-powered test runner"
             )
 
-            # Initialize LLM test runner
+            # Initialize LLM test runner for the target project
             runner = SimpleLLMTestRunner(str(self.project_path))
 
-            # Create requirements object for focused test execution
-            # We have specific test functions so we skip project analysis and run them directly
-            requirements = {
-                "testing_framework": "pytest",
-                "dev_dependencies": ["pytest"],
-                "install_commands": [],  # Skip installation in workflow context
-                "test_commands": [f"python -m pytest -v {' '.join(test_functions)}"],
-                "setup_commands": [],
-                "analysis": "Focused test execution for baseline tests",
-            }
+            # Analyze target project structure to understand its environment
+            project_structure = runner.analyze_project_structure()
+            self.logger.info(
+                f"Analyzed target project: found {len(project_structure['test_files'])} test files"
+            )
 
-            # Execute the tests
-            test_results = runner.run_tests(requirements)
+            # Use LLM to detect target project's development requirements
+            dev_requirements = await runner.detect_dev_requirements(project_structure)
+            self.logger.info(
+                f"Detected target project requirements: {dev_requirements['testing_framework']}"
+            )
+
+            # Override test commands to run specific test functions instead of full test suite
+            focused_requirements = dev_requirements.copy()
+            focused_requirements["test_commands"] = [
+                f"python -m pytest -v {' '.join(test_functions)}"
+            ]
+            focused_requirements["analysis"] = (
+                "Focused test execution for baseline tests"
+            )
+
+            # Set up target project's test environment (install dev dependencies)
+            setup_results = runner.setup_test_environment(focused_requirements)
+            if not setup_results["success"]:
+                return {
+                    "success": False,
+                    "error": f"Failed to setup target project test environment: {setup_results['errors']}",
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": len(test_functions),
+                        "selected_tests": list(test_functions),
+                        "llm_powered": True,
+                    },
+                }
+
+            # Execute the tests in target project's environment
+            test_results = runner.run_tests(focused_requirements)
 
             self.logger.info(
                 f"LLM test execution completed: {test_results['summary']['successful_commands']}/{test_results['summary']['total_commands']} commands successful"
