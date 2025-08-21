@@ -16,7 +16,6 @@ from src.orchestration.config import (
     LoggingConfig,
     MCPConfig,
     MigrationConfig,
-    PerformanceConfig,
     get_config,
     get_config_manager,
 )
@@ -80,19 +79,6 @@ class TestMigrationConfig:
         assert config.min_test_coverage == 0.8
         assert config.test_paths == ["tests/", "test/"]
         assert len(config.allowed_library_pairs) == 4
-
-
-class TestPerformanceConfig:
-    """Tests for PerformanceConfig dataclass."""
-
-    def test_default_values(self):
-        """Test default configuration values."""
-        config = PerformanceConfig()
-        assert config.enable_metrics is True
-        assert config.metrics_file == "performance_metrics.json"
-        assert config.log_slow_operations is True
-        assert config.slow_operation_threshold == 1.0
-        assert config.enable_memory_tracking is False
 
 
 class TestLLMConfig:
@@ -167,7 +153,6 @@ class TestDiversifierConfig:
         assert isinstance(config.logging, LoggingConfig)
         assert isinstance(config.mcp, MCPConfig)
         assert isinstance(config.migration, MigrationConfig)
-        assert isinstance(config.performance, PerformanceConfig)
         assert isinstance(config.llm, LLMConfig)
         assert config.project_root == "."
         assert config.temp_dir == "/tmp/diversifier"
@@ -220,9 +205,6 @@ timeout = 60
 [migration]
 max_iterations = 10
 
-[performance]
-enable_metrics = false
-
 [llm]
 provider = "openai"
 model_name = "gpt-4"
@@ -244,7 +226,6 @@ api_key_env_var = "OPENAI_API_KEY"
                 assert config.logging.file_path == "test.log"
                 assert config.mcp.timeout == 60
                 assert config.migration.max_iterations == 10
-                assert config.performance.enable_metrics is False
                 assert config.llm.provider == "openai"
                 assert config.llm.model_name == "gpt-4"
                 assert config.llm.temperature == 0.7
@@ -320,52 +301,42 @@ api_key_env_var = "TEST_API_KEY"
         manager = ConfigManager("/dummy/path.toml")
 
         # Test true values
-        assert manager._convert_env_value("true", "logging", "console") is True
-        assert manager._convert_env_value("1", "logging", "console") is True
-        assert manager._convert_env_value("yes", "logging", "console") is True
-        assert manager._convert_env_value("on", "logging", "console") is True
-        assert manager._convert_env_value("TRUE", "logging", "console") is True
+        assert manager._convert_env_value("true", "console") is True
+        assert manager._convert_env_value("1", "console") is True
+        assert manager._convert_env_value("yes", "console") is True
+        assert manager._convert_env_value("on", "console") is True
+        assert manager._convert_env_value("TRUE", "console") is True
 
         # Test false values
-        assert manager._convert_env_value("false", "logging", "console") is False
-        assert manager._convert_env_value("0", "logging", "console") is False
-        assert manager._convert_env_value("no", "logging", "console") is False
-        assert manager._convert_env_value("off", "logging", "console") is False
+        assert manager._convert_env_value("false", "console") is False
+        assert manager._convert_env_value("0", "console") is False
+        assert manager._convert_env_value("no", "console") is False
+        assert manager._convert_env_value("off", "console") is False
 
     def test_convert_env_value_integer(self):
         """Test environment value conversion for integers."""
         manager = ConfigManager("/dummy/path.toml")
 
-        assert manager._convert_env_value("123", "mcp", "timeout") == 123
-        assert manager._convert_env_value("0", "mcp", "timeout") == 0
-        assert manager._convert_env_value("-5", "mcp", "timeout") == -5
+        assert manager._convert_env_value("123", "timeout") == 123
+        assert manager._convert_env_value("0", "timeout") == 0
+        assert manager._convert_env_value("-5", "timeout") == -5
 
     def test_convert_env_value_float(self):
         """Test environment value conversion for floats."""
         manager = ConfigManager("/dummy/path.toml")
 
-        assert (
-            manager._convert_env_value("1.5", "migration", "min_test_coverage") == 1.5
-        )
-        assert (
-            manager._convert_env_value("0.0", "migration", "min_test_coverage") == 0.0
-        )
-        assert (
-            manager._convert_env_value("99.99", "migration", "min_test_coverage")
-            == 99.99
-        )
-        assert manager._convert_env_value("0.7", "llm", "temperature") == 0.7
-        assert manager._convert_env_value("1.0", "llm", "temperature") == 1.0
+        assert manager._convert_env_value("1.5", "min_test_coverage") == 1.5
+        assert manager._convert_env_value("0.0", "min_test_coverage") == 0.0
+        assert manager._convert_env_value("99.99", "min_test_coverage") == 99.99
+        assert manager._convert_env_value("0.7", "temperature") == 0.7
+        assert manager._convert_env_value("1.0", "temperature") == 1.0
 
     def test_convert_env_value_string(self):
         """Test environment value conversion for strings."""
         manager = ConfigManager("/dummy/path.toml")
 
-        assert manager._convert_env_value("test", "logging", "level") == "test"
-        assert (
-            manager._convert_env_value("path/to/file", "logging", "file_path")
-            == "path/to/file"
-        )
+        assert manager._convert_env_value("test", "level") == "test"
+        assert manager._convert_env_value("path/to/file", "file_path") == "path/to/file"
 
     def test_get_config_caches_result(self):
         """Test that get_config caches the result."""

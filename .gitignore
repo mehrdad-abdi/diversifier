@@ -206,5 +206,3 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Diversifier performance metrics
-performance_metrics.json
