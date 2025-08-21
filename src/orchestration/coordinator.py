@@ -63,7 +63,13 @@ class DiversificationCoordinator:
 
         # Initialize test coverage selection components
         self.test_coverage_selector = TestCoverageSelector(
-            str(self.project_path), self.mcp_manager, self.migration_config.test_paths[0] if self.migration_config.test_paths else "tests/"
+            str(self.project_path),
+            self.mcp_manager,
+            (
+                self.migration_config.test_paths[0]
+                if self.migration_config.test_paths
+                else "tests/"
+            ),
         )
 
         self.logger = logging.getLogger("diversifier.coordinator")
@@ -433,7 +439,7 @@ class DiversificationCoordinator:
             runner = LLMTestRunner(str(self.project_path), self.migration_config)
 
             # Analyze target project structure to understand its environment
-            project_structure = runner.analyze_project_structure()
+            project_structure = await runner.analyze_project_structure()
             self.logger.info(
                 f"Analyzed target project: found {len(project_structure['test_files'])} test files"
             )
@@ -454,7 +460,7 @@ class DiversificationCoordinator:
             )
 
             # Set up target project's test environment (install dev dependencies)
-            setup_results = runner.setup_test_environment(focused_requirements)
+            setup_results = await runner.setup_test_environment(focused_requirements)
             if not setup_results["success"]:
                 return {
                     "success": False,
@@ -469,7 +475,7 @@ class DiversificationCoordinator:
                 }
 
             # Execute the tests in target project's environment
-            test_results = runner.run_tests(focused_requirements)
+            test_results = await runner.run_tests(focused_requirements)
 
             self.logger.info(
                 f"LLM test execution completed: {test_results['summary']['successful_commands']}/{test_results['summary']['total_commands']} commands successful"
@@ -531,12 +537,12 @@ class DiversificationCoordinator:
             self.logger.error(f"Error type: {e.error_type}")
             if e.original_error:
                 self.logger.error(f"Original error: {e.original_error}")
-            
+
             # Signal to workflow that this is unrecoverable
             raise RuntimeError(
                 f"Test runner encountered unrecoverable {e.error_type} error: {e.message}"
             )
-            
+
         except Exception as e:
             # Other recoverable exceptions
             self.logger.error(f"LLM test execution failed: {e}")

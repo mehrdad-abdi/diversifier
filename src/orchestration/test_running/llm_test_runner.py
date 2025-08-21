@@ -17,10 +17,12 @@ from ..config import get_config, MigrationConfig
 
 class UnrecoverableTestRunnerError(Exception):
     """Exception raised when the test runner encounters an unrecoverable error."""
-    
-    def __init__(self, message: str, error_type: str, original_error: Exception = None):
+
+    def __init__(
+        self, message: str, error_type: str, original_error: Optional[Exception] = None
+    ):
         """Initialize unrecoverable test runner error.
-        
+
         Args:
             message: Human-readable error description
             error_type: Type of error (validation, network, llm_service, unexpected)
@@ -34,14 +36,21 @@ class UnrecoverableTestRunnerError(Exception):
 
 class DevRequirements(BaseModel):
     """Development requirements analysis model."""
-    
-    testing_framework: str = Field(description="The main testing framework (e.g., 'pytest', 'unittest')")
-    dev_dependencies: List[str] = Field(description="List of development packages needed")
-    install_commands: List[str] = Field(description="List of shell commands to install dependencies")
-    test_commands: List[str] = Field(description="List of shell commands to run tests")
-    setup_commands: List[str] = Field(description="List of any setup commands needed before testing")
-    analysis: str = Field(description="Brief explanation of findings")
 
+    testing_framework: str = Field(
+        description="The main testing framework (e.g., 'pytest', 'unittest')"
+    )
+    dev_dependencies: List[str] = Field(
+        description="List of development packages needed"
+    )
+    install_commands: List[str] = Field(
+        description="List of shell commands to install dependencies"
+    )
+    test_commands: List[str] = Field(description="List of shell commands to run tests")
+    setup_commands: List[str] = Field(
+        description="List of any setup commands needed before testing"
+    )
+    analysis: str = Field(description="Brief explanation of findings")
 
 
 class LLMTestRunner:
@@ -80,7 +89,7 @@ class LLMTestRunner:
         """Load prompt template from file."""
         prompt_dir = Path(__file__).parent.parent / "prompts"
         prompt_path = prompt_dir / f"{prompt_name}.txt"
-        
+
         if prompt_path.exists():
             return prompt_path.read_text().strip()
         else:
@@ -124,7 +133,7 @@ class LLMTestRunner:
         test_dirs = []
         for test_path_config in self.migration_config.test_paths:
             test_path = test_path_config.rstrip("/")
-            
+
             # Check if the configured test path exists
             result = await self.command_client.call_tool(
                 "check_file_exists", {"path": test_path}
@@ -146,7 +155,7 @@ class LLMTestRunner:
 
         # Read project files collected by analyze_project_structure
         file_contents = {}
-        
+
         for project_file in project_structure["project_files"]:
             if project_file["type"] == "file":
                 filename = project_file["name"]
@@ -156,9 +165,7 @@ class LLMTestRunner:
                     )
                     content_result = json.loads(result[0].text)
                     if not content_result.get("truncated", False):
-                        file_contents[filename] = "\n".join(
-                            content_result["content"]
-                        )
+                        file_contents[filename] = "\n".join(content_result["content"])
                 except Exception:
                     pass  # Skip files we can't read
 
@@ -190,7 +197,7 @@ Please provide your analysis in the structured format."""
 
         # Use structured output with Pydantic model and retry logic
         structured_llm = self.llm.with_structured_output(DevRequirements)
-        
+
         # Create retryable LLM with maximum 3 retries for transient errors
         retryable_llm = structured_llm.with_retry(
             stop_after_attempt=3,
@@ -200,12 +207,12 @@ Please provide your analysis in the structured format."""
                 TimeoutError,
                 # LangChain exceptions that might be transient
                 LangChainException,
-            )
+            ),
         )
-        
+
         try:
             response = await retryable_llm.ainvoke(messages)
-            
+
             # Convert Pydantic model to dict
             return response.model_dump()
 
@@ -216,7 +223,7 @@ Please provide your analysis in the structured format."""
                 f"The LLM response does not match the expected DevRequirements schema: {str(e)}"
             )
             raise UnrecoverableTestRunnerError(error_msg, "validation", e)
-            
+
         except (ConnectionError, TimeoutError) as e:
             # Network/connectivity issues that couldn't be resolved after retries
             error_msg = (
@@ -224,7 +231,7 @@ Please provide your analysis in the structured format."""
                 f"Please check your internet connection and API configuration."
             )
             raise UnrecoverableTestRunnerError(error_msg, "network", e)
-            
+
         except LangChainException as e:
             # LangChain-specific errors (API key issues, model issues, etc.)
             error_msg = (
@@ -232,7 +239,7 @@ Please provide your analysis in the structured format."""
                 f"This may be due to API key issues, model availability, or service limits."
             )
             raise UnrecoverableTestRunnerError(error_msg, "llm_service", e)
-            
+
         except Exception as e:
             # Unexpected errors that we cannot recover from
             error_msg = (
