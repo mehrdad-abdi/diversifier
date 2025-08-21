@@ -4,14 +4,36 @@
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain.chat_models import init_chat_model
+from pydantic import BaseModel, Field
 
 from ...mcp_servers.command.client import CommandMCPClient
 from ...mcp_servers.filesystem.client import FilesystemMCPClient
 from ..config import get_config, MigrationConfig
+
+
+class DevRequirements(BaseModel):
+    """Development requirements analysis model."""
+    
+    testing_framework: str = Field(description="The main testing framework (e.g., 'pytest', 'unittest')")
+    dev_dependencies: List[str] = Field(description="List of development packages needed")
+    install_commands: List[str] = Field(description="List of shell commands to install dependencies")
+    test_commands: List[str] = Field(description="List of shell commands to run tests")
+    setup_commands: List[str] = Field(description="List of any setup commands needed before testing")
+    analysis: str = Field(description="Brief explanation of findings")
+
+
+class TestResultsAnalysis(BaseModel):
+    """Test results analysis model."""
+    
+    summary: str = Field(description="Brief summary of test execution")
+    status: str = Field(description="Test status: 'passed', 'failed', or 'error'")
+    issues_found: List[str] = Field(description="List of issues identified")
+    recommendations: List[str] = Field(description="List of actionable recommendations")
+    test_metrics: Dict[str, Any] = Field(description="Any metrics extracted (e.g., number of tests, duration)")
 
 
 class LLMTestRunner:
@@ -45,6 +67,17 @@ class LLMTestRunner:
         # MCP clients for different operations
         self.command_client: Optional[CommandMCPClient] = None
         self.filesystem_client: Optional[FilesystemMCPClient] = None
+
+    def _load_prompt(self, prompt_name: str) -> str:
+        """Load prompt template from file."""
+        prompt_dir = Path(__file__).parent.parent / "prompts"
+        prompt_path = prompt_dir / f"{prompt_name}.txt"
+        
+        if prompt_path.exists():
+            return prompt_path.read_text().strip()
+        else:
+            # Fallback for missing prompt files
+            return "You are a helpful assistant for Python project analysis."
 
     def initialize_mcp_clients(self) -> None:
         """Initialize MCP clients for command and filesystem operations."""
@@ -121,25 +154,8 @@ class LLMTestRunner:
                 except Exception:
                     pass  # Skip files we can't read
 
-        # Analyze with LLM
-        system_prompt = """You are an expert Python developer analyzing a project to determine its development and testing requirements.
-
-Your task is to:
-1. Analyze the provided project files
-2. Determine the testing framework being used (pytest, unittest, nose, etc.)
-3. Identify development dependencies needed to run tests
-4. Suggest the appropriate commands to install dependencies and run tests
-5. Identify any special setup or configuration needed
-
-Respond with a JSON object containing:
-- "testing_framework": The main testing framework (e.g., "pytest", "unittest")
-- "dev_dependencies": List of development packages needed
-- "install_commands": List of shell commands to install dependencies  
-- "test_commands": List of shell commands to run tests
-- "setup_commands": List of any setup commands needed before testing
-- "analysis": Brief explanation of your findings
-
-Be conservative and practical in your recommendations. Prefer standard, widely-used approaches."""
+        # Load system prompt from file
+        system_prompt = self._load_prompt("test_dev_requirements")
 
         file_contents_text = "\n\n".join(
             [
@@ -157,30 +173,20 @@ Project structure:
 File contents:
 {file_contents_text}
 
-Please provide your analysis in the JSON format specified."""
+Please provide your analysis in the structured format."""
 
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=human_prompt),
         ]
 
-        response = await self.llm.ainvoke(messages)
-
         try:
-            # Extract JSON from response
-            response_text = response.content
-            if "```json" in response_text:
-                json_start = response_text.find("```json") + 7
-                json_end = response_text.find("```", json_start)
-                json_text = response_text[json_start:json_end].strip()
-            elif "{" in response_text and "}" in response_text:
-                json_start = response_text.find("{")
-                json_end = response_text.rfind("}") + 1
-                json_text = response_text[json_start:json_end]
-            else:
-                raise ValueError("No JSON found in response")
-
-            return json.loads(json_text)
+            # Use structured output with Pydantic model
+            structured_llm = self.llm.with_structured_output(DevRequirements)
+            response = await structured_llm.ainvoke(messages)
+            
+            # Convert Pydantic model to dict
+            return response.model_dump()
 
         except Exception as e:
             # Fallback analysis
@@ -317,21 +323,8 @@ Please provide your analysis in the JSON format specified."""
     ) -> Dict[str, Any]:
         """Use LLM to analyze test results and provide insights."""
 
-        system_prompt = """You are an expert at analyzing test results and providing actionable insights.
-
-Your task is to analyze the provided test execution results and provide:
-1. A summary of what happened during test execution
-2. Identification of any failures or errors
-3. Suggestions for fixing issues (if any)
-4. Overall assessment of test health
-
-Respond with a JSON object containing:
-- "summary": Brief summary of test execution
-- "status": "passed", "failed", or "error"
-- "issues_found": List of issues identified
-- "recommendations": List of actionable recommendations
-- "test_metrics": Any metrics you can extract (e.g., number of tests, duration)
-"""
+        # Load system prompt from file
+        system_prompt = self._load_prompt("test_results_analysis")
 
         human_prompt = f"""Analyze these test execution results:
 
@@ -341,7 +334,7 @@ Summary: {test_results['summary']}
 Detailed Results:
 {json.dumps(test_results['test_commands_executed'], indent=2)}
 
-Please provide your analysis in the JSON format specified."""
+Please provide your analysis in the structured format."""
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -349,21 +342,12 @@ Please provide your analysis in the JSON format specified."""
         ]
 
         try:
-            response = await self.llm.ainvoke(messages)
-            response_text = response.content
-
-            if "```json" in response_text:
-                json_start = response_text.find("```json") + 7
-                json_end = response_text.find("```", json_start)
-                json_text = response_text[json_start:json_end].strip()
-            elif "{" in response_text and "}" in response_text:
-                json_start = response_text.find("{")
-                json_end = response_text.rfind("}") + 1
-                json_text = response_text[json_start:json_end]
-            else:
-                raise ValueError("No JSON found in response")
-
-            return json.loads(json_text)
+            # Use structured output with Pydantic model
+            structured_llm = self.llm.with_structured_output(TestResultsAnalysis)
+            response = await structured_llm.ainvoke(messages)
+            
+            # Convert Pydantic model to dict
+            return response.model_dump()
 
         except Exception as e:
             # Fallback analysis
