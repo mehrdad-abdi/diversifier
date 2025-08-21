@@ -81,33 +81,21 @@ class LLMTestRunner:
 
         # Find test directories using configured test paths
         test_dirs = []
-        primary_test_path = self.migration_config.test_paths[0] if self.migration_config.test_paths else "tests/"
-        test_path = primary_test_path.rstrip("/")
-
-        # Check if the configured test path exists
-        result = await self.command_client.call_tool(
-            "check_file_exists", {"path": test_path}
-        )
-        check_result = json.loads(result[0].text)
-        if check_result["exists"] and check_result["is_directory"]:
-            test_dirs.append(test_path)
-
-        # Find test files in project root
-        result = await self.command_client.call_tool(
-            "find_files", {"pattern": "test_*.py"}
-        )
-        test_files_root = json.loads(result[0].text)["matches"]
-
-        result = await self.command_client.call_tool(
-            "find_files", {"pattern": "*_test.py"}
-        )
-        test_files_suffix = json.loads(result[0].text)["matches"]
+        for test_path_config in self.migration_config.test_paths:
+            test_path = test_path_config.rstrip("/")
+            
+            # Check if the configured test path exists
+            result = await self.command_client.call_tool(
+                "check_file_exists", {"path": test_path}
+            )
+            check_result = json.loads(result[0].text)
+            if check_result["exists"] and check_result["is_directory"]:
+                test_dirs.append(test_path)
 
         return {
             "project_path": str(self.project_path),
             "project_files": project_files,
             "test_directories": test_dirs,
-            "test_files": test_files_root + test_files_suffix,
         }
 
     async def detect_dev_requirements(
@@ -172,7 +160,6 @@ Be conservative and practical in your recommendations. Prefer standard, widely-u
 Project structure:
 - Project files found: {[f['name'] for f in project_structure['project_files']]}
 - Test directories: {project_structure['test_directories']}
-- Test files found: {len(project_structure['test_files'])} test files
 
 File contents:
 {file_contents_text}

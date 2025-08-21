@@ -52,29 +52,16 @@ class SimpleLLMTestRunner:
 
         # Find test directories using configured test paths
         test_dirs = []
-        primary_test_path = self.migration_config.test_paths[0] if self.migration_config.test_paths else "tests/"
-        test_path = primary_test_path.rstrip("/")
-        dir_path = self.project_path / test_path
-        if dir_path.exists() and dir_path.is_dir():
-            test_dirs.append(test_path)
-
-        # Find test files
-        test_files = []
-        for pattern in ["test_*.py", "*_test.py"]:
-            for file_path in self.project_path.rglob(pattern):
-                if file_path.is_file():
-                    test_files.append(
-                        {
-                            "path": str(file_path.relative_to(self.project_path)),
-                            "name": file_path.name,
-                        }
-                    )
+        for test_path_config in self.migration_config.test_paths:
+            test_path = test_path_config.rstrip("/")
+            dir_path = self.project_path / test_path
+            if dir_path.exists() and dir_path.is_dir():
+                test_dirs.append(test_path)
 
         return {
             "project_path": str(self.project_path),
             "project_files": project_files,
             "test_directories": test_dirs,
-            "test_files": test_files,
         }
 
     async def detect_dev_requirements(
@@ -136,7 +123,6 @@ Be conservative and practical in your recommendations. Prefer standard, widely-u
 Project structure:
 - Project files found: {[f['name'] for f in project_structure['project_files']]}
 - Test directories: {project_structure['test_directories']}
-- Test files found: {len(project_structure['test_files'])} test files
 
 File contents:
 {file_contents_text}
