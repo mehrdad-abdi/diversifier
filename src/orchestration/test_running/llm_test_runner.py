@@ -4,10 +4,12 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+import sys
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain.chat_models import init_chat_model
-from pydantic import BaseModel, Field
+from langchain_core.exceptions import LangChainException
+from pydantic import BaseModel, Field, ValidationError
 
 from ...mcp_servers.command.client import CommandMCPClient
 from ...mcp_servers.filesystem.client import FilesystemMCPClient
@@ -179,24 +181,62 @@ Please provide your analysis in the structured format."""
             HumanMessage(content=human_prompt),
         ]
 
+        # Use structured output with Pydantic model and retry logic
+        structured_llm = self.llm.with_structured_output(DevRequirements)
+        
+        # Create retryable LLM with maximum 3 retries for transient errors
+        retryable_llm = structured_llm.with_retry(
+            stop_after_attempt=3,
+            retry_if_exception_type=(
+                # Network/API related errors that can be retried
+                ConnectionError,
+                TimeoutError,
+                # LangChain exceptions that might be transient
+                LangChainException,
+            )
+        )
+        
         try:
-            # Use structured output with Pydantic model
-            structured_llm = self.llm.with_structured_output(DevRequirements)
-            response = await structured_llm.ainvoke(messages)
+            response = await retryable_llm.ainvoke(messages)
             
             # Convert Pydantic model to dict
             return response.model_dump()
 
+        except ValidationError as e:
+            # Pydantic validation errors indicate malformed LLM response
+            error_msg = (
+                f"LLM failed to produce valid structured output after 3 retries. "
+                f"The LLM response does not match the expected DevRequirements schema: {str(e)}"
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
+            
+        except (ConnectionError, TimeoutError) as e:
+            # Network/connectivity issues that couldn't be resolved after retries
+            error_msg = (
+                f"Network connectivity issues prevented LLM analysis after 3 retries: {str(e)}. "
+                f"Please check your internet connection and API configuration."
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
+            
+        except LangChainException as e:
+            # LangChain-specific errors (API key issues, model issues, etc.)
+            error_msg = (
+                f"LLM service error after 3 retries: {str(e)}. "
+                f"This may be due to API key issues, model availability, or service limits."
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
+            
         except Exception as e:
-            # Fallback analysis
-            return {
-                "testing_framework": "pytest",
-                "dev_dependencies": ["pytest"],
-                "install_commands": ["pip install pytest"],
-                "test_commands": ["pytest"],
-                "setup_commands": [],
-                "analysis": f"Fallback analysis due to parsing error: {str(e)}",
-            }
+            # Unexpected errors that we cannot recover from
+            error_msg = (
+                f"Unexpected error during development requirements analysis: {str(e)}. "
+                f"Error type: {type(e).__name__}"
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
 
     async def setup_test_environment(
         self, requirements: Dict[str, Any]
@@ -340,31 +380,62 @@ Please provide your analysis in the structured format."""
             HumanMessage(content=human_prompt),
         ]
 
+        # Use structured output with Pydantic model and retry logic
+        structured_llm = self.llm.with_structured_output(TestResultsAnalysis)
+        
+        # Create retryable LLM with maximum 3 retries for transient errors
+        retryable_llm = structured_llm.with_retry(
+            stop_after_attempt=3,
+            retry_if_exception_type=(
+                # Network/API related errors that can be retried
+                ConnectionError,
+                TimeoutError,
+                # LangChain exceptions that might be transient
+                LangChainException,
+            )
+        )
+        
         try:
-            # Use structured output with Pydantic model
-            structured_llm = self.llm.with_structured_output(TestResultsAnalysis)
-            response = await structured_llm.ainvoke(messages)
+            response = await retryable_llm.ainvoke(messages)
             
             # Convert Pydantic model to dict
             return response.model_dump()
 
+        except ValidationError as e:
+            # Pydantic validation errors indicate malformed LLM response
+            error_msg = (
+                f"LLM failed to produce valid test analysis after 3 retries. "
+                f"The LLM response does not match the expected TestResultsAnalysis schema: {str(e)}"
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
+            
+        except (ConnectionError, TimeoutError) as e:
+            # Network/connectivity issues that couldn't be resolved after retries
+            error_msg = (
+                f"Network connectivity issues prevented test results analysis after 3 retries: {str(e)}. "
+                f"Please check your internet connection and API configuration."
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
+            
+        except LangChainException as e:
+            # LangChain-specific errors (API key issues, model issues, etc.)
+            error_msg = (
+                f"LLM service error during test analysis after 3 retries: {str(e)}. "
+                f"This may be due to API key issues, model availability, or service limits."
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
+            
         except Exception as e:
-            # Fallback analysis
-            status = "passed" if test_results["overall_success"] else "failed"
-            return {
-                "summary": f"Test execution {'completed successfully' if test_results['overall_success'] else 'failed'}",
-                "status": status,
-                "issues_found": (
-                    [] if test_results["overall_success"] else ["Test execution failed"]
-                ),
-                "recommendations": (
-                    []
-                    if test_results["overall_success"]
-                    else ["Review test output for specific failures"]
-                ),
-                "test_metrics": test_results["summary"],
-                "analysis_error": f"LLM analysis failed: {str(e)}",
-            }
+            # Unexpected errors that we cannot recover from
+            error_msg = (
+                f"Unexpected error during test results analysis: {str(e)}. "
+                f"Error type: {type(e).__name__}"
+            )
+            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
+            sys.exit(1)
 
     async def run_full_test_cycle(self) -> Dict[str, Any]:
         """Execute the complete test cycle: analyze, setup, run, and report."""
