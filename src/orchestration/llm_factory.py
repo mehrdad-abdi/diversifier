@@ -132,12 +132,6 @@ def validate_llm_config(config: LLMConfig) -> list[str]:
     if config.timeout <= 0:
         issues.append(f"timeout must be positive, got: {config.timeout}")
 
-    # Check retry_attempts
-    if config.retry_attempts < 0:
-        issues.append(
-            f"retry_attempts must be non-negative, got: {config.retry_attempts}"
-        )
-
     # Check API key environment variable exists
     api_key_env_var = config.api_key_env_var or get_default_api_key_env_var(
         config.provider
