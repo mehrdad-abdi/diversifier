@@ -64,7 +64,6 @@ class TestMCPConfig:
         assert config.git_server_path == "src/mcp_servers/git/server.py"
         assert config.docker_server_path == "src/mcp_servers/docker/server.py"
         assert config.timeout == 30
-        assert config.retry_attempts == 3
 
 
 class TestMigrationConfig:
@@ -112,7 +111,6 @@ class TestLLMConfig:
         assert config.temperature == 0.1
         assert config.max_tokens == 4096
         assert config.timeout == 120
-        assert config.retry_attempts == 3
         assert config.api_key_env_var == "TEST_API_KEY"
         assert config.base_url is None
         assert config.additional_params == {}
@@ -127,7 +125,6 @@ class TestLLMConfig:
             temperature=0.7,
             max_tokens=2048,
             timeout=60,
-            retry_attempts=5,
             base_url="https://api.openai.com/v1",
             additional_params={"top_p": 0.9, "frequency_penalty": 0.1},
         )
@@ -136,7 +133,6 @@ class TestLLMConfig:
         assert config.temperature == 0.7
         assert config.max_tokens == 2048
         assert config.timeout == 60
-        assert config.retry_attempts == 5
         assert config.api_key_env_var == "OPENAI_API_KEY"
         assert config.base_url == "https://api.openai.com/v1"
         assert config.additional_params == {"top_p": 0.9, "frequency_penalty": 0.1}
