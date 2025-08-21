@@ -115,9 +115,7 @@ class DiversificationCoordinator:
 
             return False
 
-    async def execute_workflow(
-        self, auto_proceed: bool = False
-    ) -> bool:
+    async def execute_workflow(self, auto_proceed: bool = False) -> bool:
         """Execute the complete diversification workflow.
 
         Args:
@@ -378,7 +376,6 @@ class DiversificationCoordinator:
                 f"Found {len(test_functions)} unique tests covering library usage"
             )
 
-
             # Use LLM-powered test running for intelligent test execution
             self.logger.info("Using LLM-powered test runner to execute tests")
             return await self._run_tests_with_llm(test_functions)
@@ -629,7 +626,6 @@ class DiversificationCoordinator:
         """Clean up and finalize migration."""
         try:
             self.logger.info("Finalizing migration")
-
 
             # Use git MCP server for cleanup when available
             if self.mcp_manager.is_server_available(MCPServerType.GIT):

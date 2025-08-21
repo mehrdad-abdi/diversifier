@@ -697,7 +697,6 @@ class TestDiversificationCoordinator:
         assert isinstance(coordinator.mcp_manager, MCPManager)
         assert isinstance(coordinator.workflow_state, WorkflowState)
 
-
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_workflow_status(self):
         """Test getting workflow status."""
