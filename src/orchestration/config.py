@@ -77,17 +77,6 @@ class MigrationConfig:
 
 
 @dataclass
-class PerformanceConfig:
-    """Performance monitoring configuration."""
-
-    enable_metrics: bool = True
-    metrics_file: Optional[str] = "performance_metrics.json"
-    log_slow_operations: bool = True
-    slow_operation_threshold: float = 1.0  # seconds
-    enable_memory_tracking: bool = False
-
-
-@dataclass
 class TaskTemperatureConfig:
     """Task-specific temperature configuration."""
 
@@ -137,7 +126,6 @@ class DiversifierConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     mcp: MCPConfig = field(default_factory=MCPConfig)
     migration: MigrationConfig = field(default_factory=MigrationConfig)
-    performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     project_root: str = "."
     temp_dir: str = "/tmp/diversifier"
     debug_mode: bool = False
@@ -220,10 +208,6 @@ class ConfigManager:
             "DIVERSIFIER_TEST_TIMEOUT": ("migration", "test_timeout"),
             "DIVERSIFIER_BACKUP_ORIGINAL": ("migration", "backup_original"),
             "DIVERSIFIER_MIN_COVERAGE": ("migration", "min_test_coverage"),
-            # Performance configuration
-            "DIVERSIFIER_ENABLE_METRICS": ("performance", "enable_metrics"),
-            "DIVERSIFIER_METRICS_FILE": ("performance", "metrics_file"),
-            "DIVERSIFIER_SLOW_THRESHOLD": ("performance", "slow_operation_threshold"),
             # LLM configuration
             "DIVERSIFIER_LLM_PROVIDER": ("llm", "provider"),
             "DIVERSIFIER_LLM_MODEL_NAME": ("llm", "model_name"),
@@ -242,7 +226,7 @@ class ConfigManager:
             value = os.getenv(env_var)
             if value is not None:
                 # Convert string values to appropriate types
-                converted_value = self._convert_env_value(value, section, key)
+                converted_value = self._convert_env_value(value, key)
 
                 if section is None:
                     config_data[key] = converted_value
@@ -253,14 +237,11 @@ class ConfigManager:
 
         return config_data
 
-    def _convert_env_value(
-        self, value: str, section: Optional[str], key: str  # noqa: ARG002
-    ) -> Union[str, int, float, bool]:
+    def _convert_env_value(self, value: str, key: str) -> Union[str, int, float, bool]:
         """Convert environment variable string to appropriate type.
 
         Args:
             value: Environment variable value
-            section: Configuration section
             key: Configuration key
 
         Returns:
@@ -272,9 +253,6 @@ class ConfigManager:
             "backup_original",
             "validate_syntax",
             "require_test_coverage",
-            "enable_metrics",
-            "log_slow_operations",
-            "enable_memory_tracking",
             "enable_correlation_ids",
             "debug_mode",
         ]:
@@ -292,7 +270,7 @@ class ConfigManager:
             return int(value)
 
         # Float values
-        if key in ["min_test_coverage", "slow_operation_threshold", "temperature"]:
+        if key in ["min_test_coverage", "temperature"]:
             return float(value)
 
         # String values (default)
@@ -311,7 +289,6 @@ class ConfigManager:
         logging_data = config_data.get("logging", {})
         mcp_data = config_data.get("mcp", {})
         migration_data = config_data.get("migration", {})
-        performance_data = config_data.get("performance", {})
         llm_data = config_data.get("llm", {})
 
         # Create nested config objects - filter out unknown keys
@@ -330,13 +307,6 @@ class ConfigManager:
                 k: v
                 for k, v in migration_data.items()
                 if k in MigrationConfig.__dataclass_fields__
-            }
-        )
-        performance_config = PerformanceConfig(
-            **{
-                k: v
-                for k, v in performance_data.items()
-                if k in PerformanceConfig.__dataclass_fields__
             }
         )
 
@@ -362,14 +332,13 @@ class ConfigManager:
         top_level_data = {
             k: v
             for k, v in config_data.items()
-            if k not in ["logging", "mcp", "migration", "performance", "llm"]
+            if k not in ["logging", "mcp", "migration", "llm"]
         }
 
         return DiversifierConfig(
             logging=logging_config,
             mcp=mcp_config,
             migration=migration_config,
-            performance=performance_config,
             llm=llm_config,
             **top_level_data,
         )
@@ -424,13 +393,6 @@ validate_syntax = true
 require_test_coverage = true
 min_test_coverage = 0.8
 test_paths = ["tests/", "test/"]
-
-[performance]
-enable_metrics = true
-metrics_file = "performance_metrics.json"
-log_slow_operations = true
-slow_operation_threshold = 1.0
-enable_memory_tracking = false
 
 [llm]
 # LLM Provider: Use correct LangChain provider names  
