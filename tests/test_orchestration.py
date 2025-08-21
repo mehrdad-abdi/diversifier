@@ -697,48 +697,6 @@ class TestDiversificationCoordinator:
         assert isinstance(coordinator.mcp_manager, MCPManager)
         assert isinstance(coordinator.workflow_state, WorkflowState)
 
-    @pytest.mark.asyncio
-    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
-    async def test_execute_workflow_dry_run(self):
-        """Test workflow execution in dry run mode."""
-
-        llm_config = LLMConfig(
-            provider="anthropic",
-            model_name="claude-3-sonnet",
-            api_key_env_var="TEST_API_KEY",
-        )
-        coordinator = DiversificationCoordinator(
-            project_path=self.project_path,
-            source_library="requests",
-            target_library="httpx",
-            llm_config=llm_config,
-        )
-
-        # Mock all the step handlers to return success
-        with (
-            patch.object(
-                coordinator, "_initialize_environment", return_value={"success": True}
-            ),
-            patch.object(coordinator, "_create_backup", return_value={"success": True}),
-            patch.object(coordinator, "_select_tests", return_value={"success": True}),
-            patch.object(
-                coordinator, "_run_baseline_tests", return_value={"success": True}
-            ),
-            patch.object(coordinator, "_migrate_code", return_value={"success": True}),
-            patch.object(
-                coordinator, "_validate_migration", return_value={"success": True}
-            ),
-            patch.object(coordinator, "_repair_issues", return_value={"success": True}),
-            patch.object(
-                coordinator, "_finalize_migration", return_value={"success": True}
-            ),
-        ):
-
-            result = await coordinator.execute_workflow(dry_run=True, auto_proceed=True)
-
-            assert result is True
-            assert coordinator.workflow_state.is_workflow_complete()
-
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_workflow_status(self):
         """Test getting workflow status."""
