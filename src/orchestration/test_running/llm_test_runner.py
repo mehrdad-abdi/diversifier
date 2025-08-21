@@ -71,7 +71,7 @@ class LLMTestRunner:
         config = get_config()
         model_id = f"{config.llm.provider.lower()}:{config.llm.model_name}"
 
-        self.llm = init_chat_model(
+        self.llm = init_chat_model(  # type: ignore[call-overload]
             model=model_id,
             temperature=0,  # Use low temperature for consistent test analysis
             max_tokens=config.llm.max_tokens,
@@ -111,6 +111,9 @@ class LLMTestRunner:
         if not self.command_client or not self.filesystem_client:
             raise ValueError("MCP clients not initialized")
 
+        # Type assertion for mypy
+        assert self.command_client is not None
+
         # Find common project files from configuration
         project_files = []
         common_files = self.migration_config.common_project_files
@@ -135,7 +138,7 @@ class LLMTestRunner:
             test_path = test_path_config.rstrip("/")
 
             # Check if the configured test path exists
-            result = await self.command_client.call_tool(
+            result = await self.command_client.call_tool(  # type: ignore[misc]
                 "check_file_exists", {"path": test_path}
             )
             check_result = json.loads(result[0].text)
@@ -153,6 +156,9 @@ class LLMTestRunner:
     ) -> Dict[str, Any]:
         """Use LLM to analyze project files and detect development requirements."""
 
+        # Type assertion for mypy
+        assert self.command_client is not None
+
         # Read project files collected by analyze_project_structure
         file_contents = {}
 
@@ -160,7 +166,7 @@ class LLMTestRunner:
             if project_file["type"] == "file":
                 filename = project_file["name"]
                 try:
-                    result = await self.command_client.call_tool(
+                    result = await self.command_client.call_tool(  # type: ignore[misc]
                         "read_file_content", {"path": filename, "max_lines": 100}
                     )
                     content_result = json.loads(result[0].text)
@@ -252,6 +258,9 @@ Please provide your analysis in the structured format."""
         self, requirements: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Set up the test environment by installing dependencies."""
+        # Type assertion for mypy
+        assert self.command_client is not None
+
         setup_results = {
             "setup_commands_executed": [],
             "install_commands_executed": [],
@@ -262,11 +271,11 @@ Please provide your analysis in the structured format."""
         # Execute setup commands
         for command in requirements.get("setup_commands", []):
             try:
-                result = await self.command_client.call_tool(
+                result = await self.command_client.call_tool(  # type: ignore[misc]
                     "execute_command", {"command": command, "timeout": 300}
                 )
                 command_result = json.loads(result[0].text)
-                setup_results["setup_commands_executed"].append(
+                setup_results["setup_commands_executed"].append(  # type: ignore[attr-defined]
                     {
                         "command": command,
                         "success": command_result["success"],
@@ -276,23 +285,23 @@ Please provide your analysis in the structured format."""
 
                 if not command_result["success"]:
                     setup_results["success"] = False
-                    setup_results["errors"].append(f"Setup command failed: {command}")
+                    setup_results["errors"].append(f"Setup command failed: {command}")  # type: ignore[attr-defined]
 
             except Exception as e:
                 setup_results["success"] = False
-                setup_results["errors"].append(
+                setup_results["errors"].append(  # type: ignore[attr-defined]
                     f"Error executing setup command '{command}': {str(e)}"
                 )
 
         # Execute install commands
         for command in requirements.get("install_commands", []):
             try:
-                result = await self.command_client.call_tool(
+                result = await self.command_client.call_tool(  # type: ignore[misc]
                     "execute_command",
                     {"command": command, "timeout": 600},  # Longer timeout for installs
                 )
                 command_result = json.loads(result[0].text)
-                setup_results["install_commands_executed"].append(
+                setup_results["install_commands_executed"].append(  # type: ignore[attr-defined]
                     {
                         "command": command,
                         "success": command_result["success"],
@@ -302,11 +311,11 @@ Please provide your analysis in the structured format."""
 
                 if not command_result["success"]:
                     setup_results["success"] = False
-                    setup_results["errors"].append(f"Install command failed: {command}")
+                    setup_results["errors"].append(f"Install command failed: {command}")  # type: ignore[attr-defined]
 
             except Exception as e:
                 setup_results["success"] = False
-                setup_results["errors"].append(
+                setup_results["errors"].append(  # type: ignore[attr-defined]
                     f"Error executing install command '{command}': {str(e)}"
                 )
 
@@ -314,6 +323,9 @@ Please provide your analysis in the structured format."""
 
     async def run_tests(self, requirements: Dict[str, Any]) -> Dict[str, Any]:
         """Execute tests using the detected testing framework and commands."""
+        # Type assertion for mypy
+        assert self.command_client is not None
+
         test_results = {
             "test_commands_executed": [],
             "overall_success": True,
@@ -328,7 +340,7 @@ Please provide your analysis in the structured format."""
 
         for command in test_commands:
             try:
-                result = await self.command_client.call_tool(
+                result = await self.command_client.call_tool(  # type: ignore[misc]
                     "execute_command", {"command": command, "timeout": 600}
                 )
                 command_result = json.loads(result[0].text)
@@ -341,13 +353,13 @@ Please provide your analysis in the structured format."""
                     "stderr": command_result.get("stderr", ""),
                 }
 
-                test_results["test_commands_executed"].append(test_execution)
-                test_results["summary"]["total_commands"] += 1
+                test_results["test_commands_executed"].append(test_execution)  # type: ignore[attr-defined]
+                test_results["summary"]["total_commands"] += 1  # type: ignore[index]
 
                 if command_result["success"]:
-                    test_results["summary"]["successful_commands"] += 1
+                    test_results["summary"]["successful_commands"] += 1  # type: ignore[index]
                 else:
-                    test_results["summary"]["failed_commands"] += 1
+                    test_results["summary"]["failed_commands"] += 1  # type: ignore[index]
                     test_results["overall_success"] = False
 
             except Exception as e:
@@ -360,9 +372,9 @@ Please provide your analysis in the structured format."""
                     "stderr": "",
                 }
 
-                test_results["test_commands_executed"].append(test_execution)
-                test_results["summary"]["total_commands"] += 1
-                test_results["summary"]["failed_commands"] += 1
+                test_results["test_commands_executed"].append(test_execution)  # type: ignore[attr-defined]
+                test_results["summary"]["total_commands"] += 1  # type: ignore[index]
+                test_results["summary"]["failed_commands"] += 1  # type: ignore[index]
                 test_results["overall_success"] = False
 
         return test_results
