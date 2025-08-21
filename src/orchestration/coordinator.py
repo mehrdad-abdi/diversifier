@@ -12,7 +12,7 @@ from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
 from .test_generation import TestCoverageSelector
 from .config import LLMConfig, MigrationConfig
-from .test_running.simple_test_runner import SimpleLLMTestRunner
+from .test_running.llm_test_runner import LLMTestRunner
 
 
 class DiversificationCoordinator:
@@ -430,7 +430,7 @@ class DiversificationCoordinator:
             )
 
             # Initialize LLM test runner for the target project
-            runner = SimpleLLMTestRunner(str(self.project_path), self.migration_config)
+            runner = LLMTestRunner(str(self.project_path), self.migration_config)
 
             # Analyze target project structure to understand its environment
             project_structure = runner.analyze_project_structure()
