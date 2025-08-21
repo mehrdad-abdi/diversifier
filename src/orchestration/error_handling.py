@@ -6,7 +6,6 @@ from typing import Dict, Any, Optional, List, Callable
 from enum import Enum
 from dataclasses import dataclass
 import traceback
-import time
 
 
 class ErrorSeverity(Enum):
@@ -472,15 +471,11 @@ class ErrorHandler:
     def attempt_recovery(
         self,
         error_info: ErrorInfo,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
     ) -> bool:
         """Attempt to recover from an error using registered handlers.
 
         Args:
             error_info: Error information
-            max_retries: Maximum number of recovery attempts
-            retry_delay: Delay between retry attempts in seconds
 
         Returns:
             True if recovery was successful, False otherwise
@@ -488,36 +483,25 @@ class ErrorHandler:
         if not error_info.recoverable:
             return False
 
-        for attempt in range(max_retries):
-            self.logger.info(
-                f"Recovery attempt {attempt + 1}/{max_retries} for "
-                f"{error_info.category.value} error"
-            )
+        self.logger.info(f"Attempting recovery for {error_info.category.value} error")
 
-            try:
-                # Apply recovery strategy based on category
-                success = self._apply_recovery_strategy(error_info)
-                if success:
-                    self.logger.info(
-                        f"Recovery successful for {error_info.category.value} error"
-                    )
-                    return True
-
-            except Exception as recovery_error:
-                self.logger.warning(
-                    f"Recovery attempt {attempt + 1} failed: {recovery_error}"
+        try:
+            # Apply recovery strategy based on category
+            success = self._apply_recovery_strategy(error_info)
+            if success:
+                self.logger.info(
+                    f"Recovery successful for {error_info.category.value} error"
                 )
+                return True
+            else:
+                self.logger.error(
+                    f"Recovery failed for {error_info.category.value} error"
+                )
+                return False
 
-            # Wait before next retry (with exponential backoff)
-            if attempt < max_retries - 1:
-                delay = retry_delay * (2**attempt)
-                self.logger.info(f"Waiting {delay:.1f}s before next retry...")
-                time.sleep(delay)
-
-        self.logger.error(
-            f"All recovery attempts failed for {error_info.category.value} error"
-        )
-        return False
+        except Exception as recovery_error:
+            self.logger.error(f"Recovery failed: {recovery_error}")
+            return False
 
     def _apply_recovery_strategy(self, error_info: ErrorInfo) -> bool:
         """Apply recovery strategy for specific error category.
@@ -560,9 +544,9 @@ class ErrorHandler:
                 # For now, we'll simulate a successful restart
                 return True
 
-            # Generic connection retry
+            # Generic connection check
             self.logger.info("Attempting generic MCP connection recovery")
-            return False  # Would implement actual connection retry logic
+            return False  # Would implement actual connection checking logic
 
         except Exception as e:
             self.logger.error(f"MCP connection recovery failed: {e}")
@@ -578,7 +562,7 @@ class ErrorHandler:
             True if agent recovery was successful
         """
         try:
-            # Clear agent memory and retry with simpler prompt
+            # Clear agent memory and use simpler prompt
             agent_type = (
                 error_info.context.get("agent_type") if error_info.context else None
             )

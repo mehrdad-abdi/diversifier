@@ -624,22 +624,6 @@ class TestWorkflowState:
         assert step.error == error
         assert self.workflow.current_stage == WorkflowStage.FAILED
 
-    def test_retry_step(self):
-        """Test retrying a failed step."""
-        # First fail a step
-        self.workflow.start_step("initialize_environment")
-        self.workflow.fail_step("initialize_environment", "Test error")
-
-        # Then retry it
-        success = self.workflow.retry_step("initialize_environment")
-
-        assert success is True
-        step = self.workflow.steps["initialize_environment"]
-        assert step.status == WorkflowStatus.PENDING
-        assert step.error is None
-        assert step.start_time is None
-        assert step.end_time is None
-
     def test_dependencies(self):
         """Test step dependencies."""
         # Try to start a step with unmet dependencies
@@ -672,7 +656,7 @@ class TestWorkflowState:
         assert summary["failed_steps"] == 1
         assert "steps" in summary
         assert summary["is_complete"] is False
-        assert summary["is_failed"] is False  # Can be retried
+        assert summary["is_failed"] is True  # Failed step means workflow failed
 
 
 class TestDiversificationCoordinator:

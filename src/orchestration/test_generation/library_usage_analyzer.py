@@ -320,13 +320,12 @@ class LibraryUsageAnalyzer:
                             for file_info in data["files"]
                         ]
 
-            # Fallback to manual file discovery
+            # Use manual file discovery
             return [str(p) for p in self.project_root.rglob("*.py") if p.is_file()]
 
         except Exception as e:
-            self.logger.warning(f"Error finding Python files: {e}")
-            # Fallback to manual file discovery
-            return [str(p) for p in self.project_root.rglob("*.py") if p.is_file()]
+            self.logger.error(f"Error finding Python files: {e}")
+            raise
 
     async def _read_file(self, file_path: str) -> Optional[str]:
         """Read content of a file."""
@@ -339,7 +338,7 @@ class LibraryUsageAnalyzer:
                 if result and "result" in result and "content" in result["result"]:
                     return result["result"]["content"][0]["text"]
 
-            # Fallback to direct file reading
+            # Use direct file reading
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
 

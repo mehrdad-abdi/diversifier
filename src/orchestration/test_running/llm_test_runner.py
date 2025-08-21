@@ -93,8 +93,7 @@ class LLMTestRunner:
         if prompt_path.exists():
             return prompt_path.read_text().strip()
         else:
-            # Fallback for missing prompt files
-            return "You are a helpful assistant for Python project analysis."
+            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
 
     def initialize_mcp_clients(self) -> None:
         """Initialize MCP clients for command and filesystem operations."""
@@ -201,23 +200,11 @@ Please provide your analysis in the structured format."""
             HumanMessage(content=human_prompt),
         ]
 
-        # Use structured output with Pydantic model and retry logic
+        # Use structured output with Pydantic model
         structured_llm = self.llm.with_structured_output(DevRequirements)
 
-        # Create retryable LLM with maximum 3 retries for transient errors
-        retryable_llm = structured_llm.with_retry(
-            stop_after_attempt=3,
-            retry_if_exception_type=(
-                # Network/API related errors that can be retried
-                ConnectionError,
-                TimeoutError,
-                # LangChain exceptions that might be transient
-                LangChainException,
-            ),
-        )
-
         try:
-            response = await retryable_llm.ainvoke(messages)
+            response = await structured_llm.ainvoke(messages)
 
             # Convert Pydantic model to dict
             return response.model_dump()
@@ -225,7 +212,7 @@ Please provide your analysis in the structured format."""
         except ValidationError as e:
             # Pydantic validation errors indicate malformed LLM response
             error_msg = (
-                f"LLM failed to produce valid structured output after 3 retries. "
+                f"LLM failed to produce valid structured output. "
                 f"The LLM response does not match the expected DevRequirements schema: {str(e)}"
             )
             raise UnrecoverableTestRunnerError(error_msg, "validation", e)

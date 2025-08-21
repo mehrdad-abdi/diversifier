@@ -291,8 +291,8 @@ def test():
         )
 
     @pytest.mark.asyncio
-    async def test_get_python_files_fallback(self, analyzer, tmp_path):
-        """Test getting Python files with fallback method."""
+    async def test_get_python_files_manual_discovery(self, analyzer, tmp_path):
+        """Test getting Python files with manual discovery method."""
         # Create test files
         (tmp_path / "file1.py").touch()
         (tmp_path / "subdir").mkdir()
@@ -312,17 +312,12 @@ def test():
     @pytest.mark.asyncio
     async def test_get_python_files_mcp_error(self, analyzer, tmp_path):
         """Test getting Python files when MCP call fails."""
-        # Create test file for fallback
-        (tmp_path / "file.py").touch()
-
         analyzer.mcp_manager.is_server_available.return_value = True
         analyzer.mcp_manager.call_tool.side_effect = Exception("MCP error")
 
-        files = await analyzer._get_python_files()
-
-        # Should fall back to manual discovery
-        assert len(files) == 1
-        assert "file.py" in files[0]
+        # Should raise exception instead of falling back
+        with pytest.raises(Exception, match="MCP error"):
+            await analyzer._get_python_files()
 
     @pytest.mark.asyncio
     async def test_read_file_with_mcp(self, analyzer):
@@ -340,8 +335,8 @@ def test():
         )
 
     @pytest.mark.asyncio
-    async def test_read_file_fallback(self, analyzer, tmp_path):
-        """Test reading file with fallback method."""
+    async def test_read_file_direct(self, analyzer, tmp_path):
+        """Test reading file with direct file access."""
         test_file = tmp_path / "file.py"
         test_content = "import requests\nrequests.get('url')"
         test_file.write_text(test_content)
