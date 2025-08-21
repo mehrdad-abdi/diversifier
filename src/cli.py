@@ -109,11 +109,6 @@ Examples:
         help="Name of the library to inject/substitute",
     )
 
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes",
-    )
 
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose output"
@@ -159,7 +154,7 @@ async def run_diversification(args) -> int:
 
         # Execute workflow
         success = await coordinator.execute_workflow(
-            dry_run=args.dry_run, auto_proceed=True  # For now, auto-proceed in CLI mode
+            auto_proceed=True  # For now, auto-proceed in CLI mode
         )
 
         if success:
@@ -236,7 +231,6 @@ def main() -> int:
         print(f"Project path: {project_path}")
         print(f"Remove library: {args.remove_lib}")
         print(f"Inject library: {args.inject_lib}")
-        print(f"Dry run: {args.dry_run}")
 
     # Store validated path
     args.project_path = project_path

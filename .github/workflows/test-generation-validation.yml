@@ -125,8 +125,8 @@ jobs:
         
         set +e  # Don't fail immediately on error so we can capture partial results
         
-        # Run diversifier using config file with dry-run to prevent actual migration
-        uv run diversifier pilot-project emails redmail --config diversifier_config.toml --dry-run --verbose 2>&1 | tee diversifier_output.log
+        # Run diversifier using config file
+        uv run diversifier pilot-project emails redmail --config diversifier_config.toml --verbose 2>&1 | tee diversifier_output.log
         
         DIVERSIFIER_EXIT_CODE=$?
         

@@ -75,7 +75,6 @@ class DiversificationCoordinator:
         self.logger = logging.getLogger("diversifier.coordinator")
 
         # Configuration
-        self.dry_run = False
         self.auto_proceed = False
 
     def _validate_api_key(self) -> bool:
@@ -117,18 +116,16 @@ class DiversificationCoordinator:
             return False
 
     async def execute_workflow(
-        self, dry_run: bool = False, auto_proceed: bool = False
+        self, auto_proceed: bool = False
     ) -> bool:
         """Execute the complete diversification workflow.
 
         Args:
-            dry_run: If True, don't make actual changes
             auto_proceed: If True, don't wait for user confirmation
 
         Returns:
             True if workflow completed successfully
         """
-        self.dry_run = dry_run
         self.auto_proceed = auto_proceed
 
         self.logger.info(
@@ -250,9 +247,6 @@ class DiversificationCoordinator:
     async def _create_backup(self) -> Dict[str, Any]:
         """Create backup of project before migration."""
         try:
-            if self.dry_run:
-                self.logger.info("Dry run: Skipping backup creation")
-                return {"success": True, "backup_path": None}
 
             # Use git MCP server to create backup branch
             if self.mcp_manager.is_server_available(MCPServerType.GIT):
@@ -384,18 +378,6 @@ class DiversificationCoordinator:
                 f"Found {len(test_functions)} unique tests covering library usage"
             )
 
-            if self.dry_run:
-                self.logger.info("Dry run: Skipping actual test execution")
-                return {
-                    "success": True,
-                    "test_results": {
-                        "tests_executed": len(test_functions),
-                        "passed": len(test_functions),
-                        "failed": 0,
-                        "note": "Dry run - tests not actually executed",
-                        "selected_tests": list(test_functions),
-                    },
-                }
 
             # Use LLM-powered test running for intelligent test execution
             self.logger.info("Using LLM-powered test runner to execute tests")
@@ -561,11 +543,7 @@ class DiversificationCoordinator:
             Perform the migration while preserving all functionality.
             """
 
-            if self.dry_run:
-                self.logger.info("Dry run: Simulating code migration")
-                result = {"output": "Dry run migration simulation"}
-            else:
-                result = migrator.invoke(migration_prompt)
+            result = migrator.invoke(migration_prompt)
 
             return {
                 "success": True,
@@ -635,11 +613,7 @@ class DiversificationCoordinator:
             Apply targeted fixes to resolve the issues while maintaining functional equivalence.
             """
 
-            if self.dry_run:
-                self.logger.info("Dry run: Simulating issue repair")
-                result = {"output": "Dry run repair simulation"}
-            else:
-                result = repairer.invoke(repair_prompt)
+            result = repairer.invoke(repair_prompt)
 
             return {
                 "success": True,
@@ -656,13 +630,6 @@ class DiversificationCoordinator:
         try:
             self.logger.info("Finalizing migration")
 
-            if self.dry_run:
-                self.logger.info("Dry run: Simulating migration finalization")
-                return {
-                    "success": True,
-                    "migration_finalized": True,
-                    "cleanup_complete": True,
-                }
 
             # Use git MCP server for cleanup when available
             if self.mcp_manager.is_server_available(MCPServerType.GIT):
