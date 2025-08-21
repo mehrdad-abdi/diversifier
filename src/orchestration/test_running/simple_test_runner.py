@@ -3,7 +3,6 @@
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -339,22 +338,3 @@ Please provide your analysis in the structured format."""
 
         except Exception as e:
             return {"error": str(e), "overall_success": False}
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    if len(sys.argv) != 2:
-        print(
-            "Usage: python -m src.orchestration.test_running.simple_test_runner <project_path>"
-        )
-        sys.exit(1)
-
-    project_path = sys.argv[1]
-
-    async def main():
-        runner = SimpleLLMTestRunner(project_path)
-        results = await runner.run_full_test_cycle()
-        print(json.dumps(results, indent=2))
-
-    asyncio.run(main())

@@ -2,7 +2,6 @@
 """LLM-based test runner that intelligently analyzes projects and runs tests."""
 
 import json
-import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -414,21 +413,3 @@ async def run_tests_with_llm(project_path: str) -> Dict[str, Any]:
     """Convenience function to run tests using LLM analysis."""
     runner = LLMTestRunner(project_path)
     return await runner.run_full_test_cycle()
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    if len(sys.argv) != 2:
-        print(
-            "Usage: python -m src.orchestration.test_running.llm_test_runner <project_path>"
-        )
-        sys.exit(1)
-
-    project_path = sys.argv[1]
-
-    async def main():
-        results = await run_tests_with_llm(project_path)
-        print(json.dumps(results, indent=2))
-
-    asyncio.run(main())
