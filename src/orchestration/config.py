@@ -42,7 +42,9 @@ class MigrationConfig:
     validate_syntax: bool = True
     require_test_coverage: bool = True
     min_test_coverage: float = 0.8
-    test_path: str = "tests/"  # Relative path to test directory
+    test_paths: List[str] = field(
+        default_factory=lambda: ["tests/", "test/"]
+    )  # List of relative paths to test directories
     common_project_files: List[str] = field(
         default_factory=lambda: [
             "pyproject.toml",
@@ -73,6 +75,11 @@ class MigrationConfig:
             ("sqlite3", "sqlalchemy"),
         ]
     )
+
+    @property
+    def test_path(self) -> str:
+        """Get the primary test path for backward compatibility."""
+        return self.test_paths[0] if self.test_paths else "tests/"
 
 
 @dataclass
@@ -256,7 +263,7 @@ class ConfigManager:
         return config_data
 
     def _convert_env_value(
-        self, value: str, section: Optional[str], key: str
+        self, value: str, section: Optional[str], key: str  # noqa: ARG002
     ) -> Union[str, int, float, bool]:
         """Convert environment variable string to appropriate type.
 
