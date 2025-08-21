@@ -42,7 +42,31 @@ class MigrationConfig:
     validate_syntax: bool = True
     require_test_coverage: bool = True
     min_test_coverage: float = 0.8
-    test_path: str = "tests/"  # Relative path to test directory
+    test_paths: List[str] = field(
+        default_factory=lambda: ["tests/", "test/"]
+    )  # List of relative paths to test directories
+    common_project_files: List[str] = field(
+        default_factory=lambda: [
+            "pyproject.toml",
+            "setup.py",
+            "requirements.txt",
+            "requirements-dev.txt",
+            "Pipfile",
+            "poetry.lock",
+            "package.json",
+            "Cargo.toml",
+            "go.mod",
+            "README.md",
+            "README.rst",
+            "tox.ini",
+            "pytest.ini",
+            ".pytest.ini",
+            "setup.cfg",
+            "Makefile",
+            "docker-compose.yml",
+            "Dockerfile",
+        ]
+    )
     allowed_library_pairs: List[tuple] = field(
         default_factory=lambda: [
             ("requests", "httpx"),
@@ -234,7 +258,7 @@ class ConfigManager:
         return config_data
 
     def _convert_env_value(
-        self, value: str, section: Optional[str], key: str
+        self, value: str, section: Optional[str], key: str  # noqa: ARG002
     ) -> Union[str, int, float, bool]:
         """Convert environment variable string to appropriate type.
 
@@ -405,7 +429,7 @@ backup_original = true
 validate_syntax = true
 require_test_coverage = true
 min_test_coverage = 0.8
-test_path = "tests/"
+test_paths = ["tests/", "test/"]
 
 [performance]
 enable_metrics = true

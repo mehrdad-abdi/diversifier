@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 
 from src.mcp_servers.filesystem.launcher import FileSystemMCPClient
-from src.mcp_servers.testing.launcher import TestingMCPClient
+from src.mcp_servers.command.client import CommandMCPClient
 from src.mcp_servers.git.launcher import GitMCPClient
 from src.mcp_servers.docker.launcher import DockerMCPLauncher
 
@@ -18,7 +18,7 @@ class MCPServerType(Enum):
     """Types of MCP servers used in diversification."""
 
     FILESYSTEM = "filesystem"
-    TESTING = "testing"
+    COMMAND = "command"
     GIT = "git"
     DOCKER = "docker"
 
@@ -267,25 +267,25 @@ class MCPManager:
             self.logger.error(f"Failed to initialize filesystem server: {e}")
             return False
 
-    async def initialize_testing_server(self) -> bool:
-        """Initialize the testing MCP server.
+    async def initialize_command_server(self) -> bool:
+        """Initialize the command MCP server.
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            client = TestingMCPClient(project_root=self.project_root)
-            connection = MCPConnection(MCPServerType.TESTING, client)
+            client = CommandMCPClient(project_root=self.project_root)
+            connection = MCPConnection(MCPServerType.COMMAND, client)
 
             success = await connection.connect()
             if success:
-                self.connections[MCPServerType.TESTING] = connection
-                self.logger.info("Testing MCP server initialized")
+                self.connections[MCPServerType.COMMAND] = connection
+                self.logger.info("Command MCP server initialized")
 
             return success
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize testing server: {e}")
+            self.logger.error(f"Failed to initialize command server: {e}")
             return False
 
     async def initialize_git_server(self) -> bool:
@@ -342,7 +342,7 @@ class MCPManager:
         results[MCPServerType.FILESYSTEM] = await self.initialize_filesystem_server()
 
         # Initialize other servers
-        results[MCPServerType.TESTING] = await self.initialize_testing_server()
+        results[MCPServerType.COMMAND] = await self.initialize_command_server()
         results[MCPServerType.GIT] = await self.initialize_git_server()
         results[MCPServerType.DOCKER] = await self.initialize_docker_server()
 

@@ -1,9 +1,6 @@
 """High-level workflow orchestration coordinator."""
 
-import json
 import logging
-import subprocess
-import time
 import re
 from typing import Dict, Any, Optional
 from pathlib import Path
@@ -15,6 +12,7 @@ from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
 from .test_generation import TestCoverageSelector
 from .config import LLMConfig, MigrationConfig
+from .test_running.llm_test_runner import LLMTestRunner, UnrecoverableTestRunnerError
 
 
 class DiversificationCoordinator:
@@ -65,7 +63,13 @@ class DiversificationCoordinator:
 
         # Initialize test coverage selection components
         self.test_coverage_selector = TestCoverageSelector(
-            str(self.project_path), self.mcp_manager, self.migration_config.test_path
+            str(self.project_path),
+            self.mcp_manager,
+            (
+                self.migration_config.test_paths[0]
+                if self.migration_config.test_paths
+                else "tests/"
+            ),
         )
 
         self.logger = logging.getLogger("diversifier.coordinator")
@@ -409,69 +413,16 @@ class DiversificationCoordinator:
                     },
                 }
 
-            # Use Testing MCP server if available, otherwise fallback to direct execution
-            if self.mcp_manager.is_server_available(MCPServerType.TESTING):
-                self.logger.info("Using Testing MCP server to execute tests")
-
-                # Execute tests via MCP server
-                test_result = await self.mcp_manager.call_tool(
-                    MCPServerType.TESTING,
-                    "run_specific_tests",
-                    {
-                        "test_specs": list(test_functions),
-                        "verbose": True,
-                        "capture_output": True,
-                    },
-                )
-
-                if test_result and "result" in test_result:
-                    # Parse JSON response from MCP server
-                    try:
-                        response_text = test_result["result"][0]["text"]
-                        parsed_result = json.loads(response_text)
-
-                        if parsed_result.get("status") == "success":
-                            results = parsed_result.get("results", {})
-                            self.logger.info(
-                                f"Baseline tests completed: {results.get('passed', 0)} passed, "
-                                f"{results.get('failed', 0)} failed"
-                            )
-
-                            return {
-                                "success": True,
-                                "test_results": {
-                                    "tests_executed": results.get(
-                                        "total", len(test_functions)
-                                    ),
-                                    "passed": results.get("passed", 0),
-                                    "failed": results.get("failed", 0),
-                                    "duration": results.get("duration", 0.0),
-                                    "selected_tests": list(test_functions),
-                                    "output": parsed_result.get("output", ""),
-                                },
-                            }
-                        else:
-                            self.logger.error(
-                                f"MCP test execution failed: {parsed_result.get('error', 'Unknown error')}"
-                            )
-                    except (json.JSONDecodeError, KeyError, IndexError) as e:
-                        self.logger.error(f"Failed to parse MCP server response: {e}")
-                        self.logger.debug(f"Raw MCP response: {test_result}")
-                else:
-                    self.logger.warning(
-                        "Testing MCP server failed, using fallback execution"
-                    )
-
-            # Fallback: direct pytest execution
-            self.logger.info("Using direct pytest execution as fallback")
-            return await self._run_tests_directly(test_functions)
+            # Use LLM-powered test running for intelligent test execution
+            self.logger.info("Using LLM-powered test runner to execute tests")
+            return await self._run_tests_with_llm(test_functions)
 
         except Exception as e:
             self.logger.error(f"Baseline test execution failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _run_tests_directly(self, test_functions: set) -> Dict[str, Any]:
-        """Run tests directly using subprocess as fallback.
+    async def _run_tests_with_llm(self, test_functions: set) -> Dict[str, Any]:
+        """Run tests using LLM-powered intelligent test runner.
 
         Args:
             test_functions: Set of test specifications to run
@@ -481,135 +432,135 @@ class DiversificationCoordinator:
         """
         try:
             self.logger.info(
-                f"Running {len(test_functions)} tests directly with pytest"
+                f"Running {len(test_functions)} tests using LLM-powered test runner"
             )
 
-            # Create pytest command with specific test functions
-            cmd = ["python", "-m", "pytest", "-v"]
-            cmd.extend(list(test_functions))
+            # Initialize LLM test runner for the target project
+            runner = LLMTestRunner(str(self.project_path), self.migration_config)
 
-            start_time = time.time()
-
-            # Run pytest and capture output
-            result = subprocess.run(
-                cmd,
-                cwd=str(self.project_path),
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
+            # Analyze target project structure to understand its environment
+            project_structure = await runner.analyze_project_structure()
+            self.logger.info(
+                f"Analyzed target project: found {len(project_structure['test_files'])} test files"
             )
 
-            duration = time.time() - start_time
+            # Use LLM to detect target project's development requirements
+            dev_requirements = await runner.detect_dev_requirements(project_structure)
+            self.logger.info(
+                f"Detected target project requirements: {dev_requirements['testing_framework']}"
+            )
 
-            # Parse pytest output to extract results
-            output_lines = result.stdout.split("\n")
-            passed = failed = skipped = 0
+            # Override test commands to run specific test functions instead of full test suite
+            focused_requirements = dev_requirements.copy()
+            focused_requirements["test_commands"] = [
+                f"python -m pytest -v {' '.join(test_functions)}"
+            ]
+            focused_requirements["analysis"] = (
+                "Focused test execution for baseline tests"
+            )
 
-            # Debug: Log the full output to understand the format
-            self.logger.debug(f"Pytest output:\n{result.stdout}")
-            if result.stderr:
-                self.logger.debug(f"Pytest stderr:\n{result.stderr}")
+            # Set up target project's test environment (install dev dependencies)
+            setup_results = await runner.setup_test_environment(focused_requirements)
+            if not setup_results["success"]:
+                return {
+                    "success": False,
+                    "error": f"Failed to setup target project test environment: {setup_results['errors']}",
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": len(test_functions),
+                        "selected_tests": list(test_functions),
+                        "llm_powered": True,
+                    },
+                }
 
-            # Look for pytest summary line with multiple patterns
-
-            for line in output_lines:
-                line_lower = line.lower().strip()
-
-                # Look for the final summary line (usually has "=" characters)
-                if ("passed" in line_lower or "failed" in line_lower) and (
-                    "=" in line or "in " in line_lower
-                ):
-                    self.logger.debug(f"Found summary line: {line}")
-
-                    # Extract all numbers from this line
-                    passed_match = re.search(r"(\d+) passed", line_lower)
-                    failed_match = re.search(r"(\d+) failed", line_lower)
-                    error_match = re.search(r"(\d+) error", line_lower)
-                    skipped_match = re.search(r"(\d+) skipped", line_lower)
-
-                    if passed_match:
-                        passed = int(passed_match.group(1))
-                    if failed_match:
-                        failed = int(failed_match.group(1))
-                    if error_match:
-                        failed += int(error_match.group(1))  # Count errors as failed
-                    if skipped_match:
-                        skipped = int(skipped_match.group(1))
-                    break
-
-            # If we still haven't found results, try counting individual test results
-            if passed == 0 and failed == 0:
-                for line in output_lines:
-                    if " PASSED " in line:
-                        passed += 1
-                    elif " FAILED " in line or " ERROR " in line:
-                        failed += 1
-
-            total_executed = passed + failed
+            # Execute the tests in target project's environment
+            test_results = await runner.run_tests(focused_requirements)
 
             self.logger.info(
-                f"Direct test execution completed: {passed} passed, {failed} failed "
-                f"in {duration:.2f}s"
+                f"LLM test execution completed: {test_results['summary']['successful_commands']}/{test_results['summary']['total_commands']} commands successful"
             )
 
-            # Log additional debugging info
-            self.logger.info(f"Pytest return code: {result.returncode}")
-            self.logger.info(
-                f"Parsed results: {passed} passed, {failed} failed, {skipped} skipped"
+            # Convert to expected format
+            if test_results["overall_success"]:
+                # Parse the output to extract test counts
+                output = (
+                    test_results["test_commands_executed"][0]["stdout"]
+                    if test_results["test_commands_executed"]
+                    else ""
+                )
+                passed = failed = 0
+
+                # Simple parsing of pytest output
+                passed_match = re.search(r"(\d+) passed", output)
+                failed_match = re.search(r"(\d+) failed", output)
+
+                if passed_match:
+                    passed = int(passed_match.group(1))
+                if failed_match:
+                    failed = int(failed_match.group(1))
+
+                return {
+                    "success": True,
+                    "test_results": {
+                        "tests_executed": passed + failed,
+                        "passed": passed,
+                        "failed": failed,
+                        "skipped": 0,
+                        "duration": 0.0,  # Not tracked in simple runner
+                        "selected_tests": list(test_functions),
+                        "output": output,
+                        "stderr": (
+                            test_results["test_commands_executed"][0].get("stderr", "")
+                            if test_results["test_commands_executed"]
+                            else ""
+                        ),
+                        "llm_powered": True,
+                    },
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "LLM test execution failed",
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": len(test_functions),
+                        "selected_tests": list(test_functions),
+                        "llm_powered": True,
+                    },
+                }
+
+        except UnrecoverableTestRunnerError as e:
+            # Fatal LLM test runner errors - do not retry, exit workflow
+            self.logger.error(f"FATAL: Unrecoverable test runner error: {e.message}")
+            self.logger.error(f"Error type: {e.error_type}")
+            if e.original_error:
+                self.logger.error(f"Original error: {e.original_error}")
+
+            # Signal to workflow that this is unrecoverable
+            raise RuntimeError(
+                f"Test runner encountered unrecoverable {e.error_type} error: {e.message}"
             )
 
-            # Determine success based on:
-            # 1. Pytest exit code is 0 (no test failures or errors)
-            # 2. No failed tests detected
-            # Note: It's okay if 0 tests were executed due to parsing issues,
-            # as long as pytest itself succeeded
-            success = result.returncode == 0
-
-            return {
-                "success": success,
-                "test_results": {
-                    "tests_executed": total_executed,
-                    "passed": passed,
-                    "failed": failed,
-                    "skipped": skipped,
-                    "duration": duration,
-                    "selected_tests": list(test_functions),
-                    "output": result.stdout,
-                    "stderr": result.stderr,
-                    "return_code": result.returncode,
-                    "test_specs_count": len(test_functions),  # For debugging
-                },
-            }
-
-        except subprocess.TimeoutExpired:
-            self.logger.error("Test execution timed out after 5 minutes")
-            return {
-                "success": False,
-                "error": "Test execution timed out",
-                "test_results": {
-                    "tests_executed": 0,
-                    "passed": 0,
-                    "failed": 0,
-                    "selected_tests": list(test_functions),
-                },
-            }
         except Exception as e:
-            self.logger.error(f"Direct test execution failed: {e}")
+            # Other recoverable exceptions
+            self.logger.error(f"LLM test execution failed: {e}")
             return {
                 "success": False,
-                "error": f"Direct test execution failed: {e}",
+                "error": f"LLM test execution failed: {e}",
                 "test_results": {
                     "tests_executed": 0,
                     "passed": 0,
                     "failed": 0,
                     "selected_tests": list(test_functions),
+                    "llm_powered": True,
                 },
             }
 
     async def _migrate_code(self) -> Dict[str, Any]:
         """Migrate from source to target library."""
         try:
-            breakpoint()
             # Get migrator agent
             migrator = self.agent_manager.get_agent(AgentType.MIGRATOR)
 

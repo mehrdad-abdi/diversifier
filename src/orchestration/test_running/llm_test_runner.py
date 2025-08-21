@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""LLM-based test runner that intelligently analyzes projects and runs tests."""
+
+import json
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.chat_models import init_chat_model
+from langchain_core.exceptions import LangChainException
+from pydantic import BaseModel, Field, ValidationError
+
+from ...mcp_servers.command.client import CommandMCPClient
+from ...mcp_servers.filesystem.client import FilesystemMCPClient
+from ..config import get_config, MigrationConfig
+
+
+class UnrecoverableTestRunnerError(Exception):
+    """Exception raised when the test runner encounters an unrecoverable error."""
+
+    def __init__(
+        self, message: str, error_type: str, original_error: Optional[Exception] = None
+    ):
+        """Initialize unrecoverable test runner error.
+
+        Args:
+            message: Human-readable error description
+            error_type: Type of error (validation, network, llm_service, unexpected)
+            original_error: The original exception that caused this error
+        """
+        super().__init__(message)
+        self.message = message
+        self.error_type = error_type
+        self.original_error = original_error
+
+
+class DevRequirements(BaseModel):
+    """Development requirements analysis model."""
+
+    testing_framework: str = Field(
+        description="The main testing framework (e.g., 'pytest', 'unittest')"
+    )
+    dev_dependencies: List[str] = Field(
+        description="List of development packages needed"
+    )
+    install_commands: List[str] = Field(
+        description="List of shell commands to install dependencies"
+    )
+    test_commands: List[str] = Field(description="List of shell commands to run tests")
+    setup_commands: List[str] = Field(
+        description="List of any setup commands needed before testing"
+    )
+    analysis: str = Field(description="Brief explanation of findings")
+
+
+class LLMTestRunner:
+    """LLM-powered test runner that uses MCP servers for project analysis and test execution."""
+
+    def __init__(
+        self, project_path: str, migration_config: Optional[MigrationConfig] = None
+    ):
+        """Initialize the LLM test runner.
+
+        Args:
+            project_path: Path to the target project
+            migration_config: Migration configuration. If None, uses defaults from global config.
+        """
+        self.project_path = Path(project_path).resolve()
+
+        # Use consistent LLM initialization pattern from config
+        config = get_config()
+        model_id = f"{config.llm.provider.lower()}:{config.llm.model_name}"
+
+        self.llm = init_chat_model(  # type: ignore[call-overload]
+            model=model_id,
+            temperature=0,  # Use low temperature for consistent test analysis
+            max_tokens=config.llm.max_tokens,
+            **config.llm.additional_params,
+        )
+
+        # Store migration config for test analysis configuration
+        self.migration_config = migration_config or config.migration
+
+        # MCP clients for different operations
+        self.command_client: Optional[CommandMCPClient] = None
+        self.filesystem_client: Optional[FilesystemMCPClient] = None
+
+    def _load_prompt(self, prompt_name: str) -> str:
+        """Load prompt template from file."""
+        prompt_dir = Path(__file__).parent.parent / "prompts"
+        prompt_path = prompt_dir / f"{prompt_name}.txt"
+
+        if prompt_path.exists():
+            return prompt_path.read_text().strip()
+        else:
+            # Fallback for missing prompt files
+            return "You are a helpful assistant for Python project analysis."
+
+    def initialize_mcp_clients(self) -> None:
+        """Initialize MCP clients for command and filesystem operations."""
+        # Initialize command client
+        self.command_client = CommandMCPClient(str(self.project_path))
+        self.command_client.start_server()
+
+        # Initialize filesystem client
+        self.filesystem_client = FilesystemMCPClient(str(self.project_path))
+        self.filesystem_client.start_server()
+
+    async def analyze_project_structure(self) -> Dict[str, Any]:
+        """Analyze project structure to understand testing setup and dependencies."""
+        if not self.command_client or not self.filesystem_client:
+            raise ValueError("MCP clients not initialized")
+
+        # Type assertion for mypy
+        assert self.command_client is not None
+
+        # Find common project files from configuration
+        project_files = []
+        common_files = self.migration_config.common_project_files
+
+        for filename in common_files:
+            result = self.command_client.call_tool(
+                "check_file_exists", {"path": filename}
+            )
+            if result and "result" in result:
+                check_result = json.loads(result["result"][0]["text"])
+                if check_result["exists"]:
+                    project_files.append(
+                        {
+                            "name": filename,
+                            "type": "file" if check_result["is_file"] else "directory",
+                        }
+                    )
+
+        # Find test directories using configured test paths
+        test_dirs = []
+        for test_path_config in self.migration_config.test_paths:
+            test_path = test_path_config.rstrip("/")
+
+            # Check if the configured test path exists
+            result = await self.command_client.call_tool(  # type: ignore[misc]
+                "check_file_exists", {"path": test_path}
+            )
+            check_result = json.loads(result[0].text)
+            if check_result["exists"] and check_result["is_directory"]:
+                test_dirs.append(test_path)
+
+        return {
+            "project_path": str(self.project_path),
+            "project_files": project_files,
+            "test_directories": test_dirs,
+        }
+
+    async def detect_dev_requirements(
+        self, project_structure: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Use LLM to analyze project files and detect development requirements."""
+
+        # Type assertion for mypy
+        assert self.command_client is not None
+
+        # Read project files collected by analyze_project_structure
+        file_contents = {}
+
+        for project_file in project_structure["project_files"]:
+            if project_file["type"] == "file":
+                filename = project_file["name"]
+                try:
+                    result = await self.command_client.call_tool(  # type: ignore[misc]
+                        "read_file_content", {"path": filename, "max_lines": 100}
+                    )
+                    content_result = json.loads(result[0].text)
+                    if not content_result.get("truncated", False):
+                        file_contents[filename] = "\n".join(content_result["content"])
+                except Exception:
+                    pass  # Skip files we can't read
+
+        # Load system prompt from file
+        system_prompt = self._load_prompt("test_dev_requirements")
+
+        file_contents_text = "\n\n".join(
+            [
+                f"=== {filename} ===\n{content}"
+                for filename, content in file_contents.items()
+            ]
+        )
+
+        human_prompt = f"""Analyze this Python project to determine how to set up and run its tests:
+
+Project structure:
+- Project files found: {[f['name'] for f in project_structure['project_files']]}
+- Test directories: {project_structure['test_directories']}
+
+File contents:
+{file_contents_text}
+
+Please provide your analysis in the structured format."""
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=human_prompt),
+        ]
+
+        # Use structured output with Pydantic model and retry logic
+        structured_llm = self.llm.with_structured_output(DevRequirements)
+
+        # Create retryable LLM with maximum 3 retries for transient errors
+        retryable_llm = structured_llm.with_retry(
+            stop_after_attempt=3,
+            retry_if_exception_type=(
+                # Network/API related errors that can be retried
+                ConnectionError,
+                TimeoutError,
+                # LangChain exceptions that might be transient
+                LangChainException,
+            ),
+        )
+
+        try:
+            response = await retryable_llm.ainvoke(messages)
+
+            # Convert Pydantic model to dict
+            return response.model_dump()
+
+        except ValidationError as e:
+            # Pydantic validation errors indicate malformed LLM response
+            error_msg = (
+                f"LLM failed to produce valid structured output after 3 retries. "
+                f"The LLM response does not match the expected DevRequirements schema: {str(e)}"
+            )
+            raise UnrecoverableTestRunnerError(error_msg, "validation", e)
+
+        except (ConnectionError, TimeoutError) as e:
+            # Network/connectivity issues that couldn't be resolved after retries
+            error_msg = (
+                f"Network connectivity issues prevented LLM analysis after 3 retries: {str(e)}. "
+                f"Please check your internet connection and API configuration."
+            )
+            raise UnrecoverableTestRunnerError(error_msg, "network", e)
+
+        except LangChainException as e:
+            # LangChain-specific errors (API key issues, model issues, etc.)
+            error_msg = (
+                f"LLM service error after 3 retries: {str(e)}. "
+                f"This may be due to API key issues, model availability, or service limits."
+            )
+            raise UnrecoverableTestRunnerError(error_msg, "llm_service", e)
+
+        except Exception as e:
+            # Unexpected errors that we cannot recover from
+            error_msg = (
+                f"Unexpected error during development requirements analysis: {str(e)}. "
+                f"Error type: {type(e).__name__}"
+            )
+            raise UnrecoverableTestRunnerError(error_msg, "unexpected", e)
+
+    async def setup_test_environment(
+        self, requirements: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Set up the test environment by installing dependencies."""
+        # Type assertion for mypy
+        assert self.command_client is not None
+
+        setup_results = {
+            "setup_commands_executed": [],
+            "install_commands_executed": [],
+            "success": True,
+            "errors": [],
+        }
+
+        # Execute setup commands
+        for command in requirements.get("setup_commands", []):
+            try:
+                result = await self.command_client.call_tool(  # type: ignore[misc]
+                    "execute_command", {"command": command, "timeout": 300}
+                )
+                command_result = json.loads(result[0].text)
+                setup_results["setup_commands_executed"].append(  # type: ignore[attr-defined]
+                    {
+                        "command": command,
+                        "success": command_result["success"],
+                        "exit_code": command_result["exit_code"],
+                    }
+                )
+
+                if not command_result["success"]:
+                    setup_results["success"] = False
+                    setup_results["errors"].append(f"Setup command failed: {command}")  # type: ignore[attr-defined]
+
+            except Exception as e:
+                setup_results["success"] = False
+                setup_results["errors"].append(  # type: ignore[attr-defined]
+                    f"Error executing setup command '{command}': {str(e)}"
+                )
+
+        # Execute install commands
+        for command in requirements.get("install_commands", []):
+            try:
+                result = await self.command_client.call_tool(  # type: ignore[misc]
+                    "execute_command",
+                    {"command": command, "timeout": 600},  # Longer timeout for installs
+                )
+                command_result = json.loads(result[0].text)
+                setup_results["install_commands_executed"].append(  # type: ignore[attr-defined]
+                    {
+                        "command": command,
+                        "success": command_result["success"],
+                        "exit_code": command_result["exit_code"],
+                    }
+                )
+
+                if not command_result["success"]:
+                    setup_results["success"] = False
+                    setup_results["errors"].append(f"Install command failed: {command}")  # type: ignore[attr-defined]
+
+            except Exception as e:
+                setup_results["success"] = False
+                setup_results["errors"].append(  # type: ignore[attr-defined]
+                    f"Error executing install command '{command}': {str(e)}"
+                )
+
+        return setup_results
+
+    async def run_tests(self, requirements: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute tests using the detected testing framework and commands."""
+        # Type assertion for mypy
+        assert self.command_client is not None
+
+        test_results = {
+            "test_commands_executed": [],
+            "overall_success": True,
+            "summary": {
+                "total_commands": 0,
+                "successful_commands": 0,
+                "failed_commands": 0,
+            },
+        }
+
+        test_commands = requirements.get("test_commands", ["pytest"])
+
+        for command in test_commands:
+            try:
+                result = await self.command_client.call_tool(  # type: ignore[misc]
+                    "execute_command", {"command": command, "timeout": 600}
+                )
+                command_result = json.loads(result[0].text)
+
+                test_execution = {
+                    "command": command,
+                    "success": command_result["success"],
+                    "exit_code": command_result["exit_code"],
+                    "stdout": command_result.get("stdout", ""),
+                    "stderr": command_result.get("stderr", ""),
+                }
+
+                test_results["test_commands_executed"].append(test_execution)  # type: ignore[attr-defined]
+                test_results["summary"]["total_commands"] += 1  # type: ignore[index]
+
+                if command_result["success"]:
+                    test_results["summary"]["successful_commands"] += 1  # type: ignore[index]
+                else:
+                    test_results["summary"]["failed_commands"] += 1  # type: ignore[index]
+                    test_results["overall_success"] = False
+
+            except Exception as e:
+                test_execution = {
+                    "command": command,
+                    "success": False,
+                    "exit_code": -1,
+                    "error": str(e),
+                    "stdout": "",
+                    "stderr": "",
+                }
+
+                test_results["test_commands_executed"].append(test_execution)  # type: ignore[attr-defined]
+                test_results["summary"]["total_commands"] += 1  # type: ignore[index]
+                test_results["summary"]["failed_commands"] += 1  # type: ignore[index]
+                test_results["overall_success"] = False
+
+        return test_results
