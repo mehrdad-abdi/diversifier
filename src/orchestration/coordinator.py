@@ -153,15 +153,8 @@ class DiversificationCoordinator:
                 success = await self._execute_step(next_step.name)
                 if not success:
                     self.logger.error(f"Step {next_step.name} failed")
-
-                    # Try to recover if possible
-                    if self.workflow_state.can_retry_step(next_step.name):
-                        self.logger.info(f"Retrying step: {next_step.name}")
-                        self.workflow_state.retry_step(next_step.name)
-                        continue
-                    else:
-                        self.logger.error("Cannot retry step, workflow failed")
-                        break
+                    self.logger.error("Workflow failed - no retry mechanism")
+                    break
 
             # Check final result
             if self.workflow_state.is_workflow_complete():
@@ -271,10 +264,10 @@ class DiversificationCoordinator:
                 )
 
                 if not status_result:
-                    self.logger.warning(
-                        "Could not get git status, using fallback backup"
+                    self.logger.error(
+                        "Could not get git status, backup creation failed"
                     )
-                    return self._fallback_backup()
+                    return {"success": False, "error": "Git status check failed"}
 
                 # Create backup branch
                 backup_result = await self.mcp_manager.call_tool(
@@ -298,26 +291,17 @@ class DiversificationCoordinator:
                         "base_branch": backup_result.get("base_branch"),
                     }
                 else:
-                    self.logger.warning("Git backup failed, using fallback")
-                    return self._fallback_backup()
+                    self.logger.error("Git backup failed")
+                    return {"success": False, "error": "Git backup creation failed"}
             else:
-                self.logger.warning(
-                    "Git MCP server not available, using fallback backup"
+                self.logger.error(
+                    "Git MCP server not available, backup creation failed"
                 )
-                return self._fallback_backup()
+                return {"success": False, "error": "Git MCP server not available"}
 
         except Exception as e:
             self.logger.error(f"Backup creation failed: {e}")
             return {"success": False, "error": str(e)}
-
-    def _fallback_backup(self) -> Dict[str, Any]:
-        """Fallback backup method when git is not available."""
-        self.logger.info("Using fallback backup method (copy-based)")
-        return {
-            "success": True,
-            "backup_path": f"{self.project_path}_backup",
-            "backup_method": "copy",
-        }
 
     async def _select_tests(self) -> Dict[str, Any]:
         """Select existing tests that cover library usage based on call graph analysis."""

@@ -93,8 +93,10 @@ class LLMTestRunner:
         if prompt_path.exists():
             return prompt_path.read_text().strip()
         else:
-            # Fallback for missing prompt files
-            return "You are a helpful assistant for Python project analysis."
+            # Raise error for missing prompt files instead of fallback
+            raise FileNotFoundError(
+                f"Prompt file {prompt_name}.txt not found in {prompt_dir}"
+            )
 
     def initialize_mcp_clients(self) -> None:
         """Initialize MCP clients for command and filesystem operations."""
@@ -201,23 +203,11 @@ Please provide your analysis in the structured format."""
             HumanMessage(content=human_prompt),
         ]
 
-        # Use structured output with Pydantic model and retry logic
+        # Use structured output with Pydantic model - no retry logic
         structured_llm = self.llm.with_structured_output(DevRequirements)
 
-        # Create retryable LLM with maximum 3 retries for transient errors
-        retryable_llm = structured_llm.with_retry(
-            stop_after_attempt=3,
-            retry_if_exception_type=(
-                # Network/API related errors that can be retried
-                ConnectionError,
-                TimeoutError,
-                # LangChain exceptions that might be transient
-                LangChainException,
-            ),
-        )
-
         try:
-            response = await retryable_llm.ainvoke(messages)
+            response = await structured_llm.ainvoke(messages)
 
             # Convert Pydantic model to dict
             return response.model_dump()
@@ -225,15 +215,15 @@ Please provide your analysis in the structured format."""
         except ValidationError as e:
             # Pydantic validation errors indicate malformed LLM response
             error_msg = (
-                f"LLM failed to produce valid structured output after 3 retries. "
+                f"LLM failed to produce valid structured output. "
                 f"The LLM response does not match the expected DevRequirements schema: {str(e)}"
             )
             raise UnrecoverableTestRunnerError(error_msg, "validation", e)
 
         except (ConnectionError, TimeoutError) as e:
-            # Network/connectivity issues that couldn't be resolved after retries
+            # Network/connectivity issues
             error_msg = (
-                f"Network connectivity issues prevented LLM analysis after 3 retries: {str(e)}. "
+                f"Network connectivity issues prevented LLM analysis: {str(e)}. "
                 f"Please check your internet connection and API configuration."
             )
             raise UnrecoverableTestRunnerError(error_msg, "network", e)
@@ -241,7 +231,7 @@ Please provide your analysis in the structured format."""
         except LangChainException as e:
             # LangChain-specific errors (API key issues, model issues, etc.)
             error_msg = (
-                f"LLM service error after 3 retries: {str(e)}. "
+                f"LLM service error: {str(e)}. "
                 f"This may be due to API key issues, model availability, or service limits."
             )
             raise UnrecoverableTestRunnerError(error_msg, "llm_service", e)

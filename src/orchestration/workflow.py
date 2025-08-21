@@ -291,52 +291,6 @@ class WorkflowState:
         self.logger.error(f"Failed workflow step {step_name}: {error}")
         return True
 
-    def can_retry_step(self, step_name: str) -> bool:
-        """Check if a step can be retried.
-
-        Args:
-            step_name: Name of step to check
-
-        Returns:
-            True if step can be retried
-        """
-        if step_name not in self.steps:
-            return False
-
-        step = self.steps[step_name]
-
-        # Repair step can be retried up to max attempts
-        if step.stage == WorkflowStage.REPAIR:
-            return self.context.repair_attempts < self.context.max_repair_attempts
-
-        # Other failed steps can generally be retried once
-        return step.status == WorkflowStatus.FAILED
-
-    def retry_step(self, step_name: str) -> bool:
-        """Retry a failed step.
-
-        Args:
-            step_name: Name of step to retry
-
-        Returns:
-            True if step reset for retry
-        """
-        if not self.can_retry_step(step_name):
-            self.logger.error(f"Cannot retry step: {step_name}")
-            return False
-
-        step = self.steps[step_name]
-        step.status = WorkflowStatus.PENDING
-        step.start_time = None
-        step.end_time = None
-        step.error = None
-
-        if step.stage == WorkflowStage.REPAIR:
-            self.context.repair_attempts += 1
-
-        self.logger.info(f"Reset step for retry: {step_name}")
-        return True
-
     def is_workflow_complete(self) -> bool:
         """Check if the entire workflow is complete.
 
@@ -353,12 +307,8 @@ class WorkflowState:
         Returns:
             True if workflow has failed
         """
-        # Check if any critical step failed and cannot be retried
-        for step in self.steps.values():
-            if step.status == WorkflowStatus.FAILED:
-                if not self.can_retry_step(step.name):
-                    return True
-        return False
+        # Check if any step failed - no retry mechanism
+        return any(step.status == WorkflowStatus.FAILED for step in self.steps.values())
 
     def get_workflow_summary(self) -> Dict[str, Any]:
         """Get a summary of the workflow state.
