@@ -63,7 +63,7 @@ class DiversificationCoordinator:
 
         # Initialize test coverage selection components
         self.test_coverage_selector = TestCoverageSelector(
-            str(self.project_path), self.mcp_manager, self.migration_config.test_path
+            str(self.project_path), self.mcp_manager, self.migration_config.test_paths[0] if self.migration_config.test_paths else "tests/"
         )
 
         self.logger = logging.getLogger("diversifier.coordinator")

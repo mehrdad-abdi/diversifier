@@ -79,9 +79,10 @@ class LLMTestRunner:
                         }
                     )
 
-        # Find test directories using configured test path
+        # Find test directories using configured test paths
         test_dirs = []
-        test_path = self.migration_config.test_path.rstrip("/")
+        primary_test_path = self.migration_config.test_paths[0] if self.migration_config.test_paths else "tests/"
+        test_path = primary_test_path.rstrip("/")
 
         # Check if the configured test path exists
         result = await self.command_client.call_tool(

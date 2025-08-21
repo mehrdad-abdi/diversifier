@@ -76,11 +76,6 @@ class MigrationConfig:
         ]
     )
 
-    @property
-    def test_path(self) -> str:
-        """Get the primary test path for backward compatibility."""
-        return self.test_paths[0] if self.test_paths else "tests/"
-
 
 @dataclass
 class PerformanceConfig:
@@ -434,7 +429,7 @@ backup_original = true
 validate_syntax = true
 require_test_coverage = true
 min_test_coverage = 0.8
-test_path = "tests/"
+test_paths = ["tests/", "test/"]
 
 [performance]
 enable_metrics = true

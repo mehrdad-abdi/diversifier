@@ -79,7 +79,7 @@ class TestMigrationConfig:
         assert config.validate_syntax is True
         assert config.require_test_coverage is True
         assert config.min_test_coverage == 0.8
-        assert config.test_path == "tests/"
+        assert config.test_paths == ["tests/", "test/"]
         assert len(config.allowed_library_pairs) == 4
 
 

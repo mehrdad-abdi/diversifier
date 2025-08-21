@@ -50,9 +50,10 @@ class SimpleLLMTestRunner:
                     }
                 )
 
-        # Find test directories using configured test path
+        # Find test directories using configured test paths
         test_dirs = []
-        test_path = self.migration_config.test_path.rstrip("/")
+        primary_test_path = self.migration_config.test_paths[0] if self.migration_config.test_paths else "tests/"
+        test_path = primary_test_path.rstrip("/")
         dir_path = self.project_path / test_path
         if dir_path.exists() and dir_path.is_dir():
             test_dirs.append(test_path)

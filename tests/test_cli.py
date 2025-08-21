@@ -84,7 +84,7 @@ class TestMainFunction:
         # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
-        mock_migration_config.test_path = "tests/"
+        mock_migration_config.test_paths = ["tests/"]
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
@@ -124,7 +124,7 @@ class TestMainFunction:
         # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
-        mock_migration_config.test_path = "tests/"
+        mock_migration_config.test_paths = ["tests/"]
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
@@ -175,7 +175,7 @@ class TestMainFunction:
         # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
-        mock_migration_config.test_path = "tests/"
+        mock_migration_config.test_paths = ["tests/"]
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
@@ -207,7 +207,7 @@ class TestMainFunction:
         # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
-        mock_migration_config.test_path = "tests/"
+        mock_migration_config.test_paths = ["tests/"]
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
@@ -247,7 +247,7 @@ class TestMainFunction:
         # Mock LLM config and migration config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
-        mock_migration_config.test_path = "tests/"
+        mock_migration_config.test_paths = ["tests/"]
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
