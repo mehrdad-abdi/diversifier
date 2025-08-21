@@ -160,8 +160,8 @@ class DiversificationAgent:
             if prompt_path.exists():
                 return prompt_path.read_text().strip()
 
-        # Error for unknown agent types
-        raise ValueError(f"No prompt found for agent type: {self.agent_type}")
+        # Fallback for unknown agent types
+        return "You are a helpful assistant for Python code migration tasks."
 
     def _get_agent_prompt(self) -> ChatPromptTemplate:
         """Get the appropriate prompt template for this agent type."""

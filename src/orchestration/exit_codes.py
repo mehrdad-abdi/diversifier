@@ -195,6 +195,26 @@ class ExitCodeManager:
 
         return descriptions.get(exit_code, f"Unknown exit code: {exit_code}")
 
+    def should_retry(self, exit_code: ExitCode) -> bool:
+        """Determine if operation should be retried based on exit code.
+
+        Args:
+            exit_code: Exit code to check
+
+        Returns:
+            True if operation should be retried
+        """
+        # Retryable exit codes (temporary failures)
+        retryable_codes = {
+            ExitCode.MCP_CONNECTION_FAILED,
+            ExitCode.API_RATE_LIMIT_EXCEEDED,
+            ExitCode.CONNECTION_TIMEOUT,
+            ExitCode.OPERATION_TIMEOUT,
+            ExitCode.SYSTEM_RESOURCE_ERROR,
+        }
+
+        return exit_code in retryable_codes
+
     def is_user_error(self, exit_code: ExitCode) -> bool:
         """Determine if exit code represents a user error.
 

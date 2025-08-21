@@ -29,6 +29,7 @@ class MCPConfig:
     git_server_path: str = "src/mcp_servers/git/server.py"
     docker_server_path: str = "src/mcp_servers/docker/server.py"
     timeout: int = 30
+    retry_attempts: int = 3
 
 
 @dataclass
@@ -110,6 +111,7 @@ class LLMConfig:
     temperature: float = 0.1  # Default temperature
     max_tokens: int = 4096
     timeout: int = 120  # seconds
+    retry_attempts: int = 3
     base_url: Optional[str] = None  # Custom API endpoint URL
     task_temperatures: TaskTemperatureConfig = field(
         default_factory=TaskTemperatureConfig
@@ -215,6 +217,7 @@ class ConfigManager:
             "DIVERSIFIER_CORRELATION_IDS": ("logging", "enable_correlation_ids"),
             # MCP configuration
             "DIVERSIFIER_MCP_TIMEOUT": ("mcp", "timeout"),
+            "DIVERSIFIER_MCP_RETRIES": ("mcp", "retry_attempts"),
             # Migration configuration
             "DIVERSIFIER_MAX_ITERATIONS": ("migration", "max_iterations"),
             "DIVERSIFIER_TEST_TIMEOUT": ("migration", "test_timeout"),
@@ -230,6 +233,7 @@ class ConfigManager:
             "DIVERSIFIER_LLM_TEMPERATURE": ("llm", "temperature"),
             "DIVERSIFIER_LLM_MAX_TOKENS": ("llm", "max_tokens"),
             "DIVERSIFIER_LLM_TIMEOUT": ("llm", "timeout"),
+            "DIVERSIFIER_LLM_RETRY_ATTEMPTS": ("llm", "retry_attempts"),
             "DIVERSIFIER_LLM_API_KEY_ENV_VAR": ("llm", "api_key_env_var"),
             "DIVERSIFIER_LLM_BASE_URL": ("llm", "base_url"),
             # General configuration
@@ -285,6 +289,7 @@ class ConfigManager:
             "max_file_size",
             "backup_count",
             "timeout",
+            "retry_attempts",
             "max_iterations",
             "test_timeout",
             "max_tokens",
@@ -442,6 +447,7 @@ api_key_env_var = "ANTHROPIC_API_KEY"  # REQUIRED: Environment variable name for
 temperature = 0.1  # Default temperature for all tasks
 max_tokens = 4096
 timeout = 120
+retry_attempts = 3
 # Optional: Custom API endpoint URL
 # base_url = "https://api.anthropic.com"
 

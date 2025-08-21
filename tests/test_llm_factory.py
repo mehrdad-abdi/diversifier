@@ -39,6 +39,7 @@ class TestLLMFactory:
                 temperature=0.5,
                 max_tokens=1000,
                 timeout=60,
+                retry_attempts=3,
             )
             issues = validate_llm_config(config)
             assert len(issues) == 0

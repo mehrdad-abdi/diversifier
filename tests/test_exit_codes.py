@@ -257,6 +257,24 @@ class TestExitCodeManager:
         desc = manager.get_exit_code_description(ExitCode.GENERAL_ERROR)
         assert len(desc) > 0  # Should have some description
 
+    def test_should_retry(self):
+        """Test retry logic for exit codes."""
+        manager = ExitCodeManager()
+
+        # Retryable codes
+        assert manager.should_retry(ExitCode.MCP_CONNECTION_FAILED) is True
+        assert manager.should_retry(ExitCode.API_RATE_LIMIT_EXCEEDED) is True
+        assert manager.should_retry(ExitCode.CONNECTION_TIMEOUT) is True
+        assert manager.should_retry(ExitCode.OPERATION_TIMEOUT) is True
+        assert manager.should_retry(ExitCode.SYSTEM_RESOURCE_ERROR) is True
+
+        # Non-retryable codes
+        assert manager.should_retry(ExitCode.SUCCESS) is False
+        assert manager.should_retry(ExitCode.INVALID_ARGUMENTS) is False
+        assert manager.should_retry(ExitCode.MISSING_API_KEY) is False
+        assert manager.should_retry(ExitCode.FILE_NOT_FOUND) is False
+        assert manager.should_retry(ExitCode.SYNTAX_ERROR) is False
+
     def test_is_user_error(self):
         """Test user error detection."""
         manager = ExitCodeManager()
