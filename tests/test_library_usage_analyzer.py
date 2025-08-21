@@ -301,13 +301,9 @@ def test():
 
         analyzer.mcp_manager.is_server_available.return_value = False
 
-        files = await analyzer._get_python_files()
-
-        # Should find .py files only
-        assert len(files) == 2
-        assert any("file1.py" in f for f in files)
-        assert any("file2.py" in f for f in files)
-        assert not any("not_python.txt" in f for f in files)
+        # Should now raise an error instead of falling back
+        with pytest.raises(RuntimeError, match="MCP filesystem server failed"):
+            await analyzer._get_python_files()
 
     @pytest.mark.asyncio
     async def test_get_python_files_mcp_error(self, analyzer, tmp_path):
@@ -345,7 +341,8 @@ def test():
 
         content = await analyzer._read_file(str(test_file))
 
-        assert content == test_content
+        # Should return None instead of falling back to direct read
+        assert content is None
 
     @pytest.mark.asyncio
     async def test_read_file_error(self, analyzer):

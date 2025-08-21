@@ -415,7 +415,6 @@ testing_server_path = "src/mcp_servers/testing/server.py"
 git_server_path = "src/mcp_servers/git/server.py"
 docker_server_path = "src/mcp_servers/docker/server.py"
 timeout = 30
-retry_attempts = 3
 
 [migration]
 max_iterations = 5

@@ -656,7 +656,7 @@ class TestWorkflowState:
         assert summary["failed_steps"] == 1
         assert "steps" in summary
         assert summary["is_complete"] is False
-        assert summary["is_failed"] is True  # Failed step means workflow failed
+        assert summary["is_failed"] is True  # No retry mechanism
 
 
 class TestDiversificationCoordinator:

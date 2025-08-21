@@ -320,8 +320,8 @@ class LibraryUsageAnalyzer:
                             for file_info in data["files"]
                         ]
 
-            # Use manual file discovery
-            return [str(p) for p in self.project_root.rglob("*.py") if p.is_file()]
+            # No fallback - raise error if MCP fails
+            raise RuntimeError("MCP filesystem server failed to find Python files")
 
         except Exception as e:
             self.logger.error(f"Error finding Python files: {e}")
@@ -338,9 +338,8 @@ class LibraryUsageAnalyzer:
                 if result and "result" in result and "content" in result["result"]:
                     return result["result"]["content"][0]["text"]
 
-            # Use direct file reading
-            with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
+            # No fallback - return None if MCP fails
+            return None
 
         except Exception as e:
             self.logger.warning(f"Error reading file {file_path}: {e}")

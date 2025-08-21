@@ -153,7 +153,7 @@ class DiversificationCoordinator:
                 success = await self._execute_step(next_step.name)
                 if not success:
                     self.logger.error(f"Step {next_step.name} failed")
-                    self.logger.error("Workflow failed")
+                    self.logger.error("Workflow failed - no retry mechanism")
                     break
 
             # Check final result
@@ -264,8 +264,10 @@ class DiversificationCoordinator:
                 )
 
                 if not status_result:
-                    self.logger.error("Could not get git status")
-                    return {"success": False, "error": "Could not get git status"}
+                    self.logger.error(
+                        "Could not get git status, backup creation failed"
+                    )
+                    return {"success": False, "error": "Git status check failed"}
 
                 # Create backup branch
                 backup_result = await self.mcp_manager.call_tool(
@@ -290,9 +292,11 @@ class DiversificationCoordinator:
                     }
                 else:
                     self.logger.error("Git backup failed")
-                    return {"success": False, "error": "Git backup failed"}
+                    return {"success": False, "error": "Git backup creation failed"}
             else:
-                self.logger.error("Git MCP server not available")
+                self.logger.error(
+                    "Git MCP server not available, backup creation failed"
+                )
                 return {"success": False, "error": "Git MCP server not available"}
 
         except Exception as e:

@@ -188,7 +188,7 @@ class ErrorHandler:
             if "disk space" in str(exception).lower():
                 return False
 
-        # Most other errors are recoverable with alternative approaches
+        # Most other errors are recoverable with retry or alternative approaches
         return True
 
     def _log_error(self, error_info: ErrorInfo) -> None:
@@ -235,7 +235,6 @@ class ErrorHandler:
         if "connection refused" in error_info.message.lower():
             suggestions.extend(
                 [
-                    "Check server connection",
                     "Check if MCP server process is running",
                     "Restart MCP server process",
                 ]
@@ -246,7 +245,6 @@ class ErrorHandler:
                 [
                     "Increase connection timeout",
                     "Check system resources",
-                    "Check configuration settings",
                 ]
             )
 
@@ -272,7 +270,6 @@ class ErrorHandler:
             suggestions.extend(
                 [
                     "Check API key configuration",
-                    "Check configuration settings",
                     "Switch to different model if rate limited",
                 ]
             )
@@ -288,7 +285,7 @@ class ErrorHandler:
 
         suggestions.extend(
             [
-                "Clear agent memory",
+                "Clear agent memory and retry",
                 "Simplify task prompt",
                 "Use alternative agent approach",
             ]
@@ -327,7 +324,7 @@ class ErrorHandler:
 
         suggestions.extend(
             [
-                "Create backup",
+                "Create backup before retry",
                 "Use temporary file for operations",
                 "Verify disk space availability",
             ]
@@ -468,11 +465,8 @@ class ErrorHandler:
             "non_recoverable": total_errors - recoverable,
         }
 
-    def attempt_recovery(
-        self,
-        error_info: ErrorInfo,
-    ) -> bool:
-        """Attempt to recover from an error using registered handlers.
+    def attempt_recovery(self, error_info: ErrorInfo) -> bool:
+        """Attempt single recovery from an error using registered handlers.
 
         Args:
             error_info: Error information
@@ -483,7 +477,9 @@ class ErrorHandler:
         if not error_info.recoverable:
             return False
 
-        self.logger.info(f"Attempting recovery for {error_info.category.value} error")
+        self.logger.info(
+            f"Single recovery attempt for {error_info.category.value} error"
+        )
 
         try:
             # Apply recovery strategy based on category
@@ -500,7 +496,7 @@ class ErrorHandler:
                 return False
 
         except Exception as recovery_error:
-            self.logger.error(f"Recovery failed: {recovery_error}")
+            self.logger.error(f"Recovery attempt failed: {recovery_error}")
             return False
 
     def _apply_recovery_strategy(self, error_info: ErrorInfo) -> bool:
@@ -544,9 +540,9 @@ class ErrorHandler:
                 # For now, we'll simulate a successful restart
                 return True
 
-            # Generic connection check
+            # Generic connection retry
             self.logger.info("Attempting generic MCP connection recovery")
-            return False  # Would implement actual connection checking logic
+            return False  # Would implement actual connection retry logic
 
         except Exception as e:
             self.logger.error(f"MCP connection recovery failed: {e}")
@@ -562,7 +558,7 @@ class ErrorHandler:
             True if agent recovery was successful
         """
         try:
-            # Clear agent memory and use simpler prompt
+            # Clear agent memory and retry with simpler prompt
             agent_type = (
                 error_info.context.get("agent_type") if error_info.context else None
             )

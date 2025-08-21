@@ -93,7 +93,10 @@ class LLMTestRunner:
         if prompt_path.exists():
             return prompt_path.read_text().strip()
         else:
-            raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+            # Raise error for missing prompt files instead of fallback
+            raise FileNotFoundError(
+                f"Prompt file {prompt_name}.txt not found in {prompt_dir}"
+            )
 
     def initialize_mcp_clients(self) -> None:
         """Initialize MCP clients for command and filesystem operations."""
@@ -200,7 +203,7 @@ Please provide your analysis in the structured format."""
             HumanMessage(content=human_prompt),
         ]
 
-        # Use structured output with Pydantic model
+        # Use structured output with Pydantic model - no retry logic
         structured_llm = self.llm.with_structured_output(DevRequirements)
 
         try:
@@ -218,9 +221,9 @@ Please provide your analysis in the structured format."""
             raise UnrecoverableTestRunnerError(error_msg, "validation", e)
 
         except (ConnectionError, TimeoutError) as e:
-            # Network/connectivity issues that couldn't be resolved after retries
+            # Network/connectivity issues
             error_msg = (
-                f"Network connectivity issues prevented LLM analysis after 3 retries: {str(e)}. "
+                f"Network connectivity issues prevented LLM analysis: {str(e)}. "
                 f"Please check your internet connection and API configuration."
             )
             raise UnrecoverableTestRunnerError(error_msg, "network", e)
@@ -228,7 +231,7 @@ Please provide your analysis in the structured format."""
         except LangChainException as e:
             # LangChain-specific errors (API key issues, model issues, etc.)
             error_msg = (
-                f"LLM service error after 3 retries: {str(e)}. "
+                f"LLM service error: {str(e)}. "
                 f"This may be due to API key issues, model availability, or service limits."
             )
             raise UnrecoverableTestRunnerError(error_msg, "llm_service", e)

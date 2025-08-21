@@ -307,11 +307,8 @@ class WorkflowState:
         Returns:
             True if workflow has failed
         """
-        # Check if any critical step failed
-        for step in self.steps.values():
-            if step.status == WorkflowStatus.FAILED:
-                return True
-        return False
+        # Check if any step failed - no retry mechanism
+        return any(step.status == WorkflowStatus.FAILED for step in self.steps.values())
 
     def get_workflow_summary(self) -> Dict[str, Any]:
         """Get a summary of the workflow state.

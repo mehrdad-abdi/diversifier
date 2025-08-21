@@ -168,12 +168,12 @@ class CallGraphBuilder:
                             for file_info in data["files"]
                         ]
 
-            # Use manual discovery
+            # Fallback to manual discovery
             return [str(p) for p in self.project_root.rglob("*.py") if p.is_file()]
 
         except Exception as e:
-            self.logger.error(f"Error finding Python files: {e}")
-            raise
+            self.logger.warning(f"Error finding Python files: {e}")
+            return [str(p) for p in self.project_root.rglob("*.py") if p.is_file()]
 
     async def _create_nodes_from_file(self, file_path: str):
         """Create call graph nodes for all functions in a file."""
@@ -403,7 +403,7 @@ class CallGraphBuilder:
                 if result and "result" in result and "content" in result["result"]:
                     return result["result"]["content"][0]["text"]
 
-            # Use direct file reading
+            # Fallback to direct file reading
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
 
