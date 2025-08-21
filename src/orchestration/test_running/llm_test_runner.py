@@ -103,30 +103,23 @@ class LLMTestRunner:
     ) -> Dict[str, Any]:
         """Use LLM to analyze project files and detect development requirements."""
 
-        # Read key project files
+        # Read project files collected by analyze_project_structure
         file_contents = {}
-        key_files = [
-            "pyproject.toml",
-            "setup.py",
-            "requirements.txt",
-            "requirements-dev.txt",
-            "README.md",
-        ]
-
-        for filename in key_files:
-            for project_file in project_structure["project_files"]:
-                if project_file["name"] == filename and project_file["type"] == "file":
-                    try:
-                        result = await self.command_client.call_tool(
-                            "read_file_content", {"path": filename, "max_lines": 100}
+        
+        for project_file in project_structure["project_files"]:
+            if project_file["type"] == "file":
+                filename = project_file["name"]
+                try:
+                    result = await self.command_client.call_tool(
+                        "read_file_content", {"path": filename, "max_lines": 100}
+                    )
+                    content_result = json.loads(result[0].text)
+                    if not content_result.get("truncated", False):
+                        file_contents[filename] = "\n".join(
+                            content_result["content"]
                         )
-                        content_result = json.loads(result[0].text)
-                        if not content_result.get("truncated", False):
-                            file_contents[filename] = "\n".join(
-                                content_result["content"]
-                            )
-                    except Exception:
-                        pass  # Skip files we can't read
+                except Exception:
+                    pass  # Skip files we can't read
 
         # Analyze with LLM
         system_prompt = """You are an expert Python developer analyzing a project to determine its development and testing requirements.

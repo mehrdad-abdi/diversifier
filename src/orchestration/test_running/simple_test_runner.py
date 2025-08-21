@@ -69,27 +69,20 @@ class SimpleLLMTestRunner:
     ) -> Dict[str, Any]:
         """Use LLM to analyze project files and detect development requirements."""
 
-        # Read key project files
+        # Read project files collected by analyze_project_structure
         file_contents = {}
-        key_files = [
-            "pyproject.toml",
-            "setup.py",
-            "requirements.txt",
-            "requirements-dev.txt",
-            "README.md",
-        ]
-
-        for filename in key_files:
-            for project_file in project_structure["project_files"]:
-                if project_file["name"] == filename:
-                    try:
-                        file_path = self.project_path / filename
-                        if file_path.stat().st_size < 10000:  # Only read small files
-                            file_contents[filename] = file_path.read_text(
-                                encoding="utf-8"
-                            )
-                    except Exception:
-                        pass  # Skip files we can't read
+        
+        for project_file in project_structure["project_files"]:
+            if project_file["type"] == "file":
+                filename = project_file["name"]
+                try:
+                    file_path = self.project_path / filename
+                    if file_path.stat().st_size < 10000:  # Only read small files
+                        file_contents[filename] = file_path.read_text(
+                            encoding="utf-8"
+                        )
+                except Exception:
+                    pass  # Skip files we can't read
 
         # Analyze with LLM
         system_prompt = """You are an expert Python developer analyzing a project to determine its development and testing requirements.
