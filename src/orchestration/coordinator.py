@@ -12,7 +12,7 @@ from .mcp_manager import MCPManager, MCPServerType
 from .workflow import WorkflowState, MigrationContext
 from .test_generation import TestCoverageSelector
 from .config import LLMConfig, MigrationConfig
-from .test_running.llm_test_runner import LLMTestRunner
+from .test_running.llm_test_runner import LLMTestRunner, UnrecoverableTestRunnerError
 
 
 class DiversificationCoordinator:
@@ -525,7 +525,20 @@ class DiversificationCoordinator:
                     },
                 }
 
+        except UnrecoverableTestRunnerError as e:
+            # Fatal LLM test runner errors - do not retry, exit workflow
+            self.logger.error(f"FATAL: Unrecoverable test runner error: {e.message}")
+            self.logger.error(f"Error type: {e.error_type}")
+            if e.original_error:
+                self.logger.error(f"Original error: {e.original_error}")
+            
+            # Signal to workflow that this is unrecoverable
+            raise RuntimeError(
+                f"Test runner encountered unrecoverable {e.error_type} error: {e.message}"
+            )
+            
         except Exception as e:
+            # Other recoverable exceptions
             self.logger.error(f"LLM test execution failed: {e}")
             return {
                 "success": False,

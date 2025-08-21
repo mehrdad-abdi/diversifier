@@ -4,7 +4,6 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-import sys
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain.chat_models import init_chat_model
@@ -14,6 +13,23 @@ from pydantic import BaseModel, Field, ValidationError
 from ...mcp_servers.command.client import CommandMCPClient
 from ...mcp_servers.filesystem.client import FilesystemMCPClient
 from ..config import get_config, MigrationConfig
+
+
+class UnrecoverableTestRunnerError(Exception):
+    """Exception raised when the test runner encounters an unrecoverable error."""
+    
+    def __init__(self, message: str, error_type: str, original_error: Exception = None):
+        """Initialize unrecoverable test runner error.
+        
+        Args:
+            message: Human-readable error description
+            error_type: Type of error (validation, network, llm_service, unexpected)
+            original_error: The original exception that caused this error
+        """
+        super().__init__(message)
+        self.message = message
+        self.error_type = error_type
+        self.original_error = original_error
 
 
 class DevRequirements(BaseModel):
@@ -208,8 +224,7 @@ Please provide your analysis in the structured format."""
                 f"LLM failed to produce valid structured output after 3 retries. "
                 f"The LLM response does not match the expected DevRequirements schema: {str(e)}"
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "validation", e)
             
         except (ConnectionError, TimeoutError) as e:
             # Network/connectivity issues that couldn't be resolved after retries
@@ -217,8 +232,7 @@ Please provide your analysis in the structured format."""
                 f"Network connectivity issues prevented LLM analysis after 3 retries: {str(e)}. "
                 f"Please check your internet connection and API configuration."
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "network", e)
             
         except LangChainException as e:
             # LangChain-specific errors (API key issues, model issues, etc.)
@@ -226,8 +240,7 @@ Please provide your analysis in the structured format."""
                 f"LLM service error after 3 retries: {str(e)}. "
                 f"This may be due to API key issues, model availability, or service limits."
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "llm_service", e)
             
         except Exception as e:
             # Unexpected errors that we cannot recover from
@@ -235,8 +248,7 @@ Please provide your analysis in the structured format."""
                 f"Unexpected error during development requirements analysis: {str(e)}. "
                 f"Error type: {type(e).__name__}"
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "unexpected", e)
 
     async def setup_test_environment(
         self, requirements: Dict[str, Any]
@@ -407,8 +419,7 @@ Please provide your analysis in the structured format."""
                 f"LLM failed to produce valid test analysis after 3 retries. "
                 f"The LLM response does not match the expected TestResultsAnalysis schema: {str(e)}"
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "validation", e)
             
         except (ConnectionError, TimeoutError) as e:
             # Network/connectivity issues that couldn't be resolved after retries
@@ -416,8 +427,7 @@ Please provide your analysis in the structured format."""
                 f"Network connectivity issues prevented test results analysis after 3 retries: {str(e)}. "
                 f"Please check your internet connection and API configuration."
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "network", e)
             
         except LangChainException as e:
             # LangChain-specific errors (API key issues, model issues, etc.)
@@ -425,8 +435,7 @@ Please provide your analysis in the structured format."""
                 f"LLM service error during test analysis after 3 retries: {str(e)}. "
                 f"This may be due to API key issues, model availability, or service limits."
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "llm_service", e)
             
         except Exception as e:
             # Unexpected errors that we cannot recover from
@@ -434,8 +443,7 @@ Please provide your analysis in the structured format."""
                 f"Unexpected error during test results analysis: {str(e)}. "
                 f"Error type: {type(e).__name__}"
             )
-            print(f"FATAL ERROR: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            raise UnrecoverableTestRunnerError(error_msg, "unexpected", e)
 
     async def run_full_test_cycle(self) -> Dict[str, Any]:
         """Execute the complete test cycle: analyze, setup, run, and report."""
@@ -469,6 +477,10 @@ Please provide your analysis in the structured format."""
                 ),
             }
 
+        except UnrecoverableTestRunnerError as e:
+            # Let unrecoverable errors bubble up to coordinator
+            raise e
+            
         except Exception as e:
             return {"error": str(e), "overall_success": False}
 
