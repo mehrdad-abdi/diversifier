@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 
 from langchain.chat_models import init_chat_model
@@ -30,8 +30,8 @@ class DiversificationCoordinator:
         project_path: str,
         source_library: str,
         target_library: str,
-        llm_config: Optional[LLMConfig] = None,
-        migration_config: Optional["MigrationConfig"] = None,
+        llm_config: LLMConfig,
+        migration_config: "MigrationConfig",
     ):
         """Initialize the diversification coordinator.
 
@@ -39,21 +39,13 @@ class DiversificationCoordinator:
             project_path: Path to the project to diversify
             source_library: Library to migrate from
             target_library: Library to migrate to
-            llm_config: LLM configuration to use. If None, uses global config.
-            migration_config: Migration configuration including test_path. If None, uses defaults.
+            llm_config: LLM configuration to use
+            migration_config: Migration configuration including test_path
         """
-        if llm_config is None:
-            raise ValueError(
-                "llm_config is required - no default configuration available"
-            )
-
         self.project_path = Path(project_path).resolve()
         self.source_library = source_library
         self.target_library = target_library
         self.llm_config = llm_config
-
-        if migration_config is None:
-            migration_config = MigrationConfig()
         self.migration_config = migration_config
 
         # Initialize components

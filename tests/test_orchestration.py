@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from src.orchestration.agent import AgentManager, AgentType, DiversificationAgent
 from src.orchestration.mcp_manager import MCPManager, MCPServerType, MCPConnection
-from src.orchestration.config import LLMConfig, LoggingConfig
+from src.orchestration.config import LLMConfig, LoggingConfig, MigrationConfig
 from src.orchestration.coordinator import DiversificationCoordinator
 from src.orchestration.error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
 from src.orchestration.logging_config import setup_logging, get_logger
@@ -568,11 +568,13 @@ class TestDiversificationCoordinator:
             api_key_env_var="OPENAI_API_KEY",
             temperature=0.2,
         )
+        migration_config = MigrationConfig()
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
             llm_config=llm_config,
+            migration_config=migration_config,
         )
 
         assert os.path.realpath(str(coordinator.project_path)) == os.path.realpath(
@@ -590,11 +592,13 @@ class TestDiversificationCoordinator:
             model_name="claude-3-sonnet",
             api_key_env_var="TEST_API_KEY",
         )
+        migration_config = MigrationConfig()
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
             llm_config=llm_config,
+            migration_config=migration_config,
         )
 
         status = coordinator.get_workflow_status()
@@ -615,11 +619,13 @@ class TestDiversificationCoordinator:
             model_name="claude-3-sonnet",
             api_key_env_var="TEST_API_KEY",
         )
+        migration_config = MigrationConfig()
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
             llm_config=llm_config,
+            migration_config=migration_config,
         )
 
         # Mock internal workflow step methods

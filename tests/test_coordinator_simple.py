@@ -6,7 +6,7 @@ import os
 from unittest.mock import patch
 
 from src.orchestration.coordinator import DiversificationCoordinator
-from src.orchestration.config import LLMConfig
+from src.orchestration.config import LLMConfig, MigrationConfig
 
 
 class TestDiversificationCoordinator:
@@ -30,11 +30,13 @@ class TestDiversificationCoordinator:
             api_key_env_var="OPENAI_API_KEY",
             temperature=0.2,
         )
+        migration_config = MigrationConfig()
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
             llm_config=llm_config,
+            migration_config=migration_config,
         )
 
         assert os.path.realpath(str(coordinator.project_path)) == os.path.realpath(
@@ -51,11 +53,13 @@ class TestDiversificationCoordinator:
             model_name="claude-3-sonnet",
             api_key_env_var="ANTHROPIC_API_KEY",
         )
+        migration_config = MigrationConfig()
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
             llm_config=llm_config,
+            migration_config=migration_config,
         )
 
         status = coordinator.get_workflow_status()
@@ -78,11 +82,13 @@ class TestDiversificationCoordinator:
             model_name="claude-3-sonnet",
             api_key_env_var="ANTHROPIC_API_KEY",
         )
+        migration_config = MigrationConfig()
         coordinator = DiversificationCoordinator(
             project_path=self.project_path,
             source_library="requests",
             target_library="httpx",
             llm_config=llm_config,
+            migration_config=migration_config,
         )
 
         # Mock internal workflow step methods
@@ -94,12 +100,11 @@ class TestDiversificationCoordinator:
             result = await coordinator._initialize_environment()
             assert result["success"] is True
 
-    def test_coordinator_requires_llm_config(self):
-        """Test coordinator requires LLM config."""
-        with pytest.raises(ValueError, match="llm_config is required"):
+    def test_coordinator_requires_params(self):
+        """Test coordinator requires all parameters."""
+        with pytest.raises(TypeError):
             DiversificationCoordinator(
                 project_path=self.project_path,
                 source_library="requests",
                 target_library="httpx",
-                llm_config=None,
             )
