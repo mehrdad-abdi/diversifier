@@ -73,7 +73,6 @@ class TestMigrationConfig:
         config = MigrationConfig()
         assert config.max_iterations == 5
         assert config.test_timeout == 300
-        assert config.backup_original is True
         assert config.validate_syntax is True
         assert config.require_test_coverage is True
         assert config.min_test_coverage == 0.8

@@ -153,7 +153,6 @@ class FileOperationError(DiversifierError):
             or [
                 "Check file permissions",
                 "Verify file path exists",
-                "Create backup before retry",
                 "Use temporary file for operations",
                 "Verify disk space availability",
             ],

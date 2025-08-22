@@ -324,7 +324,6 @@ class ErrorHandler:
 
         suggestions.extend(
             [
-                "Create backup before retry",
                 "Use temporary file for operations",
                 "Verify disk space availability",
             ]
@@ -583,7 +582,7 @@ class ErrorHandler:
             True if file operation recovery was successful
         """
         try:
-            # Create backup or temporary file location
+            # Create temporary file location
             file_path = (
                 error_info.context.get("file_path") if error_info.context else None
             )

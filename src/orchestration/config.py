@@ -37,7 +37,6 @@ class MigrationConfig:
 
     max_iterations: int = 5
     test_timeout: int = 300  # 5 minutes
-    backup_original: bool = True
     validate_syntax: bool = True
     require_test_coverage: bool = True
     min_test_coverage: float = 0.8
@@ -206,7 +205,6 @@ class ConfigManager:
             # Migration configuration
             "DIVERSIFIER_MAX_ITERATIONS": ("migration", "max_iterations"),
             "DIVERSIFIER_TEST_TIMEOUT": ("migration", "test_timeout"),
-            "DIVERSIFIER_BACKUP_ORIGINAL": ("migration", "backup_original"),
             "DIVERSIFIER_MIN_COVERAGE": ("migration", "min_test_coverage"),
             # LLM configuration
             "DIVERSIFIER_LLM_PROVIDER": ("llm", "provider"),
@@ -250,7 +248,6 @@ class ConfigManager:
         # Boolean values
         if key in [
             "console",
-            "backup_original",
             "validate_syntax",
             "require_test_coverage",
             "enable_correlation_ids",
@@ -389,7 +386,6 @@ timeout = 30
 [migration]
 max_iterations = 5
 test_timeout = 300
-backup_original = true
 validate_syntax = true
 require_test_coverage = true
 min_test_coverage = 0.8

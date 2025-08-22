@@ -83,7 +83,6 @@ class DiversificationCoordinator:
             # Execute all steps in sequence
             steps = [
                 ("initialize_environment", self._initialize_environment),
-                ("create_backup", self._create_backup),
                 ("select_tests", self._select_tests),
                 ("run_baseline_tests", self._run_baseline_tests),
                 ("migrate_code", self._migrate_code),
@@ -210,50 +209,6 @@ class DiversificationCoordinator:
             self.logger.error(f"Model: {self.llm_config.model_name}")
             self.logger.error(f"Error: {e}")
             return False
-
-    async def _create_backup(self) -> Dict[str, Any]:
-        """Create backup of project before migration."""
-        try:
-            # Use git MCP server to create backup branch
-            if self.mcp_manager.is_server_available(MCPServerType.GIT):
-                self.logger.info("Creating git-based backup branch")
-
-                # Get current status
-                status_result = await self.mcp_manager.call_tool(
-                    MCPServerType.GIT, "get_status", {"repo_path": "."}
-                )
-
-                if not status_result:
-                    return {"success": False, "error": "Git status check failed"}
-
-                # Create backup branch
-                backup_result = await self.mcp_manager.call_tool(
-                    MCPServerType.GIT,
-                    "create_temp_branch",
-                    {
-                        "repo_path": ".",
-                        "base_branch": status_result.get("branch", "main"),
-                        "prefix": "diversifier-backup",
-                    },
-                )
-
-                if backup_result and backup_result.get("status") == "success":
-                    backup_branch = backup_result.get("temp_branch")
-                    self.logger.info(f"Created backup branch: {backup_branch}")
-
-                    return {
-                        "success": True,
-                        "backup_path": backup_branch,
-                        "backup_method": "git_branch",
-                        "base_branch": backup_result.get("base_branch"),
-                    }
-                else:
-                    return {"success": False, "error": "Git backup creation failed"}
-            else:
-                return {"success": False, "error": "Git MCP server not available"}
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
 
     async def _select_tests(self) -> Dict[str, Any]:
         """Select existing tests that cover library usage based on call graph analysis."""
