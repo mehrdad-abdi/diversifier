@@ -152,9 +152,7 @@ async def run_diversification(args) -> int:
         _coordinator = coordinator
 
         # Execute workflow
-        success = await coordinator.execute_workflow(
-            auto_proceed=True  # For now, auto-proceed in CLI mode
-        )
+        success = await coordinator.execute_workflow()
 
         if success:
             print("✅ Diversification completed successfully!")

@@ -1,18 +1,25 @@
 """High-level workflow orchestration coordinator."""
 
+import asyncio
 import logging
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 
 from langchain.chat_models import init_chat_model
+from langchain_core.exceptions import LangChainException
 
 from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
-from .workflow import WorkflowState, MigrationContext
 from .test_generation import TestCoverageSelector
 from .config import LLMConfig, MigrationConfig
 from .test_running.llm_test_runner import LLMTestRunner, UnrecoverableTestRunnerError
+
+
+class RateLimitError(Exception):
+    """Exception raised when API rate limits are hit."""
+
+    pass
 
 
 class DiversificationCoordinator:
@@ -23,8 +30,8 @@ class DiversificationCoordinator:
         project_path: str,
         source_library: str,
         target_library: str,
-        llm_config: Optional[LLMConfig] = None,
-        migration_config: Optional["MigrationConfig"] = None,
+        llm_config: LLMConfig,
+        migration_config: "MigrationConfig",
     ):
         """Initialize the diversification coordinator.
 
@@ -32,36 +39,20 @@ class DiversificationCoordinator:
             project_path: Path to the project to diversify
             source_library: Library to migrate from
             target_library: Library to migrate to
-            llm_config: LLM configuration to use. If None, uses global config.
-            migration_config: Migration configuration including test_path. If None, uses defaults.
+            llm_config: LLM configuration to use
+            migration_config: Migration configuration including test_path
         """
         self.project_path = Path(project_path).resolve()
         self.source_library = source_library
         self.target_library = target_library
-        if llm_config is None:
-            raise ValueError(
-                "llm_config is required - no default configuration available"
-            )
         self.llm_config = llm_config
-
-        # Use provided migration config or create default
-        if migration_config is None:
-            migration_config = MigrationConfig()
         self.migration_config = migration_config
 
         # Initialize components
         self.agent_manager = AgentManager(llm_config=self.llm_config)
         self.mcp_manager = MCPManager(project_root=str(self.project_path))
 
-        # Initialize workflow state
-        context = MigrationContext(
-            project_path=str(self.project_path),
-            source_library=source_library,
-            target_library=target_library,
-        )
-        self.workflow_state = WorkflowState(context)
-
-        # Initialize test coverage selection components
+        # Initialize test coverage selector
         self.test_coverage_selector = TestCoverageSelector(
             str(self.project_path),
             self.mcp_manager,
@@ -74,149 +65,100 @@ class DiversificationCoordinator:
 
         self.logger = logging.getLogger("diversifier.coordinator")
 
-        # Configuration
-        self.auto_proceed = False
+        # Store results from each step
+        self.step_results: Dict[str, Dict[str, Any]] = {}
 
-    def _validate_api_key(self) -> bool:
-        """Validate LLM configuration by attempting to initialize a chat model.
-
-        Returns:
-            True if LLM config is valid, False otherwise
-        """
-        try:
-            # Create the model identifier for init_chat_model
-            model_id = (
-                f"{self.llm_config.provider.lower()}:{self.llm_config.model_name}"
-            )
-
-            # Prepare initialization arguments
-            kwargs: Dict[str, Any] = {
-                "temperature": self.llm_config.temperature,
-                "max_tokens": self.llm_config.max_tokens,
-            }
-            # Add additional params
-            for key, value in self.llm_config.additional_params.items():
-                kwargs[key] = value
-
-            # Try to initialize the LLM - this validates the config without API calls
-            init_chat_model(model=model_id, **kwargs)
-
-            self.logger.info(
-                f"✅ LLM configuration validated for {self.llm_config.provider}:{self.llm_config.model_name}"
-            )
-            return True
-
-        except Exception as e:
-            print("❌ Error: Invalid LLM configuration")
-            print(f"Provider: {self.llm_config.provider}")
-            print(f"Model: {self.llm_config.model_name}")
-            print("")
-            print(f"Error: {e}")
-
-            return False
-
-    async def execute_workflow(self, auto_proceed: bool = False) -> bool:
+    async def execute_workflow(self) -> bool:
         """Execute the complete diversification workflow.
-
-        Args:
-            auto_proceed: If True, don't wait for user confirmation
 
         Returns:
             True if workflow completed successfully
         """
-        self.auto_proceed = auto_proceed
-
         self.logger.info(
             f"Starting diversification workflow: {self.source_library} -> {self.target_library}"
         )
         self.logger.info(f"Project path: {self.project_path}")
 
-        # Validate API key before starting workflow
-        if not self._validate_api_key():
-            return False
-
         try:
-            # Execute workflow steps in order
-            while (
-                not self.workflow_state.is_workflow_complete()
-                and not self.workflow_state.is_workflow_failed()
-            ):
-                next_step = self.workflow_state.get_next_step()
-                if not next_step:
-                    break
+            # Execute all steps in sequence
+            steps = [
+                ("initialize_environment", self._initialize_environment),
+                ("create_backup", self._create_backup),
+                ("select_tests", self._select_tests),
+                ("run_baseline_tests", self._run_baseline_tests),
+                ("migrate_code", self._migrate_code),
+                ("validate_migration", self._validate_migration),
+                ("repair_issues", self._repair_issues),
+                ("finalize_migration", self._finalize_migration),
+            ]
 
-                success = await self._execute_step(next_step.name)
-                if not success:
-                    self.logger.error(f"Step {next_step.name} failed")
-                    self.logger.error("Workflow failed - no retry mechanism")
-                    break
+            for step_name, step_func in steps:
+                self.logger.info(f"Executing step: {step_name}")
 
-            # Check final result
-            if self.workflow_state.is_workflow_complete():
-                self.logger.info("Diversification workflow completed successfully")
-                return True
-            else:
-                self.logger.error("Diversification workflow failed")
-                return False
+                try:
+                    result = await self._execute_step_with_retry(step_func)
+
+                    if not result.get("success", False):
+                        error = result.get(
+                            "error", "Step failed without specific error"
+                        )
+                        self.logger.error(f"Step {step_name} failed: {error}")
+                        return False
+
+                    self.step_results[step_name] = result
+                    self.logger.info(f"Step {step_name} completed successfully")
+
+                except Exception as e:
+                    self.logger.error(f"Step {step_name} raised exception: {e}")
+                    return False
+
+            self.logger.info("Diversification workflow completed successfully")
+            return True
 
         except Exception as e:
             self.logger.error(f"Workflow execution failed: {e}")
             return False
         finally:
-            await self.cleanup()
+            await self._cleanup()
 
-    async def _execute_step(self, step_name: str) -> bool:
-        """Execute a specific workflow step.
+    async def _execute_step_with_retry(self, step_func) -> Dict[str, Any]:
+        """Execute a step with retry only for rate limit errors.
 
         Args:
-            step_name: Name of step to execute
+            step_func: Step function to execute
 
         Returns:
-            True if step completed successfully
+            Step result dictionary
         """
-        # breakpoint()
-        if not self.workflow_state.start_step(step_name):
-            return False
+        max_retries = 3
 
-        try:
-            self.logger.info(f"Executing step: {step_name}")
+        for attempt in range(max_retries):
+            try:
+                return await step_func()
+            except (RateLimitError, LangChainException) as e:
+                if "rate" in str(e).lower() or "limit" in str(e).lower():
+                    if attempt < max_retries - 1:
+                        wait_time = 2**attempt
+                        self.logger.warning(
+                            f"Rate limit hit, waiting {wait_time}s before retry {attempt + 1}/{max_retries}"
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+                raise
+            except Exception:
+                # Fail immediately for non-rate-limit errors
+                raise
 
-            # Route to appropriate step handler
-            if step_name == "initialize_environment":
-                result = await self._initialize_environment()
-            elif step_name == "create_backup":
-                result = await self._create_backup()
-            elif step_name == "select_tests":
-                result = await self._select_tests()
-            elif step_name == "run_baseline_tests":
-                result = await self._run_baseline_tests()
-            elif step_name == "migrate_code":
-                result = await self._migrate_code()
-            elif step_name == "validate_migration":
-                result = await self._validate_migration()
-            elif step_name == "repair_issues":
-                result = await self._repair_issues()
-            elif step_name == "finalize_migration":
-                result = await self._finalize_migration()
-            else:
-                raise ValueError(f"Unknown step: {step_name}")
-
-            if result.get("success", False):
-                self.workflow_state.complete_step(step_name, result)
-                return True
-            else:
-                error = result.get("error", "Step failed without specific error")
-                self.workflow_state.fail_step(step_name, error)
-                return False
-
-        except Exception as e:
-            self.workflow_state.fail_step(step_name, str(e))
-            self.logger.error(f"Step {step_name} raised exception: {e}")
-            return False
+        # This should never be reached due to the raise statements above
+        return {"success": False, "error": "Max retries exceeded"}
 
     async def _initialize_environment(self) -> Dict[str, Any]:
         """Initialize MCP servers and agents."""
         try:
+            # Validate LLM configuration first
+            if not self._validate_llm_config():
+                return {"success": False, "error": "Invalid LLM configuration"}
+
             # Initialize MCP servers
             server_results = await self.mcp_manager.initialize_all_servers()
 
@@ -242,10 +184,36 @@ class DiversificationCoordinator:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def _validate_llm_config(self) -> bool:
+        """Validate LLM configuration by attempting to initialize a chat model."""
+        try:
+            model_id = (
+                f"{self.llm_config.provider.lower()}:{self.llm_config.model_name}"
+            )
+
+            kwargs: Dict[str, Any] = {
+                "temperature": self.llm_config.temperature,
+                "max_tokens": self.llm_config.max_tokens,
+            }
+            kwargs.update(self.llm_config.additional_params)
+
+            init_chat_model(model=model_id, **kwargs)
+
+            self.logger.info(
+                f"✅ LLM configuration validated for {self.llm_config.provider}:{self.llm_config.model_name}"
+            )
+            return True
+
+        except Exception as e:
+            self.logger.error("❌ Error: Invalid LLM configuration")
+            self.logger.error(f"Provider: {self.llm_config.provider}")
+            self.logger.error(f"Model: {self.llm_config.model_name}")
+            self.logger.error(f"Error: {e}")
+            return False
+
     async def _create_backup(self) -> Dict[str, Any]:
         """Create backup of project before migration."""
         try:
-
             # Use git MCP server to create backup branch
             if self.mcp_manager.is_server_available(MCPServerType.GIT):
                 self.logger.info("Creating git-based backup branch")
@@ -256,9 +224,6 @@ class DiversificationCoordinator:
                 )
 
                 if not status_result:
-                    self.logger.error(
-                        "Could not get git status, backup creation failed"
-                    )
                     return {"success": False, "error": "Git status check failed"}
 
                 # Create backup branch
@@ -283,16 +248,11 @@ class DiversificationCoordinator:
                         "base_branch": backup_result.get("base_branch"),
                     }
                 else:
-                    self.logger.error("Git backup failed")
                     return {"success": False, "error": "Git backup creation failed"}
             else:
-                self.logger.error(
-                    "Git MCP server not available, backup creation failed"
-                )
                 return {"success": False, "error": "Git MCP server not available"}
 
         except Exception as e:
-            self.logger.error(f"Backup creation failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def _select_tests(self) -> Dict[str, Any]:
@@ -302,7 +262,7 @@ class DiversificationCoordinator:
 
             # Use the test coverage selection pipeline
             selection_result = await self.test_coverage_selector.select_test_coverage(
-                target_library=self.source_library,  # Analyze usage of the source library
+                target_library=self.source_library,
             )
 
             if not selection_result.pipeline_success:
@@ -330,7 +290,6 @@ class DiversificationCoordinator:
             }
 
         except Exception as e:
-            self.logger.error(f"Test coverage selection failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def _run_baseline_tests(self) -> Dict[str, Any]:
@@ -339,14 +298,13 @@ class DiversificationCoordinator:
             self.logger.info("Running baseline focused unit tests")
 
             # Get test selection results from previous step
-            generate_step = self.workflow_state.steps.get("select_tests")
-            if not generate_step or not generate_step.result:
+            if "select_tests" not in self.step_results:
                 return {
                     "success": False,
                     "error": "No test selection results available",
                 }
 
-            selection_result = generate_step.result.get("selection_result")
+            selection_result = self.step_results["select_tests"].get("selection_result")
             if not selection_result:
                 return {"success": False, "error": "No selection results available"}
 
@@ -368,7 +326,6 @@ class DiversificationCoordinator:
             test_functions = set()
             for path in coverage_paths:
                 test_node = path.test_node
-                # Format as pytest can understand: file_path::function_name
                 test_spec = f"{test_node.file_path}::{test_node.function_name}"
                 test_functions.add(test_spec)
 
@@ -377,22 +334,13 @@ class DiversificationCoordinator:
             )
 
             # Use LLM-powered test running for intelligent test execution
-            self.logger.info("Using LLM-powered test runner to execute tests")
             return await self._run_tests_with_llm(test_functions)
 
         except Exception as e:
-            self.logger.error(f"Baseline test execution failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def _run_tests_with_llm(self, test_functions: set) -> Dict[str, Any]:
-        """Run tests using LLM-powered intelligent test runner.
-
-        Args:
-            test_functions: Set of test specifications to run
-
-        Returns:
-            Test results dictionary
-        """
+        """Run tests using LLM-powered intelligent test runner."""
         try:
             self.logger.info(
                 f"Running {len(test_functions)} tests using LLM-powered test runner"
@@ -401,19 +349,19 @@ class DiversificationCoordinator:
             # Initialize LLM test runner for the target project
             runner = LLMTestRunner(str(self.project_path), self.migration_config)
 
-            # Analyze target project structure to understand its environment
+            # Analyze target project structure
             project_structure = await runner.analyze_project_structure()
             self.logger.info(
                 f"Analyzed target project: found {len(project_structure['test_files'])} test files"
             )
 
-            # Use LLM to detect target project's development requirements
+            # Detect target project's development requirements
             dev_requirements = await runner.detect_dev_requirements(project_structure)
             self.logger.info(
                 f"Detected target project requirements: {dev_requirements['testing_framework']}"
             )
 
-            # Override test commands to run specific test functions instead of full test suite
+            # Override test commands to run specific test functions
             focused_requirements = dev_requirements.copy()
             focused_requirements["test_commands"] = [
                 f"python -m pytest -v {' '.join(test_functions)}"
@@ -422,7 +370,7 @@ class DiversificationCoordinator:
                 "Focused test execution for baseline tests"
             )
 
-            # Set up target project's test environment (install dev dependencies)
+            # Set up target project's test environment
             setup_results = await runner.setup_test_environment(focused_requirements)
             if not setup_results["success"]:
                 return {
@@ -446,7 +394,6 @@ class DiversificationCoordinator:
 
             # Convert to expected format
             if test_results["overall_success"]:
-                # Parse the output to extract test counts
                 output = (
                     test_results["test_commands_executed"][0]["stdout"]
                     if test_results["test_commands_executed"]
@@ -470,7 +417,7 @@ class DiversificationCoordinator:
                         "passed": passed,
                         "failed": failed,
                         "skipped": 0,
-                        "duration": 0.0,  # Not tracked in simple runner
+                        "duration": 0.0,
                         "selected_tests": list(test_functions),
                         "output": output,
                         "stderr": (
@@ -495,20 +442,11 @@ class DiversificationCoordinator:
                 }
 
         except UnrecoverableTestRunnerError as e:
-            # Fatal LLM test runner errors - do not retry, exit workflow
             self.logger.error(f"FATAL: Unrecoverable test runner error: {e.message}")
-            self.logger.error(f"Error type: {e.error_type}")
-            if e.original_error:
-                self.logger.error(f"Original error: {e.original_error}")
-
-            # Signal to workflow that this is unrecoverable
             raise RuntimeError(
                 f"Test runner encountered unrecoverable {e.error_type} error: {e.message}"
             )
-
         except Exception as e:
-            # Other recoverable exceptions
-            self.logger.error(f"LLM test execution failed: {e}")
             return {
                 "success": False,
                 "error": f"LLM test execution failed: {e}",
@@ -556,15 +494,14 @@ class DiversificationCoordinator:
         try:
             self.logger.info("Validating migration with focused unit tests")
 
-            # Get test selection results from previous step
-            generate_step = self.workflow_state.steps.get("select_tests")
-            if not generate_step or not generate_step.result:
+            # Get test selection results
+            if "select_tests" not in self.step_results:
                 return {
                     "success": False,
                     "error": "No test selection results available for validation",
                 }
 
-            selection_result = generate_step.result.get("selection_result")
+            selection_result = self.step_results["select_tests"].get("selection_result")
             if not selection_result:
                 return {
                     "success": False,
@@ -583,16 +520,16 @@ class DiversificationCoordinator:
             }
 
         except Exception as e:
-            self.logger.error(f"Migration validation failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def _repair_issues(self) -> Dict[str, Any]:
         """Repair any issues found during validation."""
         try:
             # Check if repair is needed based on validation results
-            validation_step = self.workflow_state.steps.get("validate_migration")
-            if validation_step and validation_step.result:
-                test_results = validation_step.result.get("test_results", {})
+            if "validate_migration" in self.step_results:
+                test_results = self.step_results["validate_migration"].get(
+                    "test_results", {}
+                )
                 if test_results.get("failed", 0) == 0:
                     return {"success": True, "repairs_needed": False}
 
@@ -616,7 +553,6 @@ class DiversificationCoordinator:
                 "success": True,
                 "repair_result": result.get("output", ""),
                 "repairs_applied": 1,
-                "attempt": self.workflow_state.context.repair_attempts + 1,
             }
 
         except Exception as e:
@@ -632,10 +568,11 @@ class DiversificationCoordinator:
                 self.logger.info("Using git MCP server for finalization")
 
                 # Get migration results to see what files were modified
-                migration_step = self.workflow_state.steps.get("migrate_code")
                 files_modified = []
-                if migration_step and migration_step.result:
-                    files_modified = migration_step.result.get("files_modified", [])
+                if "migrate_code" in self.step_results:
+                    files_modified = self.step_results["migrate_code"].get(
+                        "files_modified", []
+                    )
 
                 # Stage modified files
                 if files_modified:
@@ -688,7 +625,7 @@ class DiversificationCoordinator:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def cleanup(self) -> None:
+    async def _cleanup(self) -> None:
         """Clean up resources."""
         try:
             await self.mcp_manager.shutdown_all_servers()
@@ -703,15 +640,20 @@ class DiversificationCoordinator:
         Returns:
             Workflow status summary
         """
-        return self.workflow_state.get_workflow_summary()
+        completed_steps = len(
+            [r for r in self.step_results.values() if r.get("success")]
+        )
+        failed_steps = len(
+            [r for r in self.step_results.values() if not r.get("success")]
+        )
 
-    def save_workflow_state(self, file_path: str) -> bool:
-        """Save current workflow state to file.
-
-        Args:
-            file_path: Path to save state file
-
-        Returns:
-            True if saved successfully
-        """
-        return self.workflow_state.save_state(file_path)
+        return {
+            "project_path": str(self.project_path),
+            "source_library": self.source_library,
+            "target_library": self.target_library,
+            "total_steps": 8,
+            "completed_steps": completed_steps,
+            "failed_steps": failed_steps,
+            "is_complete": completed_steps == 8,
+            "step_results": self.step_results,
+        }
