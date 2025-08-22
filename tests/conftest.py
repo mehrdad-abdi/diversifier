@@ -8,8 +8,11 @@ from unittest.mock import Mock, patch
 @pytest.fixture(autouse=True)
 def setup_test_environment():
     """Set up test environment with required API keys and mocks."""
-    # Set dummy OpenAI API key to prevent real API calls
+    # Set dummy API keys to prevent real API calls
     os.environ["OPENAI_API_KEY"] = "test-key-12345"
+    os.environ["ANTHROPIC_API_KEY"] = "test-key-12345"
+    os.environ["TEST_API_KEY"] = "test-key-12345"
+    os.environ["GOOGLE_API_KEY"] = "test-key-12345"
 
     # Set other environment variables that might be needed
     os.environ["LANGCHAIN_TRACING_V2"] = "false"

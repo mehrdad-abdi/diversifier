@@ -26,7 +26,7 @@ class TestDiversificationAgent:
         """Clean up test environment."""
         self.temp_dir.cleanup()
 
-    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}, clear=False)
     def test_agent_initialization(self):
         """Test agent initialization."""
 
