@@ -12,12 +12,7 @@ class LoggingConfig:
     """Logging configuration settings."""
 
     level: str = "INFO"
-    console: bool = True
-    file_path: Optional[str] = None
-    max_file_size: int = 10 * 1024 * 1024  # 10MB
-    backup_count: int = 5
     format_string: str = "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
-    enable_correlation_ids: bool = True
 
 
 @dataclass
@@ -195,11 +190,6 @@ class ConfigManager:
         env_mappings = {
             # Logging configuration
             "DIVERSIFIER_LOG_LEVEL": ("logging", "level"),
-            "DIVERSIFIER_LOG_FILE": ("logging", "file_path"),
-            "DIVERSIFIER_LOG_CONSOLE": ("logging", "console"),
-            "DIVERSIFIER_LOG_MAX_SIZE": ("logging", "max_file_size"),
-            "DIVERSIFIER_LOG_BACKUP_COUNT": ("logging", "backup_count"),
-            "DIVERSIFIER_CORRELATION_IDS": ("logging", "enable_correlation_ids"),
             # MCP configuration
             "DIVERSIFIER_MCP_TIMEOUT": ("mcp", "timeout"),
             # Migration configuration
@@ -247,18 +237,14 @@ class ConfigManager:
         """
         # Boolean values
         if key in [
-            "console",
             "validate_syntax",
             "require_test_coverage",
-            "enable_correlation_ids",
             "debug_mode",
         ]:
             return value.lower() in ("true", "1", "yes", "on")
 
         # Integer values
         if key in [
-            "max_file_size",
-            "backup_count",
             "timeout",
             "max_iterations",
             "test_timeout",
@@ -370,11 +356,7 @@ class ConfigManager:
 
 [logging]
 level = "INFO"
-console = true
-file_path = "diversifier.log"
-max_file_size = 10485760  # 10MB
-backup_count = 5
-enable_correlation_ids = true
+format_string = "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
 
 [mcp]
 filesystem_server_path = "src/mcp_servers/filesystem/server.py"

@@ -32,7 +32,7 @@ class TestCreateParser:
         assert args.inject_lib == "httpx"
         assert args.verbose is False
 
-    def test_parser_optional_flags(self):
+    def test_parser_verbose_flag(self):
         parser = create_parser()
 
         args = parser.parse_args(
@@ -70,13 +70,19 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_get_config
     ):
 
-        # Mock LLM config and migration config
+        # Mock LLM config, migration config, and logging config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
         mock_migration_config.test_paths = ["tests/"]
+        mock_logging_config = Mock()
+        mock_logging_config.level = "INFO"
+        mock_logging_config.format_string = (
+            "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
+        )
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
+        mock_config.logging = mock_logging_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (
@@ -121,13 +127,19 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
 
-        # Mock LLM config and migration config
+        # Mock LLM config, migration config, and logging config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
         mock_migration_config.test_paths = ["tests/"]
+        mock_logging_config = Mock()
+        mock_logging_config.level = "INFO"
+        mock_logging_config.format_string = (
+            "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
+        )
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
+        mock_config.logging = mock_logging_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (True, [])
@@ -153,13 +165,19 @@ class TestMainFunction:
         self, mock_print, mock_validate_python, mock_coordinator_class, mock_get_config
     ):
 
-        # Mock LLM config and migration config
+        # Mock LLM config, migration config, and logging config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
         mock_migration_config.test_paths = ["tests/"]
+        mock_logging_config = Mock()
+        mock_logging_config.level = "INFO"
+        mock_logging_config.format_string = (
+            "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
+        )
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
+        mock_config.logging = mock_logging_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (True, [])
@@ -193,13 +211,19 @@ class TestMainFunction:
         mock_get_config,
     ):
 
-        # Mock LLM config and migration config
+        # Mock LLM config, migration config, and logging config
         mock_llm_config = Mock(spec=LLMConfig)
         mock_migration_config = Mock()
         mock_migration_config.test_paths = ["tests/"]
+        mock_logging_config = Mock()
+        mock_logging_config.level = "INFO"
+        mock_logging_config.format_string = (
+            "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
+        )
         mock_config = Mock(spec=DiversifierConfig)
         mock_config.llm = mock_llm_config
         mock_config.migration = mock_migration_config
+        mock_config.logging = mock_logging_config
         mock_get_config.return_value = mock_config
 
         mock_validate_python.return_value = (True, [])

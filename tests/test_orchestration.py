@@ -761,7 +761,7 @@ class TestLoggingConfig:
     def test_setup_logging(self):
         """Test logging setup."""
         # This is mainly to ensure no exceptions are raised
-        config = LoggingConfig(level="DEBUG", console=True)
+        config = LoggingConfig(level="DEBUG")
         setup_logging(config)
 
         logger = get_logger("test")

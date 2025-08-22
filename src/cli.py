@@ -41,7 +41,7 @@ def _cleanup_on_exit() -> None:
             print(f"⚠️  Error during cleanup: {e}")
 
 
-def _signal_handler(signum: int, frame) -> None:
+def _signal_handler(signum: int, frame=None) -> None:
     """Handle termination signals by cleaning up coordinator resources."""
     signal_name = signal.Signals(signum).name
     print(f"\n🛑 Received {signal_name}, shutting down gracefully...")
@@ -113,15 +113,6 @@ Examples:
         "--verbose", "-v", action="store_true", help="Enable verbose output"
     )
 
-    parser.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Set logging level (default: INFO)",
-    )
-
-    parser.add_argument("--log-file", type=str, help="Write logs to file")
-
     return parser
 
 
@@ -129,16 +120,16 @@ async def run_diversification(args) -> int:
     """Run the diversification workflow."""
     global _coordinator
 
-    # Setup logging
-    log_level = "DEBUG" if args.verbose else args.log_level
-    logging_config = LoggingConfig(
-        level=log_level, console=True, file_path=args.log_file
-    )
-    setup_logging(logging_config)
-
     try:
         # Initialize coordinator with configuration from config file
         config = get_config(args.config)
+
+        # Setup logging
+        log_level = "DEBUG" if args.verbose else config.logging.level
+        logging_config = LoggingConfig(
+            level=log_level, format_string=config.logging.format_string
+        )
+        setup_logging(logging_config)
 
         coordinator = DiversificationCoordinator(
             project_path=str(args.project_path),
