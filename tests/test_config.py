@@ -477,3 +477,42 @@ api_key_env_var = "TEST_API_KEY"
                 assert config.debug_mode is True
             finally:
                 os.unlink(f.name)
+
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
+    def test_load_config_filters_unknown_keys(self):
+        """Test that unknown top-level keys are filtered out during config loading."""
+        toml_content = """
+# Top-level configuration
+project_root = "/test/path"
+debug_mode = true
+performance = "high"  # Unknown key that should be filtered out
+unknown_param = "should_be_ignored"  # Another unknown key
+
+[logging]
+level = "DEBUG"
+
+[llm]
+provider = "anthropic"
+model_name = "claude-3-5-sonnet-20241022"
+api_key_env_var = "TEST_API_KEY"
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+
+            try:
+                manager = ConfigManager(f.name)
+                # This should not raise an error about unexpected keyword arguments
+                config = manager.load_config()
+
+                # Check that known parameters are loaded correctly
+                assert config.project_root == "/test/path"
+                assert config.debug_mode is True
+                assert config.logging.level == "DEBUG"
+                assert config.llm.provider == "anthropic"
+
+                # The config should be created successfully despite unknown keys
+                assert isinstance(config, DiversifierConfig)
+            finally:
+                os.unlink(f.name)

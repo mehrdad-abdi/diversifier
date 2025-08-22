@@ -328,11 +328,12 @@ class ConfigManager:
         }
         llm_config = LLMConfig(task_temperatures=task_temperatures, **llm_config_data)
 
-        # Extract top-level configuration
+        # Extract top-level configuration - filter out unknown keys
         top_level_data = {
             k: v
             for k, v in config_data.items()
             if k not in ["logging", "mcp", "migration", "llm"]
+            and k in DiversifierConfig.__dataclass_fields__
         }
 
         return DiversifierConfig(
