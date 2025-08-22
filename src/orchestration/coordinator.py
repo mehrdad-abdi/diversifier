@@ -68,11 +68,8 @@ class DiversificationCoordinator:
         # Store results from each step
         self.step_results: Dict[str, Dict[str, Any]] = {}
 
-    async def execute_workflow(self, auto_proceed: bool = False) -> bool:
+    async def execute_workflow(self) -> bool:
         """Execute the complete diversification workflow.
-
-        Args:
-            auto_proceed: If True, don't wait for user confirmation (unused in simple workflow)
 
         Returns:
             True if workflow completed successfully
