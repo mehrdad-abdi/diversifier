@@ -6,17 +6,11 @@ import tempfile
 import logging
 import os
 from unittest.mock import Mock, patch
-from pathlib import Path
 
 from src.orchestration.agent import AgentManager, AgentType, DiversificationAgent
+from src.orchestration.simple_workflow import MigrationWorkflow
 from src.orchestration.mcp_manager import MCPManager, MCPServerType, MCPConnection
 from src.orchestration.config import LLMConfig, LoggingConfig
-from src.orchestration.workflow import (
-    WorkflowState,
-    MigrationContext,
-    WorkflowStage,
-    WorkflowStatus,
-)
 from src.orchestration.coordinator import DiversificationCoordinator
 from src.orchestration.error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
 from src.orchestration.test_generation import (
@@ -29,7 +23,6 @@ from src.orchestration.test_generation import (
     LibraryUsageType,
     LibraryUsageSummary,
 )
-from src.orchestration.workflow import WorkflowStep
 from src.orchestration.logging_config import setup_logging, get_logger
 
 
@@ -564,101 +557,6 @@ class TestMCPManager:
         assert "filesystem" in stats["servers"]
 
 
-class TestWorkflowState:
-    """Test cases for WorkflowState."""
-
-    def setup_method(self):
-        """Set up test environment."""
-        self.context = MigrationContext(
-            project_path="/test/project",
-            source_library="requests",
-            target_library="httpx",
-        )
-        self.workflow = WorkflowState(self.context)
-
-    def test_workflow_initialization(self):
-        """Test workflow state initialization."""
-        assert self.workflow.context == self.context
-        assert self.workflow.current_stage == WorkflowStage.INITIALIZATION
-        assert len(self.workflow.steps) > 0
-        assert len(self.workflow.step_order) == len(self.workflow.steps)
-
-    def test_get_next_step_initial(self):
-        """Test getting the first step."""
-        next_step = self.workflow.get_next_step()
-
-        assert next_step is not None
-        assert next_step.name == "initialize_environment"
-        assert next_step.status == WorkflowStatus.PENDING
-
-    def test_start_step(self):
-        """Test starting a workflow step."""
-        success = self.workflow.start_step("initialize_environment")
-
-        assert success is True
-        step = self.workflow.steps["initialize_environment"]
-        assert step.status == WorkflowStatus.RUNNING
-        assert step.start_time is not None
-
-    def test_complete_step(self):
-        """Test completing a workflow step."""
-        self.workflow.start_step("initialize_environment")
-        result = {"servers_initialized": 4}
-        success = self.workflow.complete_step("initialize_environment", result)
-
-        assert success is True
-        step = self.workflow.steps["initialize_environment"]
-        assert step.status == WorkflowStatus.COMPLETED
-        assert step.end_time is not None
-        assert step.result == result
-
-    def test_fail_step(self):
-        """Test failing a workflow step."""
-        self.workflow.start_step("initialize_environment")
-        error = "Server connection failed"
-        success = self.workflow.fail_step("initialize_environment", error)
-
-        assert success is True
-        step = self.workflow.steps["initialize_environment"]
-        assert step.status == WorkflowStatus.FAILED
-        assert step.error == error
-        assert self.workflow.current_stage == WorkflowStage.FAILED
-
-    def test_dependencies(self):
-        """Test step dependencies."""
-        # Try to start a step with unmet dependencies
-        success = self.workflow.start_step("create_backup")
-
-        assert success is False  # Should fail due to unmet dependencies
-
-        # Complete the dependency first
-        self.workflow.start_step("initialize_environment")
-        self.workflow.complete_step("initialize_environment")
-
-        # Now it should succeed
-        success = self.workflow.start_step("create_backup")
-        assert success is True
-
-    def test_workflow_summary(self):
-        """Test getting workflow summary."""
-        # Complete one step
-        self.workflow.start_step("initialize_environment")
-        self.workflow.complete_step("initialize_environment")
-
-        # Fail another step
-        self.workflow.start_step("create_backup")
-        self.workflow.fail_step("create_backup", "Test error")
-
-        summary = self.workflow.get_workflow_summary()
-
-        assert summary["total_steps"] > 0
-        assert summary["completed_steps"] == 1
-        assert summary["failed_steps"] == 1
-        assert "steps" in summary
-        assert summary["is_complete"] is False
-        assert summary["is_failed"] is True  # No retry mechanism
-
-
 class TestDiversificationCoordinator:
     """Test cases for DiversificationCoordinator."""
 
@@ -688,14 +586,9 @@ class TestDiversificationCoordinator:
             llm_config=llm_config,
         )
 
-        assert str(coordinator.project_path) == str(Path(self.project_path).resolve())
-        assert coordinator.source_library == "requests"
-        assert coordinator.target_library == "httpx"
-        assert coordinator.llm_config.model_name == "gpt-3.5-turbo"
-        assert coordinator.llm_config.temperature == 0.2
-        assert isinstance(coordinator.agent_manager, AgentManager)
-        assert isinstance(coordinator.mcp_manager, MCPManager)
-        assert isinstance(coordinator.workflow_state, WorkflowState)
+        assert isinstance(coordinator.workflow, MigrationWorkflow)
+        assert coordinator.workflow.source_library == "requests"
+        assert coordinator.workflow.target_library == "httpx"
 
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     def test_get_workflow_status(self):
@@ -716,13 +609,14 @@ class TestDiversificationCoordinator:
         status = coordinator.get_workflow_status()
 
         assert isinstance(status, dict)
-        assert "context" in status
-        assert "current_stage" in status
         assert "total_steps" in status
+        assert "completed_steps" in status
+        assert "source_library" in status
+        assert "target_library" in status
 
     @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
     @pytest.mark.asyncio
-    async def test_run_baseline_tests_with_coverage(self):
+    async def test_execute_workflow(self):
         """Test _run_baseline_tests with test coverage results."""
 
         llm_config = LLMConfig(

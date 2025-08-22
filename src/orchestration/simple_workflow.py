@@ -1,0 +1,658 @@
+"""Simple sequential workflow for diversification process."""
+
+import asyncio
+import logging
+import re
+from typing import Dict, Any, Optional
+from pathlib import Path
+
+from langchain.chat_models import init_chat_model
+from langchain_core.exceptions import LangChainException
+
+from .agent import AgentManager, AgentType
+from .mcp_manager import MCPManager, MCPServerType
+from .test_generation import TestCoverageSelector
+from .config import LLMConfig, MigrationConfig
+from .test_running.llm_test_runner import LLMTestRunner, UnrecoverableTestRunnerError
+
+
+class RateLimitError(Exception):
+    """Exception raised when API rate limits are hit."""
+
+    pass
+
+
+class MigrationWorkflow:
+    """Simple sequential workflow for library migration."""
+
+    def __init__(
+        self,
+        project_path: str,
+        source_library: str,
+        target_library: str,
+        llm_config: LLMConfig,
+        migration_config: Optional[MigrationConfig] = None,
+    ):
+        """Initialize the migration workflow.
+
+        Args:
+            project_path: Path to the project to migrate
+            source_library: Library to migrate from
+            target_library: Library to migrate to
+            llm_config: LLM configuration
+            migration_config: Migration configuration including test_path
+        """
+        self.project_path = Path(project_path).resolve()
+        self.source_library = source_library
+        self.target_library = target_library
+        self.llm_config = llm_config
+
+        if migration_config is None:
+            migration_config = MigrationConfig()
+        self.migration_config = migration_config
+
+        # Initialize components
+        self.agent_manager = AgentManager(llm_config=self.llm_config)
+        self.mcp_manager = MCPManager(project_root=str(self.project_path))
+
+        # Initialize test coverage selector
+        self.test_coverage_selector = TestCoverageSelector(
+            str(self.project_path),
+            self.mcp_manager,
+            (
+                self.migration_config.test_paths[0]
+                if self.migration_config.test_paths
+                else "tests/"
+            ),
+        )
+
+        self.logger = logging.getLogger("diversifier.workflow")
+
+        # Store results from each step
+        self.step_results: Dict[str, Dict[str, Any]] = {}
+
+    async def execute(self) -> bool:
+        """Execute the complete migration workflow.
+
+        Returns:
+            True if workflow completed successfully, False otherwise
+        """
+        self.logger.info(
+            f"Starting migration workflow: {self.source_library} -> {self.target_library}"
+        )
+        self.logger.info(f"Project path: {self.project_path}")
+
+        try:
+            # Execute all steps in sequence
+            steps = [
+                ("initialize_environment", self._initialize_environment),
+                ("create_backup", self._create_backup),
+                ("select_tests", self._select_tests),
+                ("run_baseline_tests", self._run_baseline_tests),
+                ("migrate_code", self._migrate_code),
+                ("validate_migration", self._validate_migration),
+                ("repair_issues", self._repair_issues),
+                ("finalize_migration", self._finalize_migration),
+            ]
+
+            for step_name, step_func in steps:
+                self.logger.info(f"Executing step: {step_name}")
+
+                try:
+                    result = await self._execute_step_with_retry(step_func)
+
+                    if not result.get("success", False):
+                        error = result.get(
+                            "error", "Step failed without specific error"
+                        )
+                        self.logger.error(f"Step {step_name} failed: {error}")
+                        return False
+
+                    self.step_results[step_name] = result
+                    self.logger.info(f"Step {step_name} completed successfully")
+
+                except Exception as e:
+                    self.logger.error(f"Step {step_name} raised exception: {e}")
+                    return False
+
+            self.logger.info("Migration workflow completed successfully")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Workflow execution failed: {e}")
+            return False
+        finally:
+            await self._cleanup()
+
+    async def _execute_step_with_retry(self, step_func) -> Dict[str, Any]:
+        """Execute a step with retry only for rate limit errors.
+
+        Args:
+            step_func: Step function to execute
+
+        Returns:
+            Step result dictionary
+        """
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            try:
+                return await step_func()
+            except (RateLimitError, LangChainException) as e:
+                if "rate" in str(e).lower() or "limit" in str(e).lower():
+                    if attempt < max_retries - 1:
+                        wait_time = 2**attempt
+                        self.logger.warning(
+                            f"Rate limit hit, waiting {wait_time}s before retry {attempt + 1}/{max_retries}"
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+                raise
+            except Exception:
+                # Fail immediately for non-rate-limit errors
+                raise
+
+        # This should never be reached due to the raise statements above
+        return {"success": False, "error": "Max retries exceeded"}
+
+    async def _initialize_environment(self) -> Dict[str, Any]:
+        """Initialize MCP servers and agents."""
+        try:
+            # Validate LLM configuration first
+            if not self._validate_llm_config():
+                return {"success": False, "error": "Invalid LLM configuration"}
+
+            # Initialize MCP servers
+            server_results = await self.mcp_manager.initialize_all_servers()
+
+            # Check if filesystem server is available (required)
+            if not server_results.get(MCPServerType.FILESYSTEM, False):
+                return {
+                    "success": False,
+                    "error": "Filesystem MCP server failed to initialize",
+                }
+
+            # Log server status
+            available_servers = [
+                server.value for server, success in server_results.items() if success
+            ]
+            self.logger.info(f"Available MCP servers: {available_servers}")
+
+            return {
+                "success": True,
+                "mcp_servers": server_results,
+                "available_servers": available_servers,
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _validate_llm_config(self) -> bool:
+        """Validate LLM configuration by attempting to initialize a chat model."""
+        try:
+            model_id = (
+                f"{self.llm_config.provider.lower()}:{self.llm_config.model_name}"
+            )
+
+            kwargs: Dict[str, Any] = {
+                "temperature": self.llm_config.temperature,
+                "max_tokens": self.llm_config.max_tokens,
+            }
+            kwargs.update(self.llm_config.additional_params)
+
+            init_chat_model(model=model_id, **kwargs)
+
+            self.logger.info(
+                f"✅ LLM configuration validated for {self.llm_config.provider}:{self.llm_config.model_name}"
+            )
+            return True
+
+        except Exception as e:
+            self.logger.error("❌ Error: Invalid LLM configuration")
+            self.logger.error(f"Provider: {self.llm_config.provider}")
+            self.logger.error(f"Model: {self.llm_config.model_name}")
+            self.logger.error(f"Error: {e}")
+            return False
+
+    async def _create_backup(self) -> Dict[str, Any]:
+        """Create backup of project before migration."""
+        try:
+            # Use git MCP server to create backup branch
+            if self.mcp_manager.is_server_available(MCPServerType.GIT):
+                self.logger.info("Creating git-based backup branch")
+
+                # Get current status
+                status_result = await self.mcp_manager.call_tool(
+                    MCPServerType.GIT, "get_status", {"repo_path": "."}
+                )
+
+                if not status_result:
+                    return {"success": False, "error": "Git status check failed"}
+
+                # Create backup branch
+                backup_result = await self.mcp_manager.call_tool(
+                    MCPServerType.GIT,
+                    "create_temp_branch",
+                    {
+                        "repo_path": ".",
+                        "base_branch": status_result.get("branch", "main"),
+                        "prefix": "diversifier-backup",
+                    },
+                )
+
+                if backup_result and backup_result.get("status") == "success":
+                    backup_branch = backup_result.get("temp_branch")
+                    self.logger.info(f"Created backup branch: {backup_branch}")
+
+                    return {
+                        "success": True,
+                        "backup_path": backup_branch,
+                        "backup_method": "git_branch",
+                        "base_branch": backup_result.get("base_branch"),
+                    }
+                else:
+                    return {"success": False, "error": "Git backup creation failed"}
+            else:
+                return {"success": False, "error": "Git MCP server not available"}
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _select_tests(self) -> Dict[str, Any]:
+        """Select existing tests that cover library usage based on call graph analysis."""
+        try:
+            self.logger.info("Starting test coverage selection workflow")
+
+            # Use the test coverage selection pipeline
+            selection_result = await self.test_coverage_selector.select_test_coverage(
+                target_library=self.source_library,
+            )
+
+            if not selection_result.pipeline_success:
+                return {
+                    "success": False,
+                    "error": "Test coverage selection pipeline failed",
+                }
+
+            # Get selection summary
+            summary = self.test_coverage_selector.get_selection_summary(
+                selection_result
+            )
+
+            self.logger.info(
+                f"Selected {summary['test_coverage']['covered_usages']} covered "
+                f"and {summary['test_coverage']['uncovered_usages']} uncovered "
+                f"library usages ({summary['test_coverage']['coverage_percentage']:.1f}% coverage)"
+            )
+
+            return {
+                "success": True,
+                "selection_result": selection_result,
+                "summary": summary,
+                "execution_time": selection_result.total_execution_time,
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _run_baseline_tests(self) -> Dict[str, Any]:
+        """Run baseline focused unit tests before migration."""
+        try:
+            self.logger.info("Running baseline focused unit tests")
+
+            # Get test selection results from previous step
+            if "select_tests" not in self.step_results:
+                return {
+                    "success": False,
+                    "error": "No test selection results available",
+                }
+
+            selection_result = self.step_results["select_tests"].get("selection_result")
+            if not selection_result:
+                return {"success": False, "error": "No selection results available"}
+
+            # Extract test functions that cover library usage
+            coverage_paths = selection_result.test_discovery_result.coverage_paths
+            if not coverage_paths:
+                self.logger.info("No test coverage found for the selected library")
+                return {
+                    "success": True,
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": 0,
+                        "note": "No tests cover the selected library usage",
+                    },
+                }
+
+            # Collect unique test functions to execute
+            test_functions = set()
+            for path in coverage_paths:
+                test_node = path.test_node
+                test_spec = f"{test_node.file_path}::{test_node.function_name}"
+                test_functions.add(test_spec)
+
+            self.logger.info(
+                f"Found {len(test_functions)} unique tests covering library usage"
+            )
+
+            # Use LLM-powered test running for intelligent test execution
+            return await self._run_tests_with_llm(test_functions)
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _run_tests_with_llm(self, test_functions: set) -> Dict[str, Any]:
+        """Run tests using LLM-powered intelligent test runner."""
+        try:
+            self.logger.info(
+                f"Running {len(test_functions)} tests using LLM-powered test runner"
+            )
+
+            # Initialize LLM test runner for the target project
+            runner = LLMTestRunner(str(self.project_path), self.migration_config)
+
+            # Analyze target project structure
+            project_structure = await runner.analyze_project_structure()
+            self.logger.info(
+                f"Analyzed target project: found {len(project_structure['test_files'])} test files"
+            )
+
+            # Detect target project's development requirements
+            dev_requirements = await runner.detect_dev_requirements(project_structure)
+            self.logger.info(
+                f"Detected target project requirements: {dev_requirements['testing_framework']}"
+            )
+
+            # Override test commands to run specific test functions
+            focused_requirements = dev_requirements.copy()
+            focused_requirements["test_commands"] = [
+                f"python -m pytest -v {' '.join(test_functions)}"
+            ]
+            focused_requirements["analysis"] = (
+                "Focused test execution for baseline tests"
+            )
+
+            # Set up target project's test environment
+            setup_results = await runner.setup_test_environment(focused_requirements)
+            if not setup_results["success"]:
+                return {
+                    "success": False,
+                    "error": f"Failed to setup target project test environment: {setup_results['errors']}",
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": len(test_functions),
+                        "selected_tests": list(test_functions),
+                        "llm_powered": True,
+                    },
+                }
+
+            # Execute the tests in target project's environment
+            test_results = await runner.run_tests(focused_requirements)
+
+            self.logger.info(
+                f"LLM test execution completed: {test_results['summary']['successful_commands']}/{test_results['summary']['total_commands']} commands successful"
+            )
+
+            # Convert to expected format
+            if test_results["overall_success"]:
+                output = (
+                    test_results["test_commands_executed"][0]["stdout"]
+                    if test_results["test_commands_executed"]
+                    else ""
+                )
+                passed = failed = 0
+
+                # Simple parsing of pytest output
+                passed_match = re.search(r"(\d+) passed", output)
+                failed_match = re.search(r"(\d+) failed", output)
+
+                if passed_match:
+                    passed = int(passed_match.group(1))
+                if failed_match:
+                    failed = int(failed_match.group(1))
+
+                return {
+                    "success": True,
+                    "test_results": {
+                        "tests_executed": passed + failed,
+                        "passed": passed,
+                        "failed": failed,
+                        "skipped": 0,
+                        "duration": 0.0,
+                        "selected_tests": list(test_functions),
+                        "output": output,
+                        "stderr": (
+                            test_results["test_commands_executed"][0].get("stderr", "")
+                            if test_results["test_commands_executed"]
+                            else ""
+                        ),
+                        "llm_powered": True,
+                    },
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "LLM test execution failed",
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": len(test_functions),
+                        "selected_tests": list(test_functions),
+                        "llm_powered": True,
+                    },
+                }
+
+        except UnrecoverableTestRunnerError as e:
+            self.logger.error(f"FATAL: Unrecoverable test runner error: {e.message}")
+            raise RuntimeError(
+                f"Test runner encountered unrecoverable {e.error_type} error: {e.message}"
+            )
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"LLM test execution failed: {e}",
+                "test_results": {
+                    "tests_executed": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "selected_tests": list(test_functions),
+                    "llm_powered": True,
+                },
+            }
+
+    async def _migrate_code(self) -> Dict[str, Any]:
+        """Migrate from source to target library."""
+        try:
+            # Get migrator agent
+            migrator = self.agent_manager.get_agent(AgentType.MIGRATOR)
+
+            migration_prompt = f"""
+            Please migrate the Python code from {self.source_library} to {self.target_library}.
+            
+            Migration requirements:
+            1. Update all import statements
+            2. Convert API calls to the new library
+            3. Handle parameter mapping and structural changes
+            4. Maintain functional equivalence
+            5. Follow best practices for the target library
+            
+            Perform the migration while preserving all functionality.
+            """
+
+            result = migrator.invoke(migration_prompt)
+
+            return {
+                "success": True,
+                "migration_result": result.get("output", ""),
+                "files_modified": [],  # Will be populated by actual migration tools
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _validate_migration(self) -> Dict[str, Any]:
+        """Run focused unit tests to validate migration."""
+        try:
+            self.logger.info("Validating migration with focused unit tests")
+
+            # Get test selection results
+            if "select_tests" not in self.step_results:
+                return {
+                    "success": False,
+                    "error": "No test selection results available for validation",
+                }
+
+            selection_result = self.step_results["select_tests"].get("selection_result")
+            if not selection_result:
+                return {
+                    "success": False,
+                    "error": "No selection results available for validation",
+                }
+
+            # Since we only do test selection now, skip validation
+            self.logger.info(
+                "Test coverage selection completed - no test generation for validation"
+            )
+            return {
+                "success": True,
+                "test_results": {
+                    "note": "Test coverage selection only - no tests generated to validate"
+                },
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _repair_issues(self) -> Dict[str, Any]:
+        """Repair any issues found during validation."""
+        try:
+            # Check if repair is needed based on validation results
+            if "validate_migration" in self.step_results:
+                test_results = self.step_results["validate_migration"].get(
+                    "test_results", {}
+                )
+                if test_results.get("failed", 0) == 0:
+                    return {"success": True, "repairs_needed": False}
+
+            # Get repairer agent
+            repairer = self.agent_manager.get_agent(AgentType.REPAIRER)
+
+            repair_prompt = """
+            Please analyze and repair the issues found during migration validation.
+            
+            Issues to address:
+            1. Failed tests from validation step
+            2. API compatibility problems
+            3. Behavioral differences
+            
+            Apply targeted fixes to resolve the issues while maintaining functional equivalence.
+            """
+
+            result = repairer.invoke(repair_prompt)
+
+            return {
+                "success": True,
+                "repair_result": result.get("output", ""),
+                "repairs_applied": 1,
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _finalize_migration(self) -> Dict[str, Any]:
+        """Clean up and finalize migration."""
+        try:
+            self.logger.info("Finalizing migration")
+
+            # Use git MCP server for cleanup when available
+            if self.mcp_manager.is_server_available(MCPServerType.GIT):
+                self.logger.info("Using git MCP server for finalization")
+
+                # Get migration results to see what files were modified
+                files_modified = []
+                if "migrate_code" in self.step_results:
+                    files_modified = self.step_results["migrate_code"].get(
+                        "files_modified", []
+                    )
+
+                # Stage modified files
+                if files_modified:
+                    stage_result = await self.mcp_manager.call_tool(
+                        MCPServerType.GIT,
+                        "add_files",
+                        {"repo_path": ".", "file_patterns": files_modified},
+                    )
+
+                    if stage_result and stage_result.get("status") == "success":
+                        self.logger.info(f"Staged {len(files_modified)} modified files")
+
+                        # Commit changes
+                        commit_message = f"diversifier: Migrate from {self.source_library} to {self.target_library}"
+                        commit_result = await self.mcp_manager.call_tool(
+                            MCPServerType.GIT,
+                            "commit_changes",
+                            {"repo_path": ".", "message": commit_message},
+                        )
+
+                        if commit_result and commit_result.get("status") == "success":
+                            commit_hash = commit_result.get("commit_hash") or ""
+                            self.logger.info(
+                                f"Migration committed: {commit_hash[:8] if commit_hash else 'unknown'}"
+                            )
+
+                            return {
+                                "success": True,
+                                "migration_finalized": True,
+                                "cleanup_complete": True,
+                                "commit_hash": commit_hash or "unknown",
+                                "files_committed": len(files_modified),
+                            }
+                        else:
+                            self.logger.warning("Failed to commit changes")
+                    else:
+                        self.logger.warning("Failed to stage files for commit")
+                else:
+                    self.logger.info("No modified files to commit")
+
+            else:
+                self.logger.info("Git MCP server not available, basic cleanup only")
+
+            return {
+                "success": True,
+                "migration_finalized": True,
+                "cleanup_complete": True,
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _cleanup(self) -> None:
+        """Clean up resources."""
+        try:
+            await self.mcp_manager.shutdown_all_servers()
+            self.agent_manager.clear_all_memories()
+            self.logger.info("Cleanup completed")
+        except Exception as e:
+            self.logger.error(f"Cleanup failed: {e}")
+
+    def get_workflow_summary(self) -> Dict[str, Any]:
+        """Get a summary of the workflow execution."""
+        completed_steps = len(
+            [r for r in self.step_results.values() if r.get("success")]
+        )
+        failed_steps = len(
+            [r for r in self.step_results.values() if not r.get("success")]
+        )
+
+        return {
+            "project_path": str(self.project_path),
+            "source_library": self.source_library,
+            "target_library": self.target_library,
+            "total_steps": 8,
+            "completed_steps": completed_steps,
+            "failed_steps": failed_steps,
+            "is_complete": completed_steps == 8,
+            "step_results": self.step_results,
+        }
