@@ -32,11 +32,11 @@ class TestCallGraphBuilder:
     @pytest.fixture
     def builder(self, mock_mcp_manager, tmp_path):
         """Create a CallGraphBuilder instance for testing."""
-        return CallGraphBuilder(str(tmp_path), mock_mcp_manager)
+        return CallGraphBuilder(str(tmp_path), mock_mcp_manager, ["tests"])
 
     def test_init(self, mock_mcp_manager, tmp_path):
         """Test CallGraphBuilder initialization."""
-        builder = CallGraphBuilder(str(tmp_path), mock_mcp_manager)
+        builder = CallGraphBuilder(str(tmp_path), mock_mcp_manager, ["tests"])
 
         assert builder.project_root == Path(tmp_path)
         assert builder.mcp_manager == mock_mcp_manager
@@ -267,7 +267,9 @@ class TestCallGraphTestDiscoveryAnalyzer:
     @pytest.fixture
     def analyzer(self, mock_mcp_manager, tmp_path):
         """Create a CallGraphTestDiscoveryAnalyzer instance for testing."""
-        return CallGraphTestDiscoveryAnalyzer(str(tmp_path), mock_mcp_manager)
+        return CallGraphTestDiscoveryAnalyzer(
+            str(tmp_path), mock_mcp_manager, ["tests"]
+        )
 
     @pytest.fixture
     def sample_call_graph(self):
@@ -860,15 +862,15 @@ class TestCallGraphTestDiscoveryAnalyzer:
                 assert actual_chain == expected_chain
 
     def test_configurable_test_path(self, mock_mcp_manager, tmp_path):
-        """Test that CallGraphTestDiscoveryAnalyzer uses configurable test path."""
-        # Test with custom test path
-        custom_test_path = "app/tests"
+        """Test that CallGraphTestDiscoveryAnalyzer uses configurable test paths."""
+        # Test with custom test paths
+        custom_test_paths = ["app/tests"]
         analyzer = CallGraphTestDiscoveryAnalyzer(
-            str(tmp_path), mock_mcp_manager, custom_test_path
+            str(tmp_path), mock_mcp_manager, custom_test_paths
         )
 
-        assert analyzer.test_path == custom_test_path
-        assert analyzer.call_graph_builder.test_path == custom_test_path
+        assert analyzer.test_paths == custom_test_paths
+        assert analyzer.call_graph_builder.test_paths == ["app/tests"]
 
         # Test _is_test_file method
         assert analyzer.call_graph_builder._is_test_file("app/tests/test_module.py")
@@ -878,3 +880,32 @@ class TestCallGraphTestDiscoveryAnalyzer:
         assert not analyzer.call_graph_builder._is_test_file("tests/test_module.py")
         assert not analyzer.call_graph_builder._is_test_file("src/module.py")
         assert not analyzer.call_graph_builder._is_test_file("app/src/utils.py")
+
+    def test_multiple_test_paths(self, mock_mcp_manager, tmp_path):
+        """Test that CallGraphTestDiscoveryAnalyzer supports multiple test directories."""
+        # Test with multiple test paths
+        test_paths = ["tests", "app/tests", "backend/tests"]
+        analyzer = CallGraphTestDiscoveryAnalyzer(
+            str(tmp_path), mock_mcp_manager, test_paths
+        )
+
+        assert analyzer.test_paths == test_paths
+        assert analyzer.call_graph_builder.test_paths == test_paths
+
+        # Test _is_test_file method with multiple paths
+        test_cases = [
+            ("tests/test_api.py", True),  # First test path
+            ("app/tests/test_models.py", True),  # Second test path
+            ("backend/tests/test_views.py", True),  # Third test path
+            ("tests/unit/test_utils.py", True),  # Subdirectory in first path
+            ("app/tests/integration/test_e2e.py", True),  # Subdirectory in second path
+            ("src/api.py", False),  # Not in any test path
+            ("other/test_something.py", False),  # Not in configured test paths
+            ("app/src/test_helper.py", False),  # Not in test directory
+        ]
+
+        for file_path, expected in test_cases:
+            result = analyzer.call_graph_builder._is_test_file(file_path)
+            assert (
+                result == expected
+            ), f"Expected {expected} for path '{file_path}', got {result}"
