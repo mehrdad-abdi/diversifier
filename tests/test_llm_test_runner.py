@@ -113,13 +113,13 @@ class TestLLMTestRunnerMethods:
 
     def test_analyze_project_structure_gets_clients_from_manager(self, runner):
         """Test that analyze_project_structure gets clients from MCP manager."""
-        # Mock the call_tool method on the command client
+        # Mock the call_tool method on the command client for execute_command
         command_connection = runner.mcp_manager.get_connection(MCPServerType.COMMAND)
-        command_connection.client.call_tool.return_value = {
-            "result": [
-                {"text": '{"exists": true, "is_file": true, "is_directory": false}'}
-            ]
-        }
+
+        # Create a mock text content object
+        mock_text_content = Mock()
+        mock_text_content.text = '{"command": "test command", "success": true, "stdout": "file", "stderr": "", "exit_code": 0}'
+        command_connection.client.call_tool.return_value = [mock_text_content]
 
         # Test that the method gets clients from manager
         # Note: This is now a sync method since we removed the async pattern

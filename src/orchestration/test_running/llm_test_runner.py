@@ -110,14 +110,24 @@ class LLMTestRunner:
         common_files = self.migration_config.common_project_files
 
         for filename in common_files:
-            result = command_client.call_tool("check_file_exists", {"path": filename})
-            if result and "result" in result:
-                check_result = json.loads(result["result"][0]["text"])
-                if check_result["exists"]:
+            # Use execute_command to check if file exists and determine type
+            result = command_client.call_tool(
+                "execute_command",
+                {
+                    "command": f"test -e '{filename}' && (test -f '{filename}' && echo 'file' || echo 'directory') || echo 'not_found'",
+                    "capture_output": True,
+                },
+            )
+            if result:
+                command_result = json.loads(result[0].text)
+                if command_result["success"] and command_result["stdout"].strip() in [
+                    "file",
+                    "directory",
+                ]:
                     project_files.append(
                         {
                             "name": filename,
-                            "type": "file" if check_result["is_file"] else "directory",
+                            "type": command_result["stdout"].strip(),
                         }
                     )
 
@@ -126,11 +136,20 @@ class LLMTestRunner:
         for test_path_config in self.migration_config.test_paths:
             test_path = test_path_config.rstrip("/")
 
-            # Check if the configured test path exists
-            result = command_client.call_tool("check_file_exists", {"path": test_path})
-            if result and "result" in result:
-                check_result = json.loads(result["result"][0]["text"])
-                if check_result["exists"] and check_result["is_directory"]:
+            # Check if the configured test path exists and is a directory
+            result = command_client.call_tool(
+                "execute_command",
+                {
+                    "command": f"test -d '{test_path}' && echo 'directory' || echo 'not_directory'",
+                    "capture_output": True,
+                },
+            )
+            if result:
+                command_result = json.loads(result[0].text)
+                if (
+                    command_result["success"]
+                    and command_result["stdout"].strip() == "directory"
+                ):
                     test_dirs.append(test_path)
 
         return {
@@ -143,11 +162,13 @@ class LLMTestRunner:
         self, project_structure: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Use LLM to analyze project files and detect development requirements."""
-        # Get command connection from manager
-        command_connection = self.mcp_manager.get_connection(MCPServerType.COMMAND)
-        if not command_connection:
-            raise ValueError("Command MCP connection not available from manager")
-        command_client = command_connection.client
+        # Get filesystem connection from manager for file reading
+        filesystem_connection = self.mcp_manager.get_connection(
+            MCPServerType.FILESYSTEM
+        )
+        if not filesystem_connection:
+            raise ValueError("Filesystem MCP connection not available from manager")
+        filesystem_client = filesystem_connection.client
 
         # Read project files collected by analyze_project_structure
         file_contents = {}
@@ -156,12 +177,14 @@ class LLMTestRunner:
             if project_file["type"] == "file":
                 filename = project_file["name"]
                 try:
-                    result = await command_client.call_tool(  # type: ignore[misc]
-                        "read_file_content", {"path": filename, "max_lines": 100}
+                    result = await filesystem_client.call_tool(  # type: ignore[misc]
+                        "read_file", {"file_path": filename}
                     )
                     content_result = json.loads(result[0].text)
-                    if not content_result.get("truncated", False):
-                        file_contents[filename] = "\n".join(content_result["content"])
+                    if content_result.get("success", False):
+                        # Limit content to first 100 lines for analysis
+                        content_lines = content_result["content"].split("\n")[:100]
+                        file_contents[filename] = "\n".join(content_lines)
                 except Exception:
                     pass  # Skip files we can't read
 
