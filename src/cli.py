@@ -33,14 +33,6 @@ def _cleanup_on_exit() -> None:
                 _coordinator.mcp_manager.emergency_shutdown()
                 print("  ✓ All MCP servers terminated")
 
-            # Clear agent memories if possible
-            if hasattr(_coordinator, "agent_manager") and _coordinator.agent_manager:
-                try:
-                    _coordinator.agent_manager.clear_all_memories()
-                    print("  ✓ Agent memories cleared")
-                except Exception:
-                    pass  # Not critical for emergency shutdown
-
         except Exception as e:
             print(f"⚠️  Error during cleanup: {e}")
 

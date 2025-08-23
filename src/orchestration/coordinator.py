@@ -9,7 +9,6 @@ from pathlib import Path
 from langchain.chat_models import init_chat_model
 from langchain_core.exceptions import LangChainException
 
-from .agent import AgentManager, AgentType
 from .mcp_manager import MCPManager, MCPServerType
 from .test_generation import TestCoverageSelector
 from .config import LLMConfig, MigrationConfig
@@ -49,7 +48,6 @@ class DiversificationCoordinator:
         self.migration_config = migration_config
 
         # Initialize components
-        self.agent_manager = AgentManager(llm_config=self.llm_config)
         self.mcp_manager = MCPManager(project_root=str(self.project_path))
 
         # Initialize test coverage selector
@@ -416,175 +414,28 @@ class DiversificationCoordinator:
 
     async def _migrate_code(self) -> Dict[str, Any]:
         """Migrate from source to target library."""
-        try:
-            # Get migrator agent
-            migrator = self.agent_manager.get_agent(AgentType.MIGRATOR)
-
-            migration_prompt = f"""
-            Please migrate the Python code from {self.source_library} to {self.target_library}.
-            
-            Migration requirements:
-            1. Update all import statements
-            2. Convert API calls to the new library
-            3. Handle parameter mapping and structural changes
-            4. Maintain functional equivalence
-            5. Follow best practices for the target library
-            
-            Perform the migration while preserving all functionality.
-            """
-
-            result = migrator.invoke(migration_prompt)
-
-            return {
-                "success": True,
-                "migration_result": result.get("output", ""),
-                "files_modified": [],  # Will be populated by actual migration tools
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        self.logger.info("Step migrate_code will come here")
+        return {"success": True}
 
     async def _validate_migration(self) -> Dict[str, Any]:
         """Run focused unit tests to validate migration."""
-        try:
-            self.logger.info("Validating migration with focused unit tests")
-
-            # Get test selection results
-            if "select_tests" not in self.step_results:
-                return {
-                    "success": False,
-                    "error": "No test selection results available for validation",
-                }
-
-            selection_result = self.step_results["select_tests"].get("selection_result")
-            if not selection_result:
-                return {
-                    "success": False,
-                    "error": "No selection results available for validation",
-                }
-
-            # Since we only do test selection now, skip validation
-            self.logger.info(
-                "Test coverage selection completed - no test generation for validation"
-            )
-            return {
-                "success": True,
-                "test_results": {
-                    "note": "Test coverage selection only - no tests generated to validate"
-                },
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        self.logger.info("Step validate_migration will come here")
+        return {"success": True}
 
     async def _repair_issues(self) -> Dict[str, Any]:
         """Repair any issues found during validation."""
-        try:
-            # Check if repair is needed based on validation results
-            if "validate_migration" in self.step_results:
-                test_results = self.step_results["validate_migration"].get(
-                    "test_results", {}
-                )
-                if test_results.get("failed", 0) == 0:
-                    return {"success": True, "repairs_needed": False}
-
-            # Get repairer agent
-            repairer = self.agent_manager.get_agent(AgentType.REPAIRER)
-
-            repair_prompt = """
-            Please analyze and repair the issues found during migration validation.
-            
-            Issues to address:
-            1. Failed tests from validation step
-            2. API compatibility problems
-            3. Behavioral differences
-            
-            Apply targeted fixes to resolve the issues while maintaining functional equivalence.
-            """
-
-            result = repairer.invoke(repair_prompt)
-
-            return {
-                "success": True,
-                "repair_result": result.get("output", ""),
-                "repairs_applied": 1,
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        self.logger.info("Step repair_issues will come here")
+        return {"success": True}
 
     async def _finalize_migration(self) -> Dict[str, Any]:
         """Clean up and finalize migration."""
-        try:
-            self.logger.info("Finalizing migration")
-
-            # Use git MCP server for cleanup when available
-            if self.mcp_manager.is_server_available(MCPServerType.GIT):
-                self.logger.info("Using git MCP server for finalization")
-
-                # Get migration results to see what files were modified
-                files_modified = []
-                if "migrate_code" in self.step_results:
-                    files_modified = self.step_results["migrate_code"].get(
-                        "files_modified", []
-                    )
-
-                # Stage modified files
-                if files_modified:
-                    stage_result = await self.mcp_manager.call_tool(
-                        MCPServerType.GIT,
-                        "add_files",
-                        {"repo_path": ".", "file_patterns": files_modified},
-                    )
-
-                    if stage_result and stage_result.get("status") == "success":
-                        self.logger.info(f"Staged {len(files_modified)} modified files")
-
-                        # Commit changes
-                        commit_message = f"diversifier: Migrate from {self.source_library} to {self.target_library}"
-                        commit_result = await self.mcp_manager.call_tool(
-                            MCPServerType.GIT,
-                            "commit_changes",
-                            {"repo_path": ".", "message": commit_message},
-                        )
-
-                        if commit_result and commit_result.get("status") == "success":
-                            commit_hash = commit_result.get("commit_hash") or ""
-                            self.logger.info(
-                                f"Migration committed: {commit_hash[:8] if commit_hash else 'unknown'}"
-                            )
-
-                            return {
-                                "success": True,
-                                "migration_finalized": True,
-                                "cleanup_complete": True,
-                                "commit_hash": commit_hash or "unknown",
-                                "files_committed": len(files_modified),
-                            }
-                        else:
-                            self.logger.warning("Failed to commit changes")
-                    else:
-                        self.logger.warning("Failed to stage files for commit")
-                else:
-                    self.logger.info("No modified files to commit")
-
-            else:
-                self.logger.info("Git MCP server not available, basic cleanup only")
-
-            return {
-                "success": True,
-                "migration_finalized": True,
-                "cleanup_complete": True,
-            }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        self.logger.info("Step finalize_migration will come here")
+        return {"success": True}
 
     async def _cleanup(self) -> None:
         """Clean up resources."""
         try:
             await self.mcp_manager.shutdown_all_servers()
-            self.agent_manager.clear_all_memories()
             self.logger.info("Cleanup completed")
         except Exception as e:
             self.logger.error(f"Cleanup failed: {e}")
