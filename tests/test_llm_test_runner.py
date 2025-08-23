@@ -116,14 +116,19 @@ class TestLLMTestRunnerMethods:
         # Mock the call_tool method on the command client for find_files
         command_connection = runner.mcp_manager.get_connection(MCPServerType.COMMAND)
 
-        # Create a mock response matching actual MCP response format
+        # Create a mock response matching actual JSON-RPC MCP response format
         mock_response = {
-            "content": [
-                {
-                    "type": "text",
-                    "text": '{"pattern": "pyproject.toml", "search_directory": ".", "matches": [{"path": "pyproject.toml", "name": "pyproject.toml", "directory": "."}], "total_matches": 1}',
-                }
-            ]
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": '{"pattern": "pyproject.toml", "search_directory": ".", "matches": [{"path": "pyproject.toml", "name": "pyproject.toml", "directory": "."}], "total_matches": 1}',
+                    }
+                ],
+                "isError": False,
+            },
         }
         command_connection.client.call_tool.return_value = mock_response
 
