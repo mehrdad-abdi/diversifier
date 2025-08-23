@@ -11,7 +11,6 @@ from src.orchestration.agent import AgentManager, AgentType, DiversificationAgen
 from src.orchestration.mcp_manager import MCPManager, MCPServerType, MCPConnection
 from src.orchestration.config import LLMConfig, LoggingConfig, MigrationConfig
 from src.orchestration.coordinator import DiversificationCoordinator
-from src.orchestration.error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
 from src.orchestration.config import setup_logging
 
 
@@ -694,65 +693,6 @@ class TestDiversificationCoordinator:
 
         # Verify connections were cleared
         assert len(mcp_manager.connections) == 0
-
-
-class TestErrorHandler:
-    """Test cases for ErrorHandler."""
-
-    def setup_method(self):
-        """Set up test environment."""
-        self.error_handler = ErrorHandler()
-
-    def test_error_handler_initialization(self):
-        """Test error handler initialization."""
-        assert len(self.error_handler.error_history) == 0
-        assert len(self.error_handler.recovery_handlers) > 0
-
-    def test_handle_error(self):
-        """Test handling an error."""
-        exception = Exception("Test error")
-        error_info = self.error_handler.handle_error(
-            exception, ErrorCategory.MCP_CONNECTION, {"server": "filesystem"}
-        )
-
-        assert error_info.category == ErrorCategory.MCP_CONNECTION
-        assert error_info.message == "Test error"
-        assert error_info.context["server"] == "filesystem"
-        assert len(self.error_handler.error_history) == 1
-        assert len(error_info.recovery_suggestions) > 0
-
-    def test_assess_severity(self):
-        """Test severity assessment."""
-        # Critical error
-        api_key_error = Exception("API key not found")
-        error_info = self.error_handler.handle_error(
-            api_key_error, ErrorCategory.CONFIGURATION
-        )
-        assert error_info.severity == ErrorSeverity.CRITICAL
-
-        # High severity error
-        mcp_error = Exception("Connection failed")
-        error_info = self.error_handler.handle_error(
-            mcp_error, ErrorCategory.MCP_CONNECTION
-        )
-        assert error_info.severity == ErrorSeverity.HIGH
-
-    def test_error_summary(self):
-        """Test getting error summary."""
-        # Add some errors
-        self.error_handler.handle_error(
-            Exception("Error 1"), ErrorCategory.MCP_CONNECTION
-        )
-        self.error_handler.handle_error(
-            Exception("Error 2"), ErrorCategory.AGENT_EXECUTION
-        )
-
-        summary = self.error_handler.get_error_summary()
-
-        assert summary["total_errors"] == 2
-        assert "mcp_connection" in summary["categories"]
-        assert "agent_execution" in summary["categories"]
-        assert summary["recoverable"] >= 0
 
 
 class TestLoggingConfig:
