@@ -76,31 +76,36 @@ class CallGraphBuilder:
     """Builds a call graph from Python source code using AST analysis."""
 
     def __init__(
-        self, project_root: str, mcp_manager: MCPManager, test_path: str = "tests/"
+        self,
+        project_root: str,
+        mcp_manager: MCPManager,
+        test_paths: Optional[List[str]] = None,
     ):
         """Initialize the call graph builder.
 
         Args:
             project_root: Root directory of the project
             mcp_manager: MCP manager for file system operations
-            test_path: Relative path to test directory (e.g., "tests/" or "app/tests/")
+            test_paths: List of relative paths to test directories (e.g., ["tests/", "app/tests/"])
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
-        self.test_path = test_path.rstrip(
-            "/"
-        )  # Remove trailing slash for consistent comparison
+        # Handle backward compatibility and defaults
+        if test_paths is None:
+            test_paths = ["tests/"]
+        # Remove trailing slashes for consistent comparison
+        self.test_paths = [path.rstrip("/") for path in test_paths]
         self.logger = logging.getLogger("diversifier.call_graph_builder")
         self.nodes: Dict[str, CallGraphNode] = {}  # full_name -> CallGraphNode
 
     def _is_test_file(self, file_path: str) -> bool:
-        """Check if a file is within the configured test directory.
+        """Check if a file is within any of the configured test directories.
 
         Args:
             file_path: Path to the file (relative to project root or absolute)
 
         Returns:
-            True if the file is in the test directory
+            True if the file is in any test directory
         """
         # Convert to Path for proper path operations
         path = Path(file_path)
@@ -113,19 +118,22 @@ class CallGraphBuilder:
                 # If can't make relative to project root, use the path as-is for testing
                 # This handles test cases with fake absolute paths like "/tests/test_api.py"
                 path_str = str(path)
-                return (
-                    path_str.startswith("/" + self.test_path + "/")
-                    or path_str.startswith(self.test_path + "/")
-                    or str(path.parent) == "/" + self.test_path
-                    or str(path.parent) == self.test_path
-                )
+                for test_path in self.test_paths:
+                    if (
+                        path_str.startswith("/" + test_path + "/")
+                        or path_str.startswith(test_path + "/")
+                        or str(path.parent) == "/" + test_path
+                        or str(path.parent) == test_path
+                    ):
+                        return True
+                return False
 
-        # Check if the file is within the test directory
+        # Check if the file is within any test directory
         path_str = str(path)
-        return (
-            path_str.startswith(self.test_path + "/")
-            or str(path.parent) == self.test_path
-        )
+        for test_path in self.test_paths:
+            if path_str.startswith(test_path + "/") or str(path.parent) == test_path:
+                return True
+        return False
 
     async def build_call_graph(self) -> Dict[str, CallGraphNode]:
         """Build the complete call graph for the project.
@@ -416,20 +424,28 @@ class CallGraphTestDiscoveryAnalyzer:
     """Analyzes test coverage using call graph backward traversal."""
 
     def __init__(
-        self, project_root: str, mcp_manager: MCPManager, test_path: str = "tests/"
+        self,
+        project_root: str,
+        mcp_manager: MCPManager,
+        test_paths: Optional[List[str]] = None,
     ):
         """Initialize the call graph test discovery analyzer.
 
         Args:
             project_root: Root directory of the project
             mcp_manager: MCP manager for file system operations
-            test_path: Relative path to test directory (e.g., "tests/" or "app/tests/")
+            test_paths: List of relative paths to test directories (e.g., ["tests/", "app/tests/"])
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
-        self.test_path = test_path
+        # Handle backward compatibility and defaults
+        if test_paths is None:
+            test_paths = ["tests/"]
+        self.test_paths = test_paths
         self.logger = logging.getLogger("diversifier.call_graph_test_discovery")
-        self.call_graph_builder = CallGraphBuilder(project_root, mcp_manager, test_path)
+        self.call_graph_builder = CallGraphBuilder(
+            project_root, mcp_manager, test_paths
+        )
         self.call_graph: Dict[str, CallGraphNode] = {}
 
     async def discover_test_coverage(

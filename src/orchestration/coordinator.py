@@ -55,9 +55,9 @@ class DiversificationCoordinator:
             str(self.project_path),
             self.mcp_manager,
             (
-                self.migration_config.test_paths[0]
+                self.migration_config.test_paths
                 if self.migration_config.test_paths
-                else "tests/"
+                else ["tests/"]
             ),
         )
 

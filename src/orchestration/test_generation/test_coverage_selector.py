@@ -4,7 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 from ..mcp_manager import MCPManager
 from .library_usage_analyzer import LibraryUsageAnalyzer, LibraryUsageSummary
@@ -28,24 +28,30 @@ class TestCoverageSelector:
     """Main pipeline for selecting tests that cover library usage based on call graph analysis."""
 
     def __init__(
-        self, project_root: str, mcp_manager: MCPManager, test_path: str = "tests/"
+        self,
+        project_root: str,
+        mcp_manager: MCPManager,
+        test_paths: Optional[List[str]] = None,
     ):
         """Initialize the test coverage selection pipeline.
 
         Args:
             project_root: Root directory of the project
             mcp_manager: MCP manager for operations
-            test_path: Relative path to test directory (e.g., "tests/" or "app/tests/")
+            test_paths: List of relative paths to test directories (e.g., ["tests/", "app/tests/"])
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
-        self.test_path = test_path
+        # Handle backward compatibility and defaults
+        if test_paths is None:
+            test_paths = ["tests/"]
+        self.test_paths = test_paths
         self.logger = logging.getLogger("diversifier.test_coverage_selector")
 
         # Initialize components
         self.usage_analyzer = LibraryUsageAnalyzer(project_root, mcp_manager)
         self.test_discovery = CallGraphTestDiscoveryAnalyzer(
-            project_root, mcp_manager, test_path
+            project_root, mcp_manager, test_paths
         )
 
     async def select_test_coverage(
