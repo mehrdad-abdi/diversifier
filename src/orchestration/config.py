@@ -21,11 +21,6 @@ class LoggingConfig:
 class MigrationConfig:
     """Migration workflow configuration settings."""
 
-    max_iterations: int = 5
-    test_timeout: int = 300  # 5 minutes
-    validate_syntax: bool = True
-    require_test_coverage: bool = True
-    min_test_coverage: float = 0.8
     test_paths: List[str] = field(
         default_factory=lambda: ["tests/", "test/"]
     )  # List of relative paths to test directories
@@ -51,27 +46,6 @@ class MigrationConfig:
             "Dockerfile",
         ]
     )
-    allowed_library_pairs: List[tuple] = field(
-        default_factory=lambda: [
-            ("requests", "httpx"),
-            ("urllib", "requests"),
-            ("flask", "fastapi"),
-            ("sqlite3", "sqlalchemy"),
-        ]
-    )
-
-
-@dataclass
-class TaskTemperatureConfig:
-    """Task-specific temperature configuration."""
-
-    analyzer: float = 0.1  # Lower for precise analysis
-    migrator: float = 0.2  # Slightly higher for code transformation
-    tester: float = 0.3  # Higher for creative test generation
-    repairer: float = 0.2  # Moderate for problem solving
-    doc_analyzer: float = 0.1  # Lower for precise documentation analysis
-    source_code_analyzer: float = 0.1  # Lower for precise code analysis
-    acceptance_test_generator: float = 0.2  # Moderate for test generation
 
 
 @dataclass
@@ -83,11 +57,6 @@ class LLMConfig:
     api_key_env_var: str  # Environment variable name for API key (REQUIRED)
     temperature: float = 0.1  # Default temperature
     max_tokens: int = 4096
-    timeout: int = 120  # seconds
-    base_url: Optional[str] = None  # Custom API endpoint URL
-    task_temperatures: TaskTemperatureConfig = field(
-        default_factory=TaskTemperatureConfig
-    )
     additional_params: Dict[str, Union[str, int, float, bool]] = field(
         default_factory=dict
     )
@@ -110,9 +79,6 @@ class DiversifierConfig:
     llm: LLMConfig  # LLM configuration (REQUIRED)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     migration: MigrationConfig = field(default_factory=MigrationConfig)
-    project_root: str = "."
-    temp_dir: str = "/tmp/diversifier"
-    debug_mode: bool = False
 
 
 class ConfigManager:
@@ -180,22 +146,12 @@ class ConfigManager:
         env_mappings = {
             # Logging configuration
             "DIVERSIFIER_LOG_LEVEL": ("logging", "level"),
-            # Migration configuration
-            "DIVERSIFIER_MAX_ITERATIONS": ("migration", "max_iterations"),
-            "DIVERSIFIER_TEST_TIMEOUT": ("migration", "test_timeout"),
-            "DIVERSIFIER_MIN_COVERAGE": ("migration", "min_test_coverage"),
             # LLM configuration
             "DIVERSIFIER_LLM_PROVIDER": ("llm", "provider"),
             "DIVERSIFIER_LLM_MODEL_NAME": ("llm", "model_name"),
             "DIVERSIFIER_LLM_TEMPERATURE": ("llm", "temperature"),
             "DIVERSIFIER_LLM_MAX_TOKENS": ("llm", "max_tokens"),
-            "DIVERSIFIER_LLM_TIMEOUT": ("llm", "timeout"),
             "DIVERSIFIER_LLM_API_KEY_ENV_VAR": ("llm", "api_key_env_var"),
-            "DIVERSIFIER_LLM_BASE_URL": ("llm", "base_url"),
-            # General configuration
-            "DIVERSIFIER_PROJECT_ROOT": (None, "project_root"),
-            "DIVERSIFIER_TEMP_DIR": (None, "temp_dir"),
-            "DIVERSIFIER_DEBUG": (None, "debug_mode"),
         }
 
         for env_var, (section, key) in env_mappings.items():
@@ -223,25 +179,12 @@ class ConfigManager:
         Returns:
             Converted value
         """
-        # Boolean values
-        if key in [
-            "validate_syntax",
-            "require_test_coverage",
-            "debug_mode",
-        ]:
-            return value.lower() in ("true", "1", "yes", "on")
-
         # Integer values
-        if key in [
-            "timeout",
-            "max_iterations",
-            "test_timeout",
-            "max_tokens",
-        ]:
+        if key in ["max_tokens"]:
             return int(value)
 
         # Float values
-        if key in ["min_test_coverage", "temperature"]:
+        if key in ["temperature"]:
             return float(value)
 
         # String values (default)
@@ -277,23 +220,11 @@ class ConfigManager:
             }
         )
 
-        # Handle task temperatures separately
-        task_temps_data = llm_data.get("task_temperatures", {})
-        task_temperatures = TaskTemperatureConfig(
-            **{
-                k: v
-                for k, v in task_temps_data.items()
-                if k in TaskTemperatureConfig.__dataclass_fields__
-            }
-        )
-
-        # Create LLM config with task temperatures
+        # Create LLM config - filter out unknown keys
         llm_config_data = {
-            k: v
-            for k, v in llm_data.items()
-            if k != "task_temperatures" and k in LLMConfig.__dataclass_fields__
+            k: v for k, v in llm_data.items() if k in LLMConfig.__dataclass_fields__
         }
-        llm_config = LLMConfig(task_temperatures=task_temperatures, **llm_config_data)
+        llm_config = LLMConfig(**llm_config_data)
 
         # Extract top-level configuration - filter out unknown keys
         top_level_data = {
@@ -342,11 +273,6 @@ level = "INFO"
 format_string = "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
 
 [migration]
-max_iterations = 5
-test_timeout = 300
-validate_syntax = true
-require_test_coverage = true
-min_test_coverage = 0.8
 test_paths = ["tests/", "test/"]
 
 [llm]
@@ -355,21 +281,8 @@ test_paths = ["tests/", "test/"]
 provider = "anthropic"
 model_name = "claude-3-5-sonnet-20241022"
 api_key_env_var = "ANTHROPIC_API_KEY"  # REQUIRED: Environment variable name for API key
-temperature = 0.1  # Default temperature for all tasks
+temperature = 0.1
 max_tokens = 4096
-timeout = 120
-# Optional: Custom API endpoint URL
-# base_url = "https://api.anthropic.com"
-
-# Task-specific temperatures (override default temperature for specific tasks)
-[llm.task_temperatures]
-analyzer = 0.1  # Lower for precise analysis
-migrator = 0.2  # Slightly higher for code transformation
-tester = 0.3  # Higher for creative test generation
-repairer = 0.2  # Moderate for problem solving
-doc_analyzer = 0.1  # Lower for precise documentation analysis
-source_code_analyzer = 0.1  # Lower for precise code analysis
-acceptance_test_generator = 0.2  # Moderate for test generation
 
 # Example configurations for different providers:
 # For OpenAI:
@@ -385,11 +298,6 @@ acceptance_test_generator = 0.2  # Moderate for test generation
 # For Azure OpenAI:
 # provider = "azure_openai"
 # model_name = "gpt-4"
-
-# General settings
-project_root = "."
-temp_dir = "/tmp/diversifier"
-debug_mode = false
 """
 
         output_path = Path(output_path)
@@ -440,30 +348,6 @@ def get_config(config_path: Optional[Union[str, Path]] = None) -> DiversifierCon
                 "global config first by calling get_config_manager() with a path."
             )
         return _config_manager.get_config()
-
-
-def get_task_temperature(
-    task_name: str, llm_config: Optional[LLMConfig] = None
-) -> float:
-    """Get temperature for a specific task.
-
-    Args:
-        task_name: Name of the task (analyzer, migrator, etc.)
-        llm_config: Optional LLM config. If None, uses global config.
-
-    Returns:
-        Temperature value for the task
-    """
-    if llm_config is None:
-        llm_config = get_config().llm
-
-    # Try to get task-specific temperature
-    task_temp = getattr(llm_config.task_temperatures, task_name, None)
-    if task_temp is not None:
-        return task_temp
-
-    # Fall back to default temperature
-    return llm_config.temperature
 
 
 def setup_logging(config: Optional[LoggingConfig] = None) -> None:
