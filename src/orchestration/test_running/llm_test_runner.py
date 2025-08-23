@@ -287,7 +287,7 @@ Please provide your analysis in the structured format with precise test commands
                     MCPServerType.COMMAND
                 )
                 if not command_connection:
-                    return f'{{"error": "Command MCP connection not available"}}'
+                    return '{"error": "Command MCP connection not available"}'
                 command_client = command_connection.client
                 result = command_client.call_tool(
                     "find_files", {"pattern": pattern, "directory": directory}
