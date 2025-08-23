@@ -178,12 +178,11 @@ class LLMTestRunner:
 
         # Read project files collected by analyze_project_structure
         file_contents = {}
-
         for project_file in project_structure["project_files"]:
             if project_file["type"] == "file":
                 filename = project_file["name"]
                 try:
-                    result = await filesystem_client.call_tool(  # type: ignore[misc]
+                    result = filesystem_client.call_tool(
                         "read_file", {"file_path": filename}
                     )
                     if (
@@ -289,7 +288,7 @@ Please provide your analysis in the structured format."""
         # Execute setup commands
         for command in requirements.get("setup_commands", []):
             try:
-                result = await command_client.call_tool(  # type: ignore[misc]
+                result = command_client.call_tool(
                     "execute_command", {"command": command, "timeout": 300}
                 )
                 if (
@@ -322,7 +321,7 @@ Please provide your analysis in the structured format."""
         # Execute install commands
         for command in requirements.get("install_commands", []):
             try:
-                result = await command_client.call_tool(  # type: ignore[misc]
+                result = command_client.call_tool(
                     "execute_command",
                     {"command": command, "timeout": 600},  # Longer timeout for installs
                 )
@@ -377,7 +376,7 @@ Please provide your analysis in the structured format."""
 
         for command in test_commands:
             try:
-                result = await command_client.call_tool(  # type: ignore[misc]
+                result = command_client.call_tool(
                     "execute_command", {"command": command, "timeout": 600}
                 )
                 if (
