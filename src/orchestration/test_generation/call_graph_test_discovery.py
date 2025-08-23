@@ -424,7 +424,7 @@ class CallGraphTestDiscoveryAnalyzer:
         self,
         project_root: str,
         mcp_manager: MCPManager,
-        test_paths: Optional[List[str]] = None,
+        test_paths: List[str],
     ):
         """Initialize the call graph test discovery analyzer.
 
@@ -435,9 +435,6 @@ class CallGraphTestDiscoveryAnalyzer:
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
-        # Handle backward compatibility and defaults
-        if test_paths is None:
-            test_paths = ["tests/"]
         self.test_paths = test_paths
         self.logger = logging.getLogger("diversifier.call_graph_test_discovery")
         self.call_graph_builder = CallGraphBuilder(

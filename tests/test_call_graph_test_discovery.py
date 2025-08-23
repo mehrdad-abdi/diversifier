@@ -267,7 +267,9 @@ class TestCallGraphTestDiscoveryAnalyzer:
     @pytest.fixture
     def analyzer(self, mock_mcp_manager, tmp_path):
         """Create a CallGraphTestDiscoveryAnalyzer instance for testing."""
-        return CallGraphTestDiscoveryAnalyzer(str(tmp_path), mock_mcp_manager)
+        return CallGraphTestDiscoveryAnalyzer(
+            str(tmp_path), mock_mcp_manager, ["tests"]
+        )
 
     @pytest.fixture
     def sample_call_graph(self):
@@ -860,8 +862,8 @@ class TestCallGraphTestDiscoveryAnalyzer:
                 assert actual_chain == expected_chain
 
     def test_configurable_test_path(self, mock_mcp_manager, tmp_path):
-        """Test that CallGraphTestDiscoveryAnalyzer uses configurable test path (backward compatibility)."""
-        # Test with custom test path (single path as list)
+        """Test that CallGraphTestDiscoveryAnalyzer uses configurable test paths."""
+        # Test with custom test paths
         custom_test_paths = ["app/tests"]
         analyzer = CallGraphTestDiscoveryAnalyzer(
             str(tmp_path), mock_mcp_manager, custom_test_paths

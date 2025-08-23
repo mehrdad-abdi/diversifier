@@ -4,7 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from ..mcp_manager import MCPManager
 from .library_usage_analyzer import LibraryUsageAnalyzer, LibraryUsageSummary
@@ -31,7 +31,7 @@ class TestCoverageSelector:
         self,
         project_root: str,
         mcp_manager: MCPManager,
-        test_paths: Optional[List[str]] = None,
+        test_paths: List[str],
     ):
         """Initialize the test coverage selection pipeline.
 
@@ -42,9 +42,6 @@ class TestCoverageSelector:
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
-        # Handle backward compatibility and defaults
-        if test_paths is None:
-            test_paths = ["tests/"]
         self.test_paths = test_paths
         self.logger = logging.getLogger("diversifier.test_coverage_selector")
 
