@@ -105,29 +105,27 @@ class LLMTestRunner:
             raise ValueError("Command MCP connection not available from manager")
         command_client = command_connection.client
 
-        # Find common project files from configuration
+        # Find common project files from configuration using find_files
         project_files = []
         common_files = self.migration_config.common_project_files
 
         for filename in common_files:
-            # Use execute_command to check if file exists and determine type
+            # Use find_files to check if specific file exists
             result = command_client.call_tool(
-                "execute_command",
+                "find_files",
                 {
-                    "command": f"test -e '{filename}' && (test -f '{filename}' && echo 'file' || echo 'directory') || echo 'not_found'",
-                    "capture_output": True,
+                    "pattern": filename,
+                    "directory": ".",
                 },
             )
             if result:
-                command_result = json.loads(result[0].text)
-                if command_result["success"] and command_result["stdout"].strip() in [
-                    "file",
-                    "directory",
-                ]:
+                find_result = json.loads(result[0].text)
+                if find_result.get("total_matches", 0) > 0:
+                    # File exists - add it as a file type
                     project_files.append(
                         {
                             "name": filename,
-                            "type": command_result["stdout"].strip(),
+                            "type": "file",
                         }
                     )
 
@@ -136,20 +134,18 @@ class LLMTestRunner:
         for test_path_config in self.migration_config.test_paths:
             test_path = test_path_config.rstrip("/")
 
-            # Check if the configured test path exists and is a directory
+            # Use find_files to check if test directory exists by looking for any files in it
             result = command_client.call_tool(
-                "execute_command",
+                "find_files",
                 {
-                    "command": f"test -d '{test_path}' && echo 'directory' || echo 'not_directory'",
-                    "capture_output": True,
+                    "pattern": "*",
+                    "directory": test_path,
                 },
             )
             if result:
-                command_result = json.loads(result[0].text)
-                if (
-                    command_result["success"]
-                    and command_result["stdout"].strip() == "directory"
-                ):
+                find_result = json.loads(result[0].text)
+                # If we can search the directory and it contains files, it exists
+                if "Error" not in result[0].text:
                     test_dirs.append(test_path)
 
         return {

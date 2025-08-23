@@ -113,12 +113,12 @@ class TestLLMTestRunnerMethods:
 
     def test_analyze_project_structure_gets_clients_from_manager(self, runner):
         """Test that analyze_project_structure gets clients from MCP manager."""
-        # Mock the call_tool method on the command client for execute_command
+        # Mock the call_tool method on the command client for find_files
         command_connection = runner.mcp_manager.get_connection(MCPServerType.COMMAND)
 
-        # Create a mock text content object
+        # Create a mock text content object for find_files response
         mock_text_content = Mock()
-        mock_text_content.text = '{"command": "test command", "success": true, "stdout": "file", "stderr": "", "exit_code": 0}'
+        mock_text_content.text = '{"pattern": "pyproject.toml", "search_directory": ".", "matches": [{"path": "pyproject.toml", "name": "pyproject.toml", "directory": "."}], "total_matches": 1}'
         command_connection.client.call_tool.return_value = [mock_text_content]
 
         # Test that the method gets clients from manager
