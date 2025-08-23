@@ -246,7 +246,7 @@ Please provide your analysis in the structured format with precise test commands
             HumanMessage(content=human_prompt),
         ]
 
-        # Create tools for the LLM to read additional files and find files
+        # Create tools for the LLM to read additional files, find files, and execute commands
         def read_file_tool(file_path: str) -> str:
             """Read the contents of a file to understand project structure and dependencies.
 
@@ -306,8 +306,42 @@ Please provide your analysis in the structured format with precise test commands
             except Exception as e:
                 return f'{{"error": "Could not find files: {str(e)}"}}'
 
+        def execute_command_tool(command: str, timeout: int = 300) -> str:
+            """Execute a shell command to test setup steps and see results.
+
+            Args:
+                command: The shell command to execute
+                timeout: Command timeout in seconds (default: 300)
+
+            Returns:
+                JSON string with command execution results
+            """
+            try:
+                command_connection = self.mcp_manager.get_connection(
+                    MCPServerType.COMMAND
+                )
+                if not command_connection:
+                    return '{"error": "Command MCP connection not available"}'
+                command_client = command_connection.client
+                result = command_client.call_tool(
+                    "execute_command", {"command": command, "timeout": timeout}
+                )
+                if (
+                    result
+                    and "result" in result
+                    and "content" in result["result"]
+                    and len(result["result"]["content"]) > 0
+                ):
+                    return result["result"]["content"][0]["text"]
+                else:
+                    return f'{{"command": "{command}", "error": "No result returned", "success": false}}'
+            except Exception as e:
+                return f'{{"command": "{command}", "error": "Command execution failed: {str(e)}", "success": false}}'
+
         # Bind tools to the LLM
-        llm_with_tools = self.llm.bind_tools([read_file_tool, find_files_tool])
+        llm_with_tools = self.llm.bind_tools(
+            [read_file_tool, find_files_tool, execute_command_tool]
+        )
 
         # Use structured output with Pydantic model - no retry logic
         structured_llm = llm_with_tools.with_structured_output(DevRequirements)
@@ -435,6 +469,297 @@ Please provide your analysis in the structured format with precise test commands
                 )
 
         return setup_results
+
+    async def setup_test_environment_iteratively(
+        self,
+        project_structure: Dict[str, Any],
+        test_functions: Optional[List[str]] = None,
+        max_iterations: int = 3,
+    ) -> Dict[str, Any]:
+        """Set up test environment iteratively with LLM troubleshooting and error correction.
+
+        This method uses an LLM with command execution capabilities to:
+        1. Analyze the project and detect requirements
+        2. Try to set up the environment
+        3. If errors occur, diagnose and fix them iteratively
+        4. Validate that tests can run successfully
+
+        Args:
+            project_structure: Project structure analysis
+            test_functions: Optional list of specific test functions to target
+            max_iterations: Maximum number of fix iterations (default: 3)
+
+        Returns:
+            Dict containing setup results and final working requirements
+        """
+        # Get connections for the iterative setup process
+        filesystem_connection = self.mcp_manager.get_connection(
+            MCPServerType.FILESYSTEM
+        )
+        command_connection = self.mcp_manager.get_connection(MCPServerType.COMMAND)
+
+        if not filesystem_connection or not command_connection:
+            raise ValueError("Required MCP connections not available")
+
+        filesystem_client = filesystem_connection.client
+        command_client = command_connection.client
+
+        # Initial analysis and requirements detection with tools
+        initial_requirements = await self.detect_dev_requirements(
+            project_structure, test_functions
+        )
+
+        setup_log = []
+        current_requirements = initial_requirements.copy()
+
+        for iteration in range(max_iterations):
+            setup_log.append(f"=== Iteration {iteration + 1} ===")
+
+            # Try to set up environment with current requirements
+            setup_results = await self.setup_test_environment(current_requirements)
+
+            if setup_results["success"]:
+                # Try to run a quick test to validate setup
+                test_results = await self.run_tests(current_requirements)
+
+                if test_results["overall_success"]:
+                    setup_log.append(
+                        f"✅ Setup successful on iteration {iteration + 1}"
+                    )
+                    return {
+                        "success": True,
+                        "requirements": current_requirements,
+                        "setup_results": setup_results,
+                        "test_results": test_results,
+                        "iterations": iteration + 1,
+                        "setup_log": setup_log,
+                    }
+                else:
+                    # Setup worked but tests failed - need to troubleshoot test execution
+                    setup_log.append(
+                        f"⚠️  Setup completed but tests failed on iteration {iteration + 1}"
+                    )
+                    error_context = {
+                        "setup_success": True,
+                        "test_failure": True,
+                        "test_output": test_results.get("test_commands_executed", []),
+                        "current_requirements": current_requirements,
+                    }
+            else:
+                # Setup failed - need to troubleshoot setup issues
+                setup_log.append(
+                    f"❌ Setup failed on iteration {iteration + 1}: {setup_results.get('errors', [])}"
+                )
+                error_context = {
+                    "setup_success": False,
+                    "setup_errors": setup_results.get("errors", []),
+                    "setup_commands": setup_results.get("setup_commands_executed", []),
+                    "install_commands": setup_results.get(
+                        "install_commands_executed", []
+                    ),
+                    "current_requirements": current_requirements,
+                }
+
+            # Use LLM to analyze errors and suggest fixes
+            if iteration < max_iterations - 1:  # Don't try to fix on last iteration
+                try:
+                    fixed_requirements = await self._diagnose_and_fix_setup_issues(
+                        project_structure, error_context, test_functions, setup_log
+                    )
+                    current_requirements = fixed_requirements
+                    setup_log.append(
+                        f"🔧 LLM suggested fixes for iteration {iteration + 2}"
+                    )
+                except Exception as e:
+                    setup_log.append(f"❌ Failed to generate fixes: {str(e)}")
+                    break
+
+        # All iterations exhausted without success
+        setup_log.append(
+            f"❌ Failed to set up environment after {max_iterations} iterations"
+        )
+        return {
+            "success": False,
+            "requirements": current_requirements,
+            "setup_results": setup_results if "setup_results" in locals() else {},
+            "iterations": max_iterations,
+            "setup_log": setup_log,
+            "error": f"Could not set up test environment after {max_iterations} attempts",
+        }
+
+    async def _diagnose_and_fix_setup_issues(
+        self,
+        project_structure: Dict[str, Any],
+        error_context: Dict[str, Any],
+        test_functions: Optional[List[str]],
+        setup_log: List[str],
+    ) -> Dict[str, Any]:
+        """Use LLM to diagnose setup issues and suggest fixes.
+
+        Args:
+            project_structure: Project structure information
+            error_context: Context about what failed (setup or test execution)
+            test_functions: Specific test functions if any
+            setup_log: Log of previous attempts
+
+        Returns:
+            Updated requirements with fixes
+        """
+        # Build diagnostic prompt
+        if error_context.get("setup_success", False):
+            # Test execution failed after successful setup
+            diagnostic_prompt = f"""
+The project setup completed successfully, but test execution failed. 
+
+SETUP LOG:
+{chr(10).join(setup_log)}
+
+FAILED TEST EXECUTION:
+{error_context.get('test_output', [])}
+
+CURRENT REQUIREMENTS:
+{error_context.get('current_requirements', {})}
+
+Please analyze the test execution failure and provide updated requirements with corrected test commands.
+"""
+        else:
+            # Setup itself failed
+            diagnostic_prompt = f"""
+The project setup failed with the following issues:
+
+SETUP LOG:
+{chr(10).join(setup_log)}
+
+SETUP ERRORS:
+{error_context.get('setup_errors', [])}
+
+FAILED COMMANDS:
+Setup: {error_context.get('setup_commands', [])}
+Install: {error_context.get('install_commands', [])}
+
+CURRENT REQUIREMENTS:
+{error_context.get('current_requirements', {})}
+
+Please analyze these setup failures and provide updated requirements with corrected commands.
+"""
+
+        if test_functions:
+            diagnostic_prompt += f"""
+
+SPECIFIC TEST FUNCTIONS TO TARGET:
+{test_functions}
+
+Make sure the corrected test commands target only these specific functions.
+"""
+
+        diagnostic_prompt += """
+
+Use the available tools to:
+1. Investigate the specific errors by reading relevant files
+2. Try alternative setup approaches by executing test commands  
+3. Validate your proposed solutions work before recommending them
+
+Provide updated requirements that should resolve the issues."""
+
+        # Get filesystem connection for tools
+        filesystem_connection = self.mcp_manager.get_connection(
+            MCPServerType.FILESYSTEM
+        )
+        if not filesystem_connection:
+            raise ValueError("Filesystem MCP connection not available")
+        filesystem_client = filesystem_connection.client
+
+        # Create the same tools as in detect_dev_requirements
+        def read_file_tool(file_path: str) -> str:
+            """Read the contents of a file to understand project structure and dependencies."""
+            try:
+                result = filesystem_client.call_tool(
+                    "read_file", {"file_path": file_path}
+                )
+                if (
+                    result
+                    and "result" in result
+                    and "content" in result["result"]
+                    and len(result["result"]["content"]) > 0
+                ):
+                    return result["result"]["content"][0]["text"]
+                else:
+                    return f"Error: Could not read file {file_path}"
+            except Exception as e:
+                return f"Error reading {file_path}: {str(e)}"
+
+        def find_files_tool(pattern: str, directory: str = ".") -> str:
+            """Find files matching a pattern in the project."""
+            try:
+                command_connection = self.mcp_manager.get_connection(
+                    MCPServerType.COMMAND
+                )
+                if not command_connection:
+                    return '{"error": "Command MCP connection not available"}'
+                command_client = command_connection.client
+                result = command_client.call_tool(
+                    "find_files", {"pattern": pattern, "directory": directory}
+                )
+                if (
+                    result
+                    and "result" in result
+                    and "content" in result["result"]
+                    and len(result["result"]["content"]) > 0
+                ):
+                    return result["result"]["content"][0]["text"]
+                else:
+                    return (
+                        f'{{"pattern": "{pattern}", "matches": [], "total_matches": 0}}'
+                    )
+            except Exception as e:
+                return f'{{"error": "Could not find files: {str(e)}"}}'
+
+        def execute_command_tool(command: str, timeout: int = 300) -> str:
+            """Execute a shell command to test setup steps and see results."""
+            try:
+                command_connection = self.mcp_manager.get_connection(
+                    MCPServerType.COMMAND
+                )
+                if not command_connection:
+                    return '{"error": "Command MCP connection not available"}'
+                command_client = command_connection.client
+                result = command_client.call_tool(
+                    "execute_command", {"command": command, "timeout": timeout}
+                )
+                if (
+                    result
+                    and "result" in result
+                    and "content" in result["result"]
+                    and len(result["result"]["content"]) > 0
+                ):
+                    return result["result"]["content"][0]["text"]
+                else:
+                    return f'{{"command": "{command}", "error": "No result returned", "success": false}}'
+            except Exception as e:
+                return f'{{"command": "{command}", "error": "Command execution failed: {str(e)}", "success": false}}'
+
+        # Create LLM with tools for diagnosis and fixing
+        llm_with_tools = self.llm.bind_tools(
+            [read_file_tool, find_files_tool, execute_command_tool]
+        )
+        structured_llm = llm_with_tools.with_structured_output(DevRequirements)
+
+        messages = [
+            SystemMessage(
+                content="You are an expert Python developer debugging test environment setup issues. Use the available tools to investigate problems and validate your solutions before recommending them."
+            ),
+            HumanMessage(content=diagnostic_prompt),
+        ]
+
+        try:
+            response = await structured_llm.ainvoke(messages)
+            return response.model_dump()
+        except Exception as e:
+            raise UnrecoverableTestRunnerError(
+                f"Failed to diagnose and fix setup issues: {str(e)}",
+                "diagnostic_failure",
+                e,
+            )
 
     async def run_tests(self, requirements: Dict[str, Any]) -> Dict[str, Any]:
         """Execute tests using the detected testing framework and commands."""

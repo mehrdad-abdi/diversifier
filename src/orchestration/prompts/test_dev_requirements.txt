@@ -11,12 +11,16 @@ AVAILABLE TOOLS:
 You have access to additional tools that can help you gather more information:
 - read_file_tool(file_path): Read any file in the project to get complete content
 - find_files_tool(pattern, directory): Find files matching a pattern (e.g., "test_*.py", "requirements*.txt")
+- execute_command_tool(command, timeout): Execute shell commands to test setup steps and see results
 
 Use these tools to:
 - Read complete configuration files if the 100-line preview is insufficient
 - Find additional test files, configuration files, or dependency files
 - Understand the project structure better
 - Locate specific test functions or modules when targeting specific tests
+- Test installation commands and validate they work correctly
+- Try running test commands to verify they execute successfully
+- Diagnose and troubleshoot setup issues by executing commands and analyzing output
 
 Be conservative and practical in your recommendations. Prefer standard, widely-used approaches.
 
