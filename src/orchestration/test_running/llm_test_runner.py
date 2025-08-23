@@ -118,8 +118,8 @@ class LLMTestRunner:
                     "directory": ".",
                 },
             )
-            if result:
-                find_result = json.loads(result[0].text)
+            if result and "content" in result and len(result["content"]) > 0:
+                find_result = json.loads(result["content"][0]["text"])
                 if find_result.get("total_matches", 0) > 0:
                     # File exists - add it as a file type
                     project_files.append(
@@ -142,10 +142,10 @@ class LLMTestRunner:
                     "directory": test_path,
                 },
             )
-            if result:
-                find_result = json.loads(result[0].text)
-                # If we can search the directory and it contains files, it exists
-                if "Error" not in result[0].text:
+            if result and "content" in result and len(result["content"]) > 0:
+                content_text = result["content"][0]["text"]
+                # If we can search the directory and it doesn't contain error, it exists
+                if "Error" not in content_text:
                     test_dirs.append(test_path)
 
         return {
@@ -176,11 +176,12 @@ class LLMTestRunner:
                     result = await filesystem_client.call_tool(  # type: ignore[misc]
                         "read_file", {"file_path": filename}
                     )
-                    content_result = json.loads(result[0].text)
-                    if content_result.get("success", False):
-                        # Limit content to first 100 lines for analysis
-                        content_lines = content_result["content"].split("\n")[:100]
-                        file_contents[filename] = "\n".join(content_lines)
+                    if result and "content" in result and len(result["content"]) > 0:
+                        content_result = json.loads(result["content"][0]["text"])
+                        if content_result.get("success", False):
+                            # Limit content to first 100 lines for analysis
+                            content_lines = content_result["content"].split("\n")[:100]
+                            file_contents[filename] = "\n".join(content_lines)
                 except Exception:
                     pass  # Skip files we can't read
 
@@ -274,7 +275,10 @@ Please provide your analysis in the structured format."""
                 result = await command_client.call_tool(  # type: ignore[misc]
                     "execute_command", {"command": command, "timeout": 300}
                 )
-                command_result = json.loads(result[0].text)
+                if result and "content" in result and len(result["content"]) > 0:
+                    command_result = json.loads(result["content"][0]["text"])
+                else:
+                    command_result = {"success": False, "exit_code": -1}
                 setup_results["setup_commands_executed"].append(  # type: ignore[attr-defined]
                     {
                         "command": command,
@@ -300,7 +304,10 @@ Please provide your analysis in the structured format."""
                     "execute_command",
                     {"command": command, "timeout": 600},  # Longer timeout for installs
                 )
-                command_result = json.loads(result[0].text)
+                if result and "content" in result and len(result["content"]) > 0:
+                    command_result = json.loads(result["content"][0]["text"])
+                else:
+                    command_result = {"success": False, "exit_code": -1}
                 setup_results["install_commands_executed"].append(  # type: ignore[attr-defined]
                     {
                         "command": command,
@@ -346,7 +353,10 @@ Please provide your analysis in the structured format."""
                 result = await command_client.call_tool(  # type: ignore[misc]
                     "execute_command", {"command": command, "timeout": 600}
                 )
-                command_result = json.loads(result[0].text)
+                if result and "content" in result and len(result["content"]) > 0:
+                    command_result = json.loads(result["content"][0]["text"])
+                else:
+                    command_result = {"success": False, "exit_code": -1}
 
                 test_execution = {
                     "command": command,

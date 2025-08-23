@@ -116,10 +116,16 @@ class TestLLMTestRunnerMethods:
         # Mock the call_tool method on the command client for find_files
         command_connection = runner.mcp_manager.get_connection(MCPServerType.COMMAND)
 
-        # Create a mock text content object for find_files response
-        mock_text_content = Mock()
-        mock_text_content.text = '{"pattern": "pyproject.toml", "search_directory": ".", "matches": [{"path": "pyproject.toml", "name": "pyproject.toml", "directory": "."}], "total_matches": 1}'
-        command_connection.client.call_tool.return_value = [mock_text_content]
+        # Create a mock response matching actual MCP response format
+        mock_response = {
+            "content": [
+                {
+                    "type": "text",
+                    "text": '{"pattern": "pyproject.toml", "search_directory": ".", "matches": [{"path": "pyproject.toml", "name": "pyproject.toml", "directory": "."}], "total_matches": 1}',
+                }
+            ]
+        }
+        command_connection.client.call_tool.return_value = mock_response
 
         # Test that the method gets clients from manager
         # Note: This is now a sync method since we removed the async pattern
