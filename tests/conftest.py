@@ -26,21 +26,11 @@ def setup_test_environment():
 @pytest.fixture(autouse=True)
 def mock_init_chat_model():
     """Globally mock init_chat_model to prevent real API calls."""
-    with patch("src.orchestration.agent.init_chat_model") as mock_init:
+    with patch("src.orchestration.coordinator.init_chat_model") as mock_init:
         mock_llm = Mock()
         mock_llm.invoke.return_value = Mock(content="Mock response")
         mock_init.return_value = mock_llm
         yield mock_init
-
-
-@pytest.fixture(autouse=True)
-def mock_create_react_agent():
-    """Globally mock create_react_agent to prevent real agent creation."""
-    with patch("src.orchestration.agent.create_react_agent") as mock_create:
-        mock_agent = Mock()
-        mock_agent.invoke.return_value = {"output": "Mock agent response"}
-        mock_create.return_value = mock_agent
-        yield mock_create
 
 
 @pytest.fixture
