@@ -32,11 +32,11 @@ class TestCallGraphBuilder:
     @pytest.fixture
     def builder(self, mock_mcp_manager, tmp_path):
         """Create a CallGraphBuilder instance for testing."""
-        return CallGraphBuilder(str(tmp_path), mock_mcp_manager)
+        return CallGraphBuilder(str(tmp_path), mock_mcp_manager, ["tests"])
 
     def test_init(self, mock_mcp_manager, tmp_path):
         """Test CallGraphBuilder initialization."""
-        builder = CallGraphBuilder(str(tmp_path), mock_mcp_manager)
+        builder = CallGraphBuilder(str(tmp_path), mock_mcp_manager, ["tests"])
 
         assert builder.project_root == Path(tmp_path)
         assert builder.mcp_manager == mock_mcp_manager

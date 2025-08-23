@@ -79,7 +79,7 @@ class CallGraphBuilder:
         self,
         project_root: str,
         mcp_manager: MCPManager,
-        test_paths: Optional[List[str]] = None,
+        test_paths: List[str],
     ):
         """Initialize the call graph builder.
 
@@ -90,9 +90,6 @@ class CallGraphBuilder:
         """
         self.project_root = Path(project_root)
         self.mcp_manager = mcp_manager
-        # Handle backward compatibility and defaults
-        if test_paths is None:
-            test_paths = ["tests/"]
         # Remove trailing slashes for consistent comparison
         self.test_paths = [path.rstrip("/") for path in test_paths]
         self.logger = logging.getLogger("diversifier.call_graph_builder")
