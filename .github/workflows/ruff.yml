@@ -27,4 +27,4 @@ jobs:
       run: uv sync --group dev
     
     - name: Lint with ruff
-      run: uv run ruff check src/ tests/ main.py
+      run: uv run ruff check src/ tests/

@@ -48,13 +48,8 @@ class TestMigrationConfig:
     def test_default_values(self):
         """Test default configuration values."""
         config = MigrationConfig()
-        assert config.max_iterations == 5
-        assert config.test_timeout == 300
-        assert config.validate_syntax is True
-        assert config.require_test_coverage is True
-        assert config.min_test_coverage == 0.8
         assert config.test_paths == ["tests/", "test/"]
-        assert len(config.allowed_library_pairs) == 4
+        assert len(config.common_project_files) > 0
 
 
 class TestLLMConfig:
@@ -72,9 +67,7 @@ class TestLLMConfig:
         assert config.model_name == "claude-3-5-sonnet-20241022"
         assert config.temperature == 0.1
         assert config.max_tokens == 4096
-        assert config.timeout == 120
         assert config.api_key_env_var == "TEST_API_KEY"
-        assert config.base_url is None
         assert config.additional_params == {}
 
     @patch.dict(os.environ, {"OPENAI_API_KEY": "test-openai-key"}, clear=False)
@@ -86,17 +79,13 @@ class TestLLMConfig:
             api_key_env_var="OPENAI_API_KEY",
             temperature=0.7,
             max_tokens=2048,
-            timeout=60,
-            base_url="https://api.openai.com/v1",
             additional_params={"top_p": 0.9, "frequency_penalty": 0.1},
         )
         assert config.provider == "openai"
         assert config.model_name == "gpt-4"
         assert config.temperature == 0.7
         assert config.max_tokens == 2048
-        assert config.timeout == 60
         assert config.api_key_env_var == "OPENAI_API_KEY"
-        assert config.base_url == "https://api.openai.com/v1"
         assert config.additional_params == {"top_p": 0.9, "frequency_penalty": 0.1}
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "test-google-key"}, clear=False)
@@ -129,9 +118,6 @@ class TestDiversifierConfig:
         assert isinstance(config.logging, LoggingConfig)
         assert isinstance(config.migration, MigrationConfig)
         assert isinstance(config.llm, LLMConfig)
-        assert config.project_root == "."
-        assert config.temp_dir == "/tmp/diversifier"
-        assert config.debug_mode is False
 
 
 class TestConfigManager:
@@ -165,19 +151,12 @@ class TestConfigManager:
     def test_load_config_from_file(self):
         """Test loading configuration from TOML file."""
         toml_content = """
-# Top-level configuration
-project_root = "/test/path"
-debug_mode = true
-
 [logging]
 level = "DEBUG"
 format_string = "%(name)s - %(levelname)s - %(message)s"
 
-[mcp]
-timeout = 60
-
 [migration]
-max_iterations = 10
+test_paths = ["tests/", "test/"]
 
 [llm]
 provider = "openai"
@@ -200,14 +179,12 @@ api_key_env_var = "OPENAI_API_KEY"
                     config.logging.format_string
                     == "%(name)s - %(levelname)s - %(message)s"
                 )
-                assert config.migration.max_iterations == 10
+                assert config.migration.test_paths == ["tests/", "test/"]
                 assert config.llm.provider == "openai"
                 assert config.llm.model_name == "gpt-4"
                 assert config.llm.temperature == 0.7
                 assert config.llm.max_tokens == 2048
                 assert config.llm.api_key_env_var == "OPENAI_API_KEY"
-                assert config.project_root == "/test/path"
-                assert config.debug_mode is True
             finally:
                 os.unlink(f.name)
 
@@ -238,8 +215,6 @@ api_key_env_var = "TEST_API_KEY"
         env_vars = {
             "TEST_API_KEY": "test-key",
             "DIVERSIFIER_LOG_LEVEL": "ERROR",
-            "DIVERSIFIER_DEBUG": "true",
-            "DIVERSIFIER_MIN_COVERAGE": "0.9",
             "DIVERSIFIER_LLM_PROVIDER": "google",
             "DIVERSIFIER_LLM_MODEL_NAME": "gemini-pro",
             "DIVERSIFIER_LLM_TEMPERATURE": "0.8",
@@ -258,8 +233,6 @@ api_key_env_var = "TEST_API_KEY"
                     config = manager.load_config()
 
                     assert config.logging.level == "ERROR"
-                    assert config.debug_mode is True
-                    assert config.migration.min_test_coverage == 0.9
                     assert config.llm.provider == "google"
                     assert config.llm.model_name == "gemini-pro"
                     assert config.llm.temperature == 0.8
@@ -271,36 +244,25 @@ api_key_env_var = "TEST_API_KEY"
         """Test environment value conversion for booleans."""
         manager = ConfigManager("/dummy/path.toml")
 
-        # Test true values
-        assert manager._convert_env_value("true", "debug_mode") is True
-        assert manager._convert_env_value("1", "debug_mode") is True
-        assert manager._convert_env_value("yes", "debug_mode") is True
-        assert manager._convert_env_value("on", "debug_mode") is True
-        assert manager._convert_env_value("TRUE", "debug_mode") is True
-
-        # Test false values
-        assert manager._convert_env_value("false", "debug_mode") is False
-        assert manager._convert_env_value("0", "debug_mode") is False
-        assert manager._convert_env_value("no", "debug_mode") is False
-        assert manager._convert_env_value("off", "debug_mode") is False
+        # Boolean handling no longer exists, so test string conversion
+        assert manager._convert_env_value("true", "provider") == "true"
+        assert manager._convert_env_value("false", "provider") == "false"
 
     def test_convert_env_value_integer(self):
         """Test environment value conversion for integers."""
         manager = ConfigManager("/dummy/path.toml")
 
-        assert manager._convert_env_value("123", "timeout") == 123
-        assert manager._convert_env_value("0", "timeout") == 0
-        assert manager._convert_env_value("-5", "timeout") == -5
+        assert manager._convert_env_value("123", "max_tokens") == 123
+        assert manager._convert_env_value("0", "max_tokens") == 0
+        assert manager._convert_env_value("4096", "max_tokens") == 4096
 
     def test_convert_env_value_float(self):
         """Test environment value conversion for floats."""
         manager = ConfigManager("/dummy/path.toml")
 
-        assert manager._convert_env_value("1.5", "min_test_coverage") == 1.5
-        assert manager._convert_env_value("0.0", "min_test_coverage") == 0.0
-        assert manager._convert_env_value("99.99", "min_test_coverage") == 99.99
         assert manager._convert_env_value("0.7", "temperature") == 0.7
         assert manager._convert_env_value("1.0", "temperature") == 1.0
+        assert manager._convert_env_value("0.1", "temperature") == 0.1
 
     def test_convert_env_value_string(self):
         """Test environment value conversion for strings."""
@@ -427,7 +389,7 @@ api_key_env_var = "TEST_API_KEY"
 
     @patch.dict(
         os.environ,
-        {"DIVERSIFIER_DEBUG": "true", "TEST_API_KEY": "test-key"},
+        {"DIVERSIFIER_LLM_TEMPERATURE": "0.5", "TEST_API_KEY": "test-key"},
         clear=False,
     )
     def test_get_config_with_env_vars(self):
@@ -445,7 +407,7 @@ api_key_env_var = "TEST_API_KEY"
 
             try:
                 config = get_config(f.name)
-                assert config.debug_mode is True
+                assert config.llm.temperature == 0.5
             finally:
                 os.unlink(f.name)
 
@@ -453,14 +415,15 @@ api_key_env_var = "TEST_API_KEY"
     def test_load_config_filters_unknown_keys(self):
         """Test that unknown top-level keys are filtered out during config loading."""
         toml_content = """
-# Top-level configuration
-project_root = "/test/path"
-debug_mode = true
+# Top-level configuration with some unknown keys
 performance = "high"  # Unknown key that should be filtered out
 unknown_param = "should_be_ignored"  # Another unknown key
 
 [logging]
 level = "DEBUG"
+
+[migration]
+test_paths = ["tests/", "test/"]
 
 [llm]
 provider = "anthropic"
@@ -478,8 +441,8 @@ api_key_env_var = "TEST_API_KEY"
                 config = manager.load_config()
 
                 # Check that known parameters are loaded correctly
-                assert config.project_root == "/test/path"
-                assert config.debug_mode is True
+                assert config.logging.level == "DEBUG"
+                assert config.migration.test_paths == ["tests/", "test/"]
                 assert config.logging.level == "DEBUG"
                 assert config.llm.provider == "anthropic"
 

@@ -221,7 +221,3 @@ def main() -> int:
 
     # Run the diversification workflow
     return asyncio.run(run_diversification(args))
-
-
-if __name__ == "__main__":
-    sys.exit(main())
