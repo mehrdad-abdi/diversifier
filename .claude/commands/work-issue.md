@@ -100,7 +100,7 @@ All checks must pass. If any fail, fix the issues before proceeding.
     - Testing approach used
     - Edge cases considered
   - Auto-close directive: `Closes #$ARGUMENTS`
-  - Reviewer assignment: `--reviewer mabdi`
+  - Reviewer assignment: `--reviewer mehrdad-abdi`
 - Include the Claude Code signature in the PR description
 
 ## Project Context
