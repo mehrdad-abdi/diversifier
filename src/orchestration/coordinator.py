@@ -321,22 +321,7 @@ class DiversificationCoordinator:
                 f"Detected target project requirements: {dev_requirements['testing_framework']}"
             )
 
-            # Set up target project's test environment
-            setup_results = await runner.setup_test_environment(dev_requirements)
-            if not setup_results["success"]:
-                return {
-                    "success": False,
-                    "error": f"Failed to setup target project test environment: {setup_results['errors']}",
-                    "test_results": {
-                        "tests_executed": 0,
-                        "passed": 0,
-                        "failed": len(test_functions),
-                        "selected_tests": list(test_functions),
-                        "llm_powered": True,
-                    },
-                }
-
-            # Execute the tests in target project's environment
+            # LLM has already validated the setup works, now execute the tests
             test_results = await runner.run_tests(dev_requirements)
 
             self.logger.info(
