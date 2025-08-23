@@ -14,7 +14,6 @@ from src.orchestration.config import (
     DiversifierConfig,
     LLMConfig,
     LoggingConfig,
-    MCPConfig,
     MigrationConfig,
     get_config,
     get_config_manager,
@@ -41,19 +40,6 @@ class TestLoggingConfig:
         )
         assert config.level == "DEBUG"
         assert config.format_string == "%(name)s - %(levelname)s - %(message)s"
-
-
-class TestMCPConfig:
-    """Tests for MCPConfig dataclass."""
-
-    def test_default_values(self):
-        """Test default configuration values."""
-        config = MCPConfig()
-        assert config.filesystem_server_path == "src/mcp_servers/filesystem/server.py"
-        assert config.testing_server_path == "src/mcp_servers/testing/server.py"
-        assert config.git_server_path == "src/mcp_servers/git/server.py"
-        assert config.docker_server_path == "src/mcp_servers/docker/server.py"
-        assert config.timeout == 30
 
 
 class TestMigrationConfig:
@@ -141,7 +127,6 @@ class TestDiversifierConfig:
         )
         config = DiversifierConfig(llm=llm_config)
         assert isinstance(config.logging, LoggingConfig)
-        assert isinstance(config.mcp, MCPConfig)
         assert isinstance(config.migration, MigrationConfig)
         assert isinstance(config.llm, LLMConfig)
         assert config.project_root == "."
@@ -215,7 +200,6 @@ api_key_env_var = "OPENAI_API_KEY"
                     config.logging.format_string
                     == "%(name)s - %(levelname)s - %(message)s"
                 )
-                assert config.mcp.timeout == 60
                 assert config.migration.max_iterations == 10
                 assert config.llm.provider == "openai"
                 assert config.llm.model_name == "gpt-4"
@@ -254,7 +238,6 @@ api_key_env_var = "TEST_API_KEY"
         env_vars = {
             "TEST_API_KEY": "test-key",
             "DIVERSIFIER_LOG_LEVEL": "ERROR",
-            "DIVERSIFIER_MCP_TIMEOUT": "120",
             "DIVERSIFIER_DEBUG": "true",
             "DIVERSIFIER_MIN_COVERAGE": "0.9",
             "DIVERSIFIER_LLM_PROVIDER": "google",
@@ -275,7 +258,6 @@ api_key_env_var = "TEST_API_KEY"
                     config = manager.load_config()
 
                     assert config.logging.level == "ERROR"
-                    assert config.mcp.timeout == 120
                     assert config.debug_mode is True
                     assert config.migration.min_test_coverage == 0.9
                     assert config.llm.provider == "google"

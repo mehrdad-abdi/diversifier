@@ -18,17 +18,6 @@ class LoggingConfig:
 
 
 @dataclass
-class MCPConfig:
-    """MCP server configuration settings."""
-
-    filesystem_server_path: str = "src/mcp_servers/filesystem/server.py"
-    testing_server_path: str = "src/mcp_servers/testing/server.py"
-    git_server_path: str = "src/mcp_servers/git/server.py"
-    docker_server_path: str = "src/mcp_servers/docker/server.py"
-    timeout: int = 30
-
-
-@dataclass
 class MigrationConfig:
     """Migration workflow configuration settings."""
 
@@ -120,7 +109,6 @@ class DiversifierConfig:
 
     llm: LLMConfig  # LLM configuration (REQUIRED)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
-    mcp: MCPConfig = field(default_factory=MCPConfig)
     migration: MigrationConfig = field(default_factory=MigrationConfig)
     project_root: str = "."
     temp_dir: str = "/tmp/diversifier"
@@ -192,8 +180,6 @@ class ConfigManager:
         env_mappings = {
             # Logging configuration
             "DIVERSIFIER_LOG_LEVEL": ("logging", "level"),
-            # MCP configuration
-            "DIVERSIFIER_MCP_TIMEOUT": ("mcp", "timeout"),
             # Migration configuration
             "DIVERSIFIER_MAX_ITERATIONS": ("migration", "max_iterations"),
             "DIVERSIFIER_TEST_TIMEOUT": ("migration", "test_timeout"),
@@ -272,7 +258,6 @@ class ConfigManager:
         """
         # Extract nested configurations
         logging_data = config_data.get("logging", {})
-        mcp_data = config_data.get("mcp", {})
         migration_data = config_data.get("migration", {})
         llm_data = config_data.get("llm", {})
 
@@ -283,9 +268,6 @@ class ConfigManager:
                 for k, v in logging_data.items()
                 if k in LoggingConfig.__dataclass_fields__
             }
-        )
-        mcp_config = MCPConfig(
-            **{k: v for k, v in mcp_data.items() if k in MCPConfig.__dataclass_fields__}
         )
         migration_config = MigrationConfig(
             **{
@@ -317,13 +299,12 @@ class ConfigManager:
         top_level_data = {
             k: v
             for k, v in config_data.items()
-            if k not in ["logging", "mcp", "migration", "llm"]
+            if k not in ["logging", "migration", "llm"]
             and k in DiversifierConfig.__dataclass_fields__
         }
 
         return DiversifierConfig(
             logging=logging_config,
-            mcp=mcp_config,
             migration=migration_config,
             llm=llm_config,
             **top_level_data,
@@ -359,13 +340,6 @@ class ConfigManager:
 [logging]
 level = "INFO"
 format_string = "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
-
-[mcp]
-filesystem_server_path = "src/mcp_servers/filesystem/server.py"
-testing_server_path = "src/mcp_servers/testing/server.py"
-git_server_path = "src/mcp_servers/git/server.py"
-docker_server_path = "src/mcp_servers/docker/server.py"
-timeout = 30
 
 [migration]
 max_iterations = 5
