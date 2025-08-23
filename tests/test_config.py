@@ -28,28 +28,19 @@ class TestLoggingConfig:
         """Test default configuration values."""
         config = LoggingConfig()
         assert config.level == "INFO"
-        assert config.console is True
-        assert config.file_path is None
-        assert config.max_file_size == 10 * 1024 * 1024
-        assert config.backup_count == 5
-        assert config.enable_correlation_ids is True
+        assert (
+            config.format_string
+            == "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
+        )
 
     def test_custom_values(self):
         """Test custom configuration values."""
         config = LoggingConfig(
             level="DEBUG",
-            console=False,
-            file_path="custom.log",
-            max_file_size=5000000,
-            backup_count=3,
-            enable_correlation_ids=False,
+            format_string="%(name)s - %(levelname)s - %(message)s",
         )
         assert config.level == "DEBUG"
-        assert config.console is False
-        assert config.file_path == "custom.log"
-        assert config.max_file_size == 5000000
-        assert config.backup_count == 3
-        assert config.enable_correlation_ids is False
+        assert config.format_string == "%(name)s - %(levelname)s - %(message)s"
 
 
 class TestMCPConfig:
@@ -195,8 +186,7 @@ debug_mode = true
 
 [logging]
 level = "DEBUG"
-console = false
-file_path = "test.log"
+format_string = "%(name)s - %(levelname)s - %(message)s"
 
 [mcp]
 timeout = 60
@@ -221,8 +211,10 @@ api_key_env_var = "OPENAI_API_KEY"
                 config = manager.load_config()
 
                 assert config.logging.level == "DEBUG"
-                assert config.logging.console is False
-                assert config.logging.file_path == "test.log"
+                assert (
+                    config.logging.format_string
+                    == "%(name)s - %(levelname)s - %(message)s"
+                )
                 assert config.mcp.timeout == 60
                 assert config.migration.max_iterations == 10
                 assert config.llm.provider == "openai"
@@ -262,7 +254,6 @@ api_key_env_var = "TEST_API_KEY"
         env_vars = {
             "TEST_API_KEY": "test-key",
             "DIVERSIFIER_LOG_LEVEL": "ERROR",
-            "DIVERSIFIER_LOG_CONSOLE": "false",
             "DIVERSIFIER_MCP_TIMEOUT": "120",
             "DIVERSIFIER_DEBUG": "true",
             "DIVERSIFIER_MIN_COVERAGE": "0.9",
@@ -284,7 +275,6 @@ api_key_env_var = "TEST_API_KEY"
                     config = manager.load_config()
 
                     assert config.logging.level == "ERROR"
-                    assert config.logging.console is False
                     assert config.mcp.timeout == 120
                     assert config.debug_mode is True
                     assert config.migration.min_test_coverage == 0.9
@@ -300,17 +290,17 @@ api_key_env_var = "TEST_API_KEY"
         manager = ConfigManager("/dummy/path.toml")
 
         # Test true values
-        assert manager._convert_env_value("true", "console") is True
-        assert manager._convert_env_value("1", "console") is True
-        assert manager._convert_env_value("yes", "console") is True
-        assert manager._convert_env_value("on", "console") is True
-        assert manager._convert_env_value("TRUE", "console") is True
+        assert manager._convert_env_value("true", "debug_mode") is True
+        assert manager._convert_env_value("1", "debug_mode") is True
+        assert manager._convert_env_value("yes", "debug_mode") is True
+        assert manager._convert_env_value("on", "debug_mode") is True
+        assert manager._convert_env_value("TRUE", "debug_mode") is True
 
         # Test false values
-        assert manager._convert_env_value("false", "console") is False
-        assert manager._convert_env_value("0", "console") is False
-        assert manager._convert_env_value("no", "console") is False
-        assert manager._convert_env_value("off", "console") is False
+        assert manager._convert_env_value("false", "debug_mode") is False
+        assert manager._convert_env_value("0", "debug_mode") is False
+        assert manager._convert_env_value("no", "debug_mode") is False
+        assert manager._convert_env_value("off", "debug_mode") is False
 
     def test_convert_env_value_integer(self):
         """Test environment value conversion for integers."""
