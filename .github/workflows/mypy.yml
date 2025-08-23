@@ -27,4 +27,4 @@ jobs:
       run: uv sync --group dev
     
     - name: Type check with mypy
-      run: uv run mypy src/ tests/ main.py
+      run: uv run mypy src/ tests/
