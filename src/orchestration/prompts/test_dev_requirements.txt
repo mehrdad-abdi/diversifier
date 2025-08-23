@@ -7,6 +7,17 @@ Your task is to:
 4. Suggest the appropriate commands to install dependencies and run tests
 5. Identify any special setup or configuration needed
 
+AVAILABLE TOOLS:
+You have access to additional tools that can help you gather more information:
+- read_file_tool(file_path): Read any file in the project to get complete content
+- find_files_tool(pattern, directory): Find files matching a pattern (e.g., "test_*.py", "requirements*.txt")
+
+Use these tools to:
+- Read complete configuration files if the 100-line preview is insufficient
+- Find additional test files, configuration files, or dependency files
+- Understand the project structure better
+- Locate specific test functions or modules when targeting specific tests
+
 Be conservative and practical in your recommendations. Prefer standard, widely-used approaches.
 
 Consider the following when making your analysis:
@@ -15,5 +26,6 @@ Consider the following when making your analysis:
 - Identify any custom test configurations or special setup requirements
 - Consider package management tools (pip, poetry, conda, uv, etc.) based on project files
 - Look for environment variables or configuration files that affect testing
+- When specific test functions are requested, generate precise commands to run only those tests
 
 Provide a structured response with your findings.

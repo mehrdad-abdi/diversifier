@@ -165,7 +165,9 @@ class LLMTestRunner:
         }
 
     async def detect_dev_requirements(
-        self, project_structure: Dict[str, Any]
+        self,
+        project_structure: Dict[str, Any],
+        test_functions: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Use LLM to analyze project files and detect development requirements."""
         # Get filesystem connection from manager for file reading
@@ -209,6 +211,23 @@ class LLMTestRunner:
             ]
         )
 
+        # Build the prompt based on whether specific test functions are requested
+        if test_functions:
+            test_scope_info = f"""
+IMPORTANT: You need to generate test commands that run ONLY these specific test functions:
+{test_functions}
+
+Generate precise test commands that target only these functions, not the entire test suite.
+For example, if using pytest, use patterns like:
+- pytest path/to/test_file.py::test_function_name
+- pytest -k "test_function_name"
+- pytest path/to/test_file.py::TestClass::test_method
+"""
+        else:
+            test_scope_info = """
+Generate test commands to run the complete test suite for this project.
+"""
+
         human_prompt = f"""Analyze this Python project to determine how to set up and run its tests:
 
 Project structure:
@@ -218,15 +237,80 @@ Project structure:
 File contents:
 {file_contents_text}
 
-Please provide your analysis in the structured format."""
+{test_scope_info}
+
+Please provide your analysis in the structured format with precise test commands."""
 
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=human_prompt),
         ]
 
+        # Create tools for the LLM to read additional files and find files
+        def read_file_tool(file_path: str) -> str:
+            """Read the contents of a file to understand project structure and dependencies.
+
+            Args:
+                file_path: Path to the file to read (relative to project root)
+
+            Returns:
+                The file contents as a string
+            """
+            try:
+                result = filesystem_client.call_tool(
+                    "read_file", {"file_path": file_path}
+                )
+                if (
+                    result
+                    and "result" in result
+                    and "content" in result["result"]
+                    and len(result["result"]["content"]) > 0
+                ):
+                    return result["result"]["content"][0]["text"]
+                else:
+                    return f"Error: Could not read file {file_path}"
+            except Exception as e:
+                return f"Error reading {file_path}: {str(e)}"
+
+        def find_files_tool(pattern: str, directory: str = ".") -> str:
+            """Find files matching a pattern in the project.
+
+            Args:
+                pattern: File pattern to search for (e.g., "*.py", "test_*.py", "requirements*.txt")
+                directory: Directory to search in (default: ".")
+
+            Returns:
+                JSON string with matching files information
+            """
+            try:
+                command_connection = self.mcp_manager.get_connection(
+                    MCPServerType.COMMAND
+                )
+                if not command_connection:
+                    return f'{{"error": "Command MCP connection not available"}}'
+                command_client = command_connection.client
+                result = command_client.call_tool(
+                    "find_files", {"pattern": pattern, "directory": directory}
+                )
+                if (
+                    result
+                    and "result" in result
+                    and "content" in result["result"]
+                    and len(result["result"]["content"]) > 0
+                ):
+                    return result["result"]["content"][0]["text"]
+                else:
+                    return (
+                        f'{{"pattern": "{pattern}", "matches": [], "total_matches": 0}}'
+                    )
+            except Exception as e:
+                return f'{{"error": "Could not find files: {str(e)}"}}'
+
+        # Bind tools to the LLM
+        llm_with_tools = self.llm.bind_tools([read_file_tool, find_files_tool])
+
         # Use structured output with Pydantic model - no retry logic
-        structured_llm = self.llm.with_structured_output(DevRequirements)
+        structured_llm = llm_with_tools.with_structured_output(DevRequirements)
 
         try:
             response = await structured_llm.ainvoke(messages)
