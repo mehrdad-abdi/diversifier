@@ -191,13 +191,11 @@ class LLMTestRunner:
                         and "content" in result["result"]
                         and len(result["result"]["content"]) > 0
                     ):
-                        content_result = json.loads(
-                            result["result"]["content"][0]["text"]
-                        )
-                        if content_result.get("success", False):
-                            # Limit content to first 100 lines for analysis
-                            content_lines = content_result["content"].split("\n")[:100]
-                            file_contents[filename] = "\n".join(content_lines)
+                        # The text field contains the raw file content, not JSON
+                        file_content = result["result"]["content"][0]["text"]
+                        # Limit content to first 100 lines for analysis
+                        content_lines = file_content.split("\n")[:100]
+                        file_contents[filename] = "\n".join(content_lines)
                 except Exception:
                     pass  # Skip files we can't read
 
