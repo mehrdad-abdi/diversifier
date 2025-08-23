@@ -300,12 +300,17 @@ class DiversificationCoordinator:
             )
 
             # Initialize LLM test runner for the target project
-            runner = LLMTestRunner(str(self.project_path), self.migration_config)
+            runner = LLMTestRunner(
+                project_path=str(self.project_path),
+                llm_config=self.llm_config,
+                migration_config=self.migration_config,
+                mcp_manager=self.mcp_manager,
+            )
 
             # Analyze target project structure
-            project_structure = await runner.analyze_project_structure()
+            project_structure = runner.analyze_project_structure()
             self.logger.info(
-                f"Analyzed target project: found {len(project_structure['test_files'])} test files"
+                f"Analyzed target project: found {len(project_structure['test_directories'])} test directories"
             )
 
             # Detect target project's development requirements
