@@ -11,8 +11,12 @@ from .validation import (
     validate_library_name,
 )
 from .orchestration.coordinator import DiversificationCoordinator
-from .orchestration.config import LoggingConfig, get_config, ConfigManager
-from .orchestration.logging_config import setup_logging
+from .orchestration.config import (
+    LoggingConfig,
+    get_config,
+    ConfigManager,
+    setup_logging,
+)
 from .orchestration.langsmith_config import setup_langsmith_tracing
 
 # Global reference to coordinator for signal handler cleanup

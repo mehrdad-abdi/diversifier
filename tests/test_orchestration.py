@@ -12,7 +12,7 @@ from src.orchestration.mcp_manager import MCPManager, MCPServerType, MCPConnecti
 from src.orchestration.config import LLMConfig, LoggingConfig, MigrationConfig
 from src.orchestration.coordinator import DiversificationCoordinator
 from src.orchestration.error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
-from src.orchestration.logging_config import setup_logging, get_logger
+from src.orchestration.config import setup_logging
 
 
 class TestDiversificationAgent:
@@ -764,13 +764,13 @@ class TestLoggingConfig:
         config = LoggingConfig(level="DEBUG")
         setup_logging(config)
 
-        logger = get_logger("test")
+        logger = logging.getLogger("diversifier.test")
         assert logger is not None
         assert logger.name == "diversifier.test"
 
     def test_get_logger(self):
         """Test getting a logger."""
-        logger = get_logger("coordinator")
+        logger = logging.getLogger("diversifier.coordinator")
 
         assert logger.name == "diversifier.coordinator"
         assert isinstance(logger, logging.Logger)

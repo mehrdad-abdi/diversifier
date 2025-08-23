@@ -1,6 +1,8 @@
 """Configuration management for Diversifier."""
 
+import logging
 import os
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -488,3 +490,36 @@ def get_task_temperature(
 
     # Fall back to default temperature
     return llm_config.temperature
+
+
+def setup_logging(config: Optional[LoggingConfig] = None) -> None:
+    """Set up logging configuration for diversifier.
+
+    Args:
+        config: Logging configuration object. If None, uses default configuration.
+    """
+    if config is None:
+        config = get_config().logging
+
+    # Convert string level to logging constant
+    numeric_level = getattr(logging, config.level.upper(), logging.INFO)
+
+    # Create root logger
+    root_logger = logging.getLogger("diversifier")
+    root_logger.setLevel(numeric_level)
+
+    # Clear any existing handlers
+    root_logger.handlers.clear()
+
+    # Console handler only
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(numeric_level)
+    console_formatter = logging.Formatter(config.format_string)
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
+
+    # Prevent propagation to root logger
+    root_logger.propagate = False
+
+    # Log setup completion
+    root_logger.info(f"Logging initialized - Level: {config.level}")

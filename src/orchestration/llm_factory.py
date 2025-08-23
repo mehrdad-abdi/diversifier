@@ -1,13 +1,13 @@
 """LLM factory for creating configured LangChain LLM instances."""
 
+import logging
 import os
 from typing import Any, Optional
 
 from langchain.chat_models import init_chat_model
 from .config import LLMConfig, get_config
-from .logging_config import get_logger
 
-logger = get_logger("llm_factory")
+logger = logging.getLogger("diversifier.llm_factory")
 
 
 def create_llm_from_config(config: Optional[LLMConfig] = None) -> Any:
