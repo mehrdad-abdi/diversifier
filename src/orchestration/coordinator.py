@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import re
 from typing import Dict, Any
 from pathlib import Path
 
@@ -313,61 +312,50 @@ class DiversificationCoordinator:
                 f"Analyzed target project: found {len(project_structure['test_directories'])} test directories"
             )
 
-            # Detect target project's development requirements with specific test functions
-            dev_requirements = await runner.detect_dev_requirements(
+            # Setup environment and run tests with LLM
+            test_env_result = await runner.setup_and_run_tests(
                 project_structure, test_functions=list(test_functions)
             )
             self.logger.info(
-                f"Detected target project requirements: {dev_requirements['testing_framework']}"
+                f"LLM setup and test execution: {test_env_result['testing_framework']}, "
+                f"Setup: {'✅' if test_env_result['setup_successful'] else '❌'}, "
+                f"Tests: {test_env_result['tests_passed']}/{test_env_result['tests_executed']} passed"
             )
 
-            # LLM has already validated the setup works, now execute the tests
-            test_results = await runner.run_tests(dev_requirements)
+            # Check if setup and tests were successful
+            if not test_env_result["setup_successful"]:
+                return {
+                    "success": False,
+                    "error": f"Environment setup failed: {test_env_result.get('analysis', 'Unknown setup failure')}",
+                    "test_results": {
+                        "tests_executed": 0,
+                        "passed": 0,
+                        "failed": len(test_functions),
+                        "selected_tests": list(test_functions),
+                        "llm_powered": True,
+                    },
+                }
 
-            self.logger.info(
-                f"LLM test execution completed: {test_results['summary']['successful_commands']}/{test_results['summary']['total_commands']} commands successful"
-            )
-
-            # Convert to expected format
-            if test_results["overall_success"]:
-                output = (
-                    test_results["test_commands_executed"][0]["stdout"]
-                    if test_results["test_commands_executed"]
-                    else ""
-                )
-                passed = failed = 0
-
-                # Simple parsing of pytest output
-                passed_match = re.search(r"(\d+) passed", output)
-                failed_match = re.search(r"(\d+) failed", output)
-
-                if passed_match:
-                    passed = int(passed_match.group(1))
-                if failed_match:
-                    failed = int(failed_match.group(1))
-
+            # Convert LLM result to expected format
+            if test_env_result["tests_executed"] > 0:
                 return {
                     "success": True,
                     "test_results": {
-                        "tests_executed": passed + failed,
-                        "passed": passed,
-                        "failed": failed,
+                        "tests_executed": test_env_result["tests_executed"],
+                        "passed": test_env_result["tests_passed"],
+                        "failed": test_env_result["tests_failed"],
                         "skipped": 0,
                         "duration": 0.0,
                         "selected_tests": list(test_functions),
-                        "output": output,
-                        "stderr": (
-                            test_results["test_commands_executed"][0].get("stderr", "")
-                            if test_results["test_commands_executed"]
-                            else ""
-                        ),
+                        "output": test_env_result["test_output"],
+                        "stderr": test_env_result["test_stderr"],
                         "llm_powered": True,
                     },
                 }
             else:
                 return {
                     "success": False,
-                    "error": "LLM test execution failed",
+                    "error": f"No tests executed: {test_env_result.get('analysis', 'Unknown test execution failure')}",
                     "test_results": {
                         "tests_executed": 0,
                         "passed": 0,

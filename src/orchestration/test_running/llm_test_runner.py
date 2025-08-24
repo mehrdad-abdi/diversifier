@@ -33,8 +33,8 @@ class UnrecoverableTestRunnerError(Exception):
         self.original_error = original_error
 
 
-class DevRequirements(BaseModel):
-    """Development requirements analysis model."""
+class TestEnvironmentResult(BaseModel):
+    """Test environment setup and execution result model."""
 
     testing_framework: str = Field(
         description="The main testing framework (e.g., 'pytest', 'unittest')"
@@ -49,7 +49,25 @@ class DevRequirements(BaseModel):
     setup_commands: List[str] = Field(
         description="List of any setup commands needed before testing"
     )
-    analysis: str = Field(description="Brief explanation of findings")
+    setup_successful: bool = Field(
+        description="Whether the environment setup completed successfully"
+    )
+    tests_executed: int = Field(
+        description="Number of tests that were executed"
+    )
+    tests_passed: int = Field(
+        description="Number of tests that passed"
+    )
+    tests_failed: int = Field(
+        description="Number of tests that failed"
+    )
+    test_output: str = Field(
+        description="Output from test execution"
+    )
+    test_stderr: str = Field(
+        description="Error output from test execution", default=""
+    )
+    analysis: str = Field(description="Brief explanation of setup process and test results")
 
 
 class LLMTestRunner:
@@ -164,12 +182,28 @@ class LLMTestRunner:
             "test_directories": test_dirs,
         }
 
-    async def detect_dev_requirements(
+    async def setup_and_run_tests(
         self,
         project_structure: Dict[str, Any],
         test_functions: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Use LLM to analyze project files and detect development requirements."""
+        """Use LLM to analyze project, setup development environment, and run tests.
+        
+        This method uses an LLM with command execution capabilities to:
+        1. Analyze the project files and detect requirements
+        2. Execute setup and installation commands to prepare the environment
+        3. Run the tests and return results
+        
+        The LLM has access to tools to read files, find files, and execute commands,
+        allowing it to validate that each step works before proceeding.
+        
+        Args:
+            project_structure: Project structure analysis from analyze_project_structure
+            test_functions: Optional list of specific test functions to target
+            
+        Returns:
+            Dict containing test execution results in coordinator-expected format
+        """
         # Get filesystem connection from manager for file reading
         filesystem_connection = self.mcp_manager.get_connection(
             MCPServerType.FILESYSTEM
@@ -344,7 +378,7 @@ Please provide your analysis in the structured format with precise test commands
         )
 
         # Use structured output with Pydantic model - no retry logic
-        structured_llm = llm_with_tools.with_structured_output(DevRequirements)
+        structured_llm = llm_with_tools.with_structured_output(TestEnvironmentResult)
 
         try:
             response = await structured_llm.ainvoke(messages)
@@ -383,72 +417,3 @@ Please provide your analysis in the structured format with precise test commands
                 f"Error type: {type(e).__name__}"
             )
             raise UnrecoverableTestRunnerError(error_msg, "unexpected", e)
-
-    async def run_tests(self, requirements: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute tests using the detected testing framework and commands."""
-        # Get command connection from manager
-        command_connection = self.mcp_manager.get_connection(MCPServerType.COMMAND)
-        if not command_connection:
-            raise ValueError("Command MCP connection not available from manager")
-        command_client = command_connection.client
-
-        test_results = {
-            "test_commands_executed": [],
-            "overall_success": True,
-            "summary": {
-                "total_commands": 0,
-                "successful_commands": 0,
-                "failed_commands": 0,
-            },
-        }
-
-        test_commands = requirements.get("test_commands", ["pytest"])
-
-        for command in test_commands:
-            try:
-                result = command_client.call_tool(
-                    "execute_command", {"command": command, "timeout": 600}
-                )
-                if (
-                    result
-                    and "result" in result
-                    and "content" in result["result"]
-                    and len(result["result"]["content"]) > 0
-                ):
-                    command_result = json.loads(result["result"]["content"][0]["text"])
-                else:
-                    command_result = {"success": False, "exit_code": -1}
-
-                test_execution = {
-                    "command": command,
-                    "success": command_result["success"],
-                    "exit_code": command_result["exit_code"],
-                    "stdout": command_result.get("stdout", ""),
-                    "stderr": command_result.get("stderr", ""),
-                }
-
-                test_results["test_commands_executed"].append(test_execution)  # type: ignore[attr-defined]
-                test_results["summary"]["total_commands"] += 1  # type: ignore[index]
-
-                if command_result["success"]:
-                    test_results["summary"]["successful_commands"] += 1  # type: ignore[index]
-                else:
-                    test_results["summary"]["failed_commands"] += 1  # type: ignore[index]
-                    test_results["overall_success"] = False
-
-            except Exception as e:
-                test_execution = {
-                    "command": command,
-                    "success": False,
-                    "exit_code": -1,
-                    "error": str(e),
-                    "stdout": "",
-                    "stderr": "",
-                }
-
-                test_results["test_commands_executed"].append(test_execution)  # type: ignore[attr-defined]
-                test_results["summary"]["total_commands"] += 1  # type: ignore[index]
-                test_results["summary"]["failed_commands"] += 1  # type: ignore[index]
-                test_results["overall_success"] = False
-
-        return test_results
