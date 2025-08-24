@@ -2,9 +2,8 @@
 """LLM-based test runner that intelligently analyzes projects and runs tests."""
 
 import json
-import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List, cast
+from typing import Dict, Any, List, Optional
 
 from langchain.chat_models import init_chat_model
 from langchain.agents import create_react_agent, AgentExecutor
@@ -54,22 +53,14 @@ class TestEnvironmentResult(BaseModel):
     setup_successful: bool = Field(
         description="Whether the environment setup completed successfully"
     )
-    tests_executed: int = Field(
-        description="Number of tests that were executed"
+    tests_executed: int = Field(description="Number of tests that were executed")
+    tests_passed: int = Field(description="Number of tests that passed")
+    tests_failed: int = Field(description="Number of tests that failed")
+    test_output: str = Field(description="Output from test execution")
+    test_stderr: str = Field(description="Error output from test execution", default="")
+    analysis: str = Field(
+        description="Brief explanation of setup process and test results"
     )
-    tests_passed: int = Field(
-        description="Number of tests that passed"
-    )
-    tests_failed: int = Field(
-        description="Number of tests that failed"
-    )
-    test_output: str = Field(
-        description="Output from test execution"
-    )
-    test_stderr: str = Field(
-        description="Error output from test execution", default=""
-    )
-    analysis: str = Field(description="Brief explanation of setup process and test results")
 
 
 class LLMTestRunner:
@@ -100,10 +91,8 @@ class LLMTestRunner:
         self.llm = init_chat_model(  # type: ignore[call-overload]
             model=model_id,
             temperature=0,  # Use low temperature for consistent test analysis
-            max_tokens=llm_config.max_tokens,
             **llm_config.additional_params,
         )
-
 
     def analyze_project_structure(self) -> Dict[str, Any]:
         """Analyze project structure to understand testing setup and dependencies."""
@@ -175,25 +164,26 @@ class LLMTestRunner:
     async def setup_and_run_tests(
         self,
         project_structure: Dict[str, Any],
-        test_functions: Optional[List[str]] = None,
+        test_functions: List[str],
     ) -> Dict[str, Any]:
         """Use ReAct agent to analyze project, setup development environment, and run tests.
-        
+
         This method uses a ReAct agent with tool execution capabilities to:
         1. Analyze the project files and detect requirements
         2. Execute setup and installation commands to prepare the environment
         3. Run the tests and return results
-        
+
         The agent has access to tools to read files, find files, and execute commands,
         allowing it to validate that each step works before proceeding.
-        
+
         Args:
             project_structure: Project structure analysis from analyze_project_structure
-            test_functions: Optional list of specific test functions to target
-            
+            test_functions: List of specific test functions to target (required)
+
         Returns:
             Dict containing test execution results in coordinator-expected format
         """
+
         # Create tool instances using the @tool decorator
         @tool
         def read_file_tool(file_path: str) -> str:
@@ -211,7 +201,7 @@ class LLMTestRunner:
                 )
                 if not filesystem_connection:
                     return "Error: Filesystem MCP connection not available"
-                
+
                 result = filesystem_connection.client.call_tool(
                     "read_file", {"file_path": file_path}
                 )
@@ -244,7 +234,7 @@ class LLMTestRunner:
                 )
                 if not command_connection:
                     return '{"error": "Command MCP connection not available"}'
-                
+
                 result = command_connection.client.call_tool(
                     "find_files", {"pattern": pattern, "directory": directory}
                 )
@@ -256,7 +246,9 @@ class LLMTestRunner:
                 ):
                     return result["result"]["content"][0]["text"]
                 else:
-                    return f'{{"pattern": "{pattern}", "matches": [], "total_matches": 0}}'
+                    return (
+                        f'{{"pattern": "{pattern}", "matches": [], "total_matches": 0}}'
+                    )
             except Exception as e:
                 return f'{{"error": "Could not find files: {str(e)}"}}'
 
@@ -277,7 +269,7 @@ class LLMTestRunner:
                 )
                 if not command_connection:
                     return '{"error": "Command MCP connection not available"}'
-                
+
                 result = command_connection.client.call_tool(
                     "execute_command", {"command": command, "timeout": timeout}
                 )
@@ -296,33 +288,40 @@ class LLMTestRunner:
         # Create the tools list
         tools = [read_file_tool, find_files_tool, execute_command_tool]
 
-        # Build the detailed prompt for the agent
-        file_contents_text = ""
-        filesystem_connection = self.mcp_manager.get_connection(MCPServerType.FILESYSTEM)
-        if filesystem_connection:
-            # Read initial project files for context
-            for project_file in project_structure["project_files"]:
-                if project_file["type"] == "file":
-                    filename = project_file["name"]
-                    try:
-                        result = filesystem_connection.client.call_tool(
-                            "read_file", {"file_path": filename}
-                        )
-                        if (
-                            result and "result" in result and "content" in result["result"] 
-                            and len(result["result"]["content"]) > 0
-                        ):
-                            file_content = result["result"]["content"][0]["text"]
-                            # Limit to first 50 lines for initial context
-                            content_lines = file_content.split("\n")[:50]
-                            file_contents_text += f"\n=== {filename} (first 50 lines) ===\n"
-                            file_contents_text += "\n".join(content_lines) + "\n"
-                    except Exception:
-                        continue
+        # Build the detailed prompt for the agent - filesystem connection is required
+        filesystem_connection = self.mcp_manager.get_connection(
+            MCPServerType.FILESYSTEM
+        )
+        if not filesystem_connection:
+            raise ValueError(
+                "Filesystem MCP connection not available - this is required for test execution"
+            )
 
-        # Build target test specification
-        if test_functions:
-            test_target = f"""
+        file_contents_text = ""
+        # Read initial project files for context
+        for project_file in project_structure["project_files"]:
+            if project_file["type"] == "file":
+                filename = project_file["name"]
+                try:
+                    result = filesystem_connection.client.call_tool(
+                        "read_file", {"file_path": filename}
+                    )
+                    if (
+                        result
+                        and "result" in result
+                        and "content" in result["result"]
+                        and len(result["result"]["content"]) > 0
+                    ):
+                        file_content = result["result"]["content"][0]["text"]
+                        # Limit to first 50 lines for initial context
+                        content_lines = file_content.split("\n")[:50]
+                        file_contents_text += f"\n=== {filename} (first 50 lines) ===\n"
+                        file_contents_text += "\n".join(content_lines) + "\n"
+                except Exception:
+                    continue
+
+        # Build target test specification - test_functions is required
+        test_target = f"""
 SPECIFIC TEST TARGETS:
 You must run ONLY these specific test functions:
 {test_functions}
@@ -332,51 +331,25 @@ Generate precise test commands targeting only these functions, such as:
 - pytest -k "test_function_name"  
 - pytest path/to/test_file.py::TestClass::test_method
 """
-        else:
-            test_target = "TARGET: Run the complete test suite for this project."
 
-        # Create the ReAct prompt
-        react_prompt_template = PromptTemplate.from_template("""
-You are an expert Python developer tasked with setting up a development environment and running tests.
+        # Load prompt from file following project pattern
+        prompt_dir = Path(__file__).parent.parent / "prompts"
+        prompt_path = prompt_dir / "react_test_setup.txt"
 
-PROJECT CONTEXT:
-- Project files found: {project_files}
-- Test directories: {test_directories}
-- Initial file contents: {file_contents}
+        if not prompt_path.exists():
+            raise FileNotFoundError(f"ReAct prompt file not found: {prompt_path}")
 
-{test_target}
-
-YOUR MISSION:
-1. ANALYZE the project to understand its structure and dependencies
-2. SETUP the development environment (install dependencies, configure tools)
-3. RUN the specified tests and capture results
-4. PROVIDE a comprehensive summary of what was accomplished
-
-You have access to these tools:
-- read_file_tool: Read any file in the project
-- find_files_tool: Search for files by pattern
-- execute_command_tool: Run shell commands for setup and testing
-
-REQUIREMENTS:
-- Use the tools to investigate the project thoroughly
-- Execute all necessary setup commands (pip install, poetry install, etc.)
-- Run the test commands and capture the output
-- Provide detailed information about what succeeded and what failed
-- Include specific numbers: how many tests passed, failed, etc.
-
-Begin by analyzing the project structure and determining what testing framework is used.
-
-Question: {input}
-{agent_scratchpad}""")
+        react_prompt_content = prompt_path.read_text().strip()
+        react_prompt_template = PromptTemplate.from_template(react_prompt_content)
 
         # Create the ReAct agent
         agent = create_react_agent(self.llm, tools, react_prompt_template)
         agent_executor = AgentExecutor(
-            agent=agent, 
-            tools=tools, 
-            verbose=False,
+            agent=agent,
+            tools=tools,
+            verbose=True,
             max_iterations=15,
-            handle_parsing_errors=True
+            handle_parsing_errors=True,
         )
 
         # Prepare the input for the agent
@@ -385,7 +358,7 @@ Question: {input}
             "project_files": [f["name"] for f in project_structure["project_files"]],
             "test_directories": project_structure["test_directories"],
             "file_contents": file_contents_text,
-            "test_target": test_target
+            "test_target": test_target,
         }
 
         try:
@@ -393,138 +366,54 @@ Question: {input}
             result = await agent_executor.ainvoke(agent_input)
             agent_output = result.get("output", "")
 
-            # Parse the agent output to extract structured information
-            return self._parse_agent_output(agent_output, test_functions)
+            # Use LLM to extract structured information from agent output
+            return await self._extract_structured_results(agent_output, test_functions)
 
         except Exception as e:
             error_msg = f"ReAct agent execution failed: {str(e)}"
             raise UnrecoverableTestRunnerError(error_msg, "agent_execution", e)
 
-    def _parse_agent_output(self, agent_output: str, test_functions: Optional[List[str]]) -> Dict[str, Any]:
-        """Parse the ReAct agent's natural language output into structured format.
-        
+    async def _extract_structured_results(
+        self, agent_output: str, test_functions: List[str]
+    ) -> Dict[str, Any]:
+        """Use LLM to extract structured information from ReAct agent output.
+
         Args:
             agent_output: Natural language output from the ReAct agent
             test_functions: List of test functions that were targeted
-            
+
         Returns:
             Dict containing structured test results in TestEnvironmentResult format
         """
-        # Default values
-        result = {
-            "testing_framework": "unknown",
-            "dev_dependencies": [],
-            "install_commands": [],
-            "test_commands": [],
-            "setup_commands": [],
-            "setup_successful": False,
-            "tests_executed": 0,
-            "tests_passed": 0,
-            "tests_failed": 0,
-            "test_output": agent_output,
-            "test_stderr": "",
-            "analysis": "ReAct agent execution completed"
-        }
-        
-        # Parse testing framework
-        if re.search(r'\bpytest\b', agent_output, re.IGNORECASE):
-            result["testing_framework"] = "pytest"
-        elif re.search(r'\bunittest\b', agent_output, re.IGNORECASE):
-            result["testing_framework"] = "unittest"
-        elif re.search(r'\bnose\b', agent_output, re.IGNORECASE):
-            result["testing_framework"] = "nose"
-        
-        # Parse setup success indicators
-        setup_indicators = [
-            r'successfully installed',
-            r'installation complete',
-            r'dependencies installed',
-            r'setup successful',
-            r'environment ready'
-        ]
-        result["setup_successful"] = any(
-            re.search(pattern, agent_output, re.IGNORECASE) 
-            for pattern in setup_indicators
+        # Create a simple LLM for extraction (reuse the same model)
+        extraction_llm = self.llm.with_structured_output(TestEnvironmentResult)
+
+        extraction_prompt = f"""
+Extract structured information from this ReAct agent execution log.
+
+The agent was tasked with setting up a Python project environment and running these specific test functions:
+{test_functions}
+
+Here is the complete agent execution log:
+---
+{agent_output}
+---
+
+Analyze the log and extract:
+1. What testing framework was detected/used
+2. What dependencies were installed
+3. What commands were executed for setup and testing
+4. Whether the setup was successful
+5. How many tests were executed, passed, and failed
+6. The complete output from test execution
+7. Any error output from test execution
+8. A summary analysis of what happened
+
+Be precise about the numbers - extract exact counts from the test output.
+If no specific numbers are found, make reasonable inferences based on the number of target test functions ({len(test_functions)}).
+"""
+
+        result = await extraction_llm.ainvoke(
+            [{"role": "user", "content": extraction_prompt}]
         )
-        
-        # Parse test results - try multiple patterns
-        test_patterns = [
-            # pytest patterns
-            r'(\d+)\s+passed',
-            r'(\d+)\s+test[s]?\s+passed',
-            r'=+\s*(\d+)\s+passed',
-        ]
-        
-        fail_patterns = [
-            r'(\d+)\s+failed',
-            r'(\d+)\s+test[s]?\s+failed',
-            r'=+\s*(\d+)\s+failed',
-        ]
-        
-        # Extract passed tests
-        for pattern in test_patterns:
-            match = re.search(pattern, agent_output, re.IGNORECASE)
-            if match:
-                result["tests_passed"] = int(match.group(1))
-                break
-                
-        # Extract failed tests  
-        for pattern in fail_patterns:
-            match = re.search(pattern, agent_output, re.IGNORECASE)
-            if match:
-                result["tests_failed"] = int(match.group(1))
-                break
-                
-        # Calculate total tests executed
-        tests_passed = cast(int, result["tests_passed"])
-        tests_failed = cast(int, result["tests_failed"]) 
-        result["tests_executed"] = tests_passed + tests_failed
-        
-        # If we have specific test functions, ensure we report them correctly
-        if test_functions and result["tests_executed"] == 0:
-            # Fallback: assume at least the number of test functions were attempted
-            result["tests_executed"] = len(test_functions)
-            # Try to determine if they passed or failed based on overall sentiment
-            if re.search(r'\bsuccess\b|\bpassed\b|\bcompleted successfully\b', agent_output, re.IGNORECASE):
-                result["tests_passed"] = len(test_functions)
-            else:
-                result["tests_failed"] = len(test_functions)
-        
-        # Parse commands from the output (look for command execution logs)
-        install_cmd_patterns = [
-            r'pip install[^\\n]*',
-            r'poetry install[^\\n]*',
-            r'conda install[^\\n]*',
-            r'uv install[^\\n]*'
-        ]
-        
-        test_cmd_patterns = [
-            r'pytest[^\\n]*',
-            r'python -m pytest[^\\n]*', 
-            r'python -m unittest[^\\n]*'
-        ]
-        
-        # Extract install commands
-        install_commands = cast(List[str], result["install_commands"])
-        for pattern in install_cmd_patterns:
-            matches = re.findall(pattern, agent_output, re.IGNORECASE)
-            install_commands.extend(matches)
-            
-        # Extract test commands
-        test_commands = cast(List[str], result["test_commands"])
-        for pattern in test_cmd_patterns:
-            matches = re.findall(pattern, agent_output, re.IGNORECASE)
-            test_commands.extend(matches)
-        
-        # Create analysis summary
-        if bool(result["setup_successful"]) and cast(int, result["tests_executed"]) > 0:
-            result["analysis"] = (
-                f"Environment setup successful. Executed {result['tests_executed']} tests: "
-                f"{result['tests_passed']} passed, {result['tests_failed']} failed."
-            )
-        elif bool(result["setup_successful"]):
-            result["analysis"] = "Environment setup successful, but no tests were executed."
-        else:
-            result["analysis"] = "Environment setup may have failed or encountered issues."
-        
-        return result
+        return result.model_dump()

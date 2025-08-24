@@ -79,7 +79,7 @@ class TestLLMTestRunnerInitialization:
 
             # Verify LLM was initialized correctly
             mock_init_chat.assert_called_once_with(
-                model="openai:gpt-4", temperature=0, max_tokens=1000, **{}
+                model="openai:gpt-4", temperature=0, **{}
             )
 
     def test_init_with_relative_path_resolves_to_absolute(

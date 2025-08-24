@@ -189,7 +189,6 @@ class DiversificationCoordinator:
 
             kwargs: Dict[str, Any] = {
                 "temperature": self.llm_config.temperature,
-                "max_tokens": self.llm_config.max_tokens,
             }
             kwargs.update(self.llm_config.additional_params)
 
