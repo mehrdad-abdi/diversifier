@@ -76,7 +76,19 @@ jobs:
         echo "🔧 Creating diversifier configuration file..."
         
         # Create config using --create-config
-        uv run diversifier --create-config diversifier_config.toml
+        cat <<EOF > diversifier_config.toml
+        [logging]
+        level = "DEBUG"
+        format_string = "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
+
+        [migration]
+        test_paths = ["app/tests/"]
+
+        [llm]
+        provider = "google_genai"
+        model_name = "gemini-2.5-flash"
+        api_key_env_var = "GOOGLE_API_KEY"
+        EOF
         
         echo "✅ Configuration file created"
         if [ -f "diversifier_config.toml" ]; then
@@ -88,24 +100,9 @@ jobs:
           exit 1
         fi
 
-    - name: Update configuration with Google GenAI settings
+    - name: Run diversifier
       run: |
-        echo "⚙️  Updating configuration with Google GenAI settings..."
-        
-        # Update the LLM section in the TOML config file
-        sed -i 's/provider = "anthropic"/provider = "google_genai"/' diversifier_config.toml
-        sed -i 's/model_name = "claude-3-5-sonnet-20241022"/model_name = "gemini-2.5-flash"/' diversifier_config.toml
-        sed -i 's/api_key_env_var = "ANTHROPIC_API_KEY"/api_key_env_var = "GOOGLE_API_KEY"/' diversifier_config.toml
-        sed -i 's/max_tokens = 4096/max_tokens = 200000/' diversifier_config.toml
-        sed -i 's/temperature = 0.1/temperature = 0.2/' diversifier_config.toml
-        
-        echo "✅ Configuration updated with Google GenAI settings"
-        echo "Updated config contents:"
-        cat diversifier_config.toml
-
-    - name: Run acceptance test generation
-      run: |
-        echo "🧪 Running diversifier for acceptance test generation using config file..."
+        echo "🧪 Running diversifier using config file..."
         
         # Set up environment for test generation
         export GOOGLE_API_KEY="${{ secrets.GEMINI_API_KEY }}"
@@ -126,7 +123,7 @@ jobs:
         set +e  # Don't fail immediately on error so we can capture partial results
         
         # Run diversifier using config file
-        uv run diversifier pilot-project emails redmail --config diversifier_config.toml --verbose 2>&1 | tee diversifier_output.log
+        uv run diversifier pilot-project/backend emails redmail --config diversifier_config.toml --verbose 2>&1 | tee diversifier_output.log
         
         DIVERSIFIER_EXIT_CODE=$?
         
@@ -158,48 +155,6 @@ jobs:
       env:
         GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-
-    - name: Analyze generated tests
-      run: |
-        echo "📊 Analyzing test generation results..."
-        
-        # Look for generated tests in various possible locations
-        TEST_LOCATIONS=(
-          "pilot-project/acceptance_tests"
-          "acceptance_tests" 
-          "pilot-project/tests"
-          "tests"
-          "pilot-project/test_*"
-          "test_*"
-        )
-        
-        TESTS_FOUND=false
-        for location in "${TEST_LOCATIONS[@]}"; do
-          if ls $location 2>/dev/null | head -1 > /dev/null; then
-            echo "✅ Found tests in: $location"
-            echo "Contents:"
-            ls -la "$location" 2>/dev/null | head -10
-            TESTS_FOUND=true
-          fi
-        done
-        
-        if [ "$TESTS_FOUND" = true ]; then
-          echo "✅ Acceptance test generation validation: SUCCESSFUL"
-          echo "Generated tests are available for analysis"
-        else
-          echo "⚠️  No generated tests found in expected locations"
-          echo "This may indicate an issue with test generation or output location"
-        fi
-        
-        # Create a summary report
-        echo "=== Test Generation Summary ===" > test_generation_summary.txt
-        echo "Timestamp: $(date)" >> test_generation_summary.txt
-        echo "Project: FastAPI Full-Stack Template (emails -> redmail)" >> test_generation_summary.txt
-        echo "Tests found: $TESTS_FOUND" >> test_generation_summary.txt
-        echo "Locations checked:" >> test_generation_summary.txt
-        for location in "${TEST_LOCATIONS[@]}"; do
-          echo "  - $location" >> test_generation_summary.txt
-        done
 
     - name: Store generated tests and logs
       uses: actions/upload-artifact@v4
