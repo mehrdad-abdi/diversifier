@@ -1,4 +1,4 @@
-name: Test Generation Validation
+name: Example full-stack-fastapi
 
 on:
   workflow_dispatch:
