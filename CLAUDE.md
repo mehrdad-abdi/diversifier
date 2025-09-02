@@ -23,13 +23,13 @@ uv sync --group dev
 uv run diversifier <project_path> <remove_lib> <inject_lib>
 
 # Code formatting
-uv run black src/ main.py
+uv run black src/
 
 # Linting
-uv run ruff check src/ main.py
+uv run ruff check src/
 
 # Type checking
-uv run mypy src/ main.py
+uv run mypy src/
 
 # Run tests
 uv run pytest
@@ -91,10 +91,10 @@ The project is in early development phase with GitHub project management:
 - **ALWAYS write unit tests** for every code change, new function, or feature
 - **MANDATORY pre-push checks**: Run these commands before every push to the repository:
   ```bash
-  uv run ruff check src/ tests/ main.py           # Linting
-  uv run mypy src/ tests/ main.py      # Type checking
+  uv run ruff check src/ tests/           # Linting
+  uv run mypy src/ tests/      # Type checking
   uv run pytest                       # Unit tests
-  uv run black src/ tests/ main.py     # Code formatting -- Important: Run as last check
+  uv run black src/ tests/     # Code formatting -- Important: Run as last check
   ```
 - All checks must pass before pushing code to any branch
 - Test coverage should be comprehensive, including edge cases and error conditions

@@ -76,10 +76,10 @@ Implement the following workflow for the given GitHub issue number:
 ### 5. Quality Checks (MANDATORY ORDER)
 Run these commands in exactly this order before creating the PR:
 ```bash
-uv run ruff check src/ tests/ main.py           # Linting
-uv run mypy src/ tests/ main.py                 # Type checking  
+uv run ruff check src/ tests/           # Linting
+uv run mypy src/ tests/                 # Type checking  
 uv run pytest                                   # All tests must pass
-uv run black src/ tests/ main.py                # Final formatting (LAST!)
+uv run black src/ tests/                # Final formatting (LAST!)
 ```
 
 All checks must pass. If any fail, fix the issues before proceeding.
