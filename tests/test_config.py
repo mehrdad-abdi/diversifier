@@ -343,6 +343,54 @@ api_key_env_var = "TEST_API_KEY"
             if Path(template_path).exists():
                 os.unlink(template_path)
 
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False)
+    def test_config_template_max_tokens_update(self):
+        """Test that config template can be updated with different max_tokens values.
+
+        This simulates the GitHub workflow scenario where sed is used to update
+        max_tokens from the default value to a higher value.
+        """
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            template_path = f.name
+
+        try:
+            # Create config template with default values
+            manager = ConfigManager("/dummy/path.toml")
+            manager.save_config_template(template_path)
+
+            # Read the template content
+            with open(template_path, "r") as f:
+                template_content = f.read()
+
+            # Verify template has the new default (200000)
+            assert "max_tokens = 200000" in template_content
+
+            # Simulate sed operation to change max_tokens (like GitHub workflow does)
+            updated_content = template_content.replace(
+                "max_tokens = 200000", "max_tokens = 500000"
+            )
+
+            # Write the updated content back
+            with open(template_path, "w") as f:
+                f.write(updated_content)
+
+            # Load the updated config and verify the change took effect
+            updated_manager = ConfigManager(template_path)
+            config = updated_manager.load_config()
+
+            assert (
+                config.llm.max_tokens == 500000
+            ), f"Expected 500000, got {config.llm.max_tokens}"
+
+            # Verify other values remain unchanged
+            assert config.llm.provider == "anthropic"
+            assert config.llm.model_name == "claude-3-5-sonnet-20241022"
+            assert config.llm.temperature == 0.1
+
+        finally:
+            if Path(template_path).exists():
+                os.unlink(template_path)
+
 
 class TestGlobalFunctions:
     """Tests for global configuration functions."""
