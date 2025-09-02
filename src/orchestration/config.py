@@ -56,7 +56,7 @@ class LLMConfig:
     model_name: str  # Model name (REQUIRED)
     api_key_env_var: str  # Environment variable name for API key (REQUIRED)
     temperature: float = 0.1  # Default temperature
-    max_tokens: int = 4096
+    max_tokens: int = 200000
     additional_params: Dict[str, Union[str, int, float, bool]] = field(
         default_factory=dict
     )
@@ -282,7 +282,7 @@ provider = "anthropic"
 model_name = "claude-3-5-sonnet-20241022"
 api_key_env_var = "ANTHROPIC_API_KEY"  # REQUIRED: Environment variable name for API key
 temperature = 0.1
-max_tokens = 4096
+max_tokens = 200000
 
 # Example configurations for different providers:
 # For OpenAI:
