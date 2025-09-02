@@ -66,7 +66,7 @@ class TestLLMConfig:
         assert config.provider == "anthropic"
         assert config.model_name == "claude-3-5-sonnet-20241022"
         assert config.temperature == 0.1
-        assert config.max_tokens == 4096
+        assert config.max_tokens == 200000
         assert config.api_key_env_var == "TEST_API_KEY"
         assert config.additional_params == {}
 
