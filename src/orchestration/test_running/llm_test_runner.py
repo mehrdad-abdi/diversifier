@@ -376,7 +376,7 @@ Generate precise test commands targeting only these functions, such as:
 
         # Prepare the input for the agent
         agent_input = {
-            "input": "Set up the development environment and run the tests for this Python project.",
+            "input": "Set up the development environment and run the tests for this Python project. Use whatever Python version is available and create appropriate virtual environments. Be flexible and adaptable rather than failing on version mismatches.",
             "project_files": [f["name"] for f in project_structure["project_files"]],
             "test_directories": project_structure["test_directories"],
             "file_contents": file_contents_text,
