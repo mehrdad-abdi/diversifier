@@ -4,7 +4,6 @@
 import tempfile
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from src.mcp_servers.command.server import CommandMCPServer
 
