@@ -12,6 +12,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, 'run test generation'))
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: changethis
+          POSTGRES_USER: postgres
+          POSTGRES_DB: app
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
     - name: Checkout repository
@@ -34,6 +49,13 @@ jobs:
       run: |
         uv sync --group dev
         echo "✅ Dependencies installed successfully"
+
+    - name: Set up environment variables
+      run: |
+        echo "🔧 Setting up environment variables for external dependencies..."
+        echo "PostgreSQL connection: localhost:5432"
+        echo "Database: app"
+        echo "✅ Environment variables configured"
 
     - name: Validate configuration
       run: |
@@ -107,6 +129,20 @@ jobs:
         # Set up environment for test generation
         export GOOGLE_API_KEY="${{ secrets.GEMINI_API_KEY }}"
         
+        # Set up database environment variables for FastAPI application
+        export POSTGRES_SERVER="localhost"
+        export POSTGRES_PORT="5432"
+        export POSTGRES_DB="app"
+        export POSTGRES_USER="postgres"
+        export POSTGRES_PASSWORD="changethis"
+        export DATABASE_URL="postgresql://postgres:changethis@localhost:5432/app"
+        
+        # Set up other common environment variables that FastAPI apps need
+        export SECRET_KEY="test-secret-key-for-github-actions"
+        export FIRST_SUPERUSER="admin@example.com"
+        export FIRST_SUPERUSER_PASSWORD="changethis"
+        export ENVIRONMENT="testing"
+        
         # Set up LangSmith tracing if API key is available
         if [ -n "$LANGSMITH_API_KEY" ]; then
           echo "✅ Enabling LangSmith tracing"
@@ -155,6 +191,18 @@ jobs:
       env:
         GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+        # Database connection for FastAPI application testing
+        POSTGRES_SERVER: localhost
+        POSTGRES_PORT: 5432
+        POSTGRES_DB: app
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: changethis
+        DATABASE_URL: postgresql://postgres:changethis@localhost:5432/app
+        # FastAPI application environment variables
+        SECRET_KEY: test-secret-key-for-github-actions
+        FIRST_SUPERUSER: admin@example.com
+        FIRST_SUPERUSER_PASSWORD: changethis
+        ENVIRONMENT: testing
 
     - name: Analyze generated tests
       run: |
