@@ -102,6 +102,38 @@ class TestLLMConfig:
         assert config.temperature == 0.5
         assert config.api_key_env_var == "GOOGLE_API_KEY"
 
+    @patch.dict(os.environ, {"TEST_API_KEY": "test-key"}, clear=False)
+    def test_retryable_error_codes_default(self):
+        """Test default retryable error codes."""
+        config = LLMConfig(
+            provider="anthropic",
+            model_name="claude-3-5-sonnet-20241022",
+            api_key_env_var="TEST_API_KEY",
+        )
+        assert config.retryable_error_codes == [500, 502, 503, 504]
+
+    @patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}, clear=False)
+    def test_retryable_error_codes_custom(self):
+        """Test custom retryable error codes for Gemini."""
+        config = LLMConfig(
+            provider="google",
+            model_name="gemini-pro",
+            api_key_env_var="GOOGLE_API_KEY",
+            retryable_error_codes=[429, 503],
+        )
+        assert config.retryable_error_codes == [429, 503]
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False)
+    def test_retryable_error_codes_empty_list(self):
+        """Test empty retryable error codes (no retries)."""
+        config = LLMConfig(
+            provider="openai",
+            model_name="gpt-4",
+            api_key_env_var="OPENAI_API_KEY",
+            retryable_error_codes=[],
+        )
+        assert config.retryable_error_codes == []
+
 
 class TestDiversifierConfig:
     """Tests for main DiversifierConfig dataclass."""

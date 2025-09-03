@@ -60,6 +60,9 @@ class LLMConfig:
     additional_params: Dict[str, Union[str, int, float, bool]] = field(
         default_factory=dict
     )
+    retryable_error_codes: List[int] = field(
+        default_factory=lambda: [500, 502, 503, 504]
+    )  # HTTP status codes to retry on
 
     def __post_init__(self):
         """Validate LLM configuration after initialization."""
@@ -284,16 +287,22 @@ api_key_env_var = "ANTHROPIC_API_KEY"  # REQUIRED: Environment variable name for
 temperature = 0.1
 max_tokens = 200000
 
+# HTTP error codes to retry on (customize for your provider)
+# Default covers common server errors: 500, 502, 503, 504
+retryable_error_codes = [500, 502, 503, 504]
+
 # Example configurations for different providers:
 # For OpenAI:
 # provider = "openai"
 # model_name = "gpt-4"
 # api_key_env_var = "OPENAI_API_KEY"
+# retryable_error_codes = [500, 502, 503, 504]
 
 # For Google Gemini (use google_genai for LangChain):
 # provider = "google_genai"
 # model_name = "gemini-pro"
 # api_key_env_var = "GOOGLE_API_KEY"
+# retryable_error_codes = [429, 503]  # Common for Gemini: rate limiting + service unavailable
 
 # For Azure OpenAI:
 # provider = "azure_openai"

@@ -98,23 +98,32 @@ class LLMTestRunner:
             **llm_config.additional_params,
         )
 
-    def _is_5xx_error(self, error_message: str) -> bool:
-        """Check if an error message indicates a 5XX HTTP error.
+    def _is_retryable_error(self, error_message: str) -> bool:
+        """Check if an error message indicates a retryable HTTP error.
 
         Args:
             error_message: Error message from LLM service
 
         Returns:
-            True if the error indicates a 5XX server error that should be retried
+            True if the error indicates a retryable error that should be retried
         """
-        # Look for HTTP 5XX status codes at the beginning of the error message
-        pattern = r"^5[0-9]{2}(?:\s|$)"
-        return bool(re.match(pattern, error_message.strip()))
+        # Extract HTTP status code from beginning of error message
+        error_message = error_message.strip()
 
-    async def _retry_on_5xx_errors(
+        # Look for HTTP status codes at the beginning of the error message
+        pattern = r"^(\d{3})(?:\s|$)"
+        match = re.match(pattern, error_message)
+
+        if match:
+            status_code = int(match.group(1))
+            return status_code in self.llm_config.retryable_error_codes
+
+        return False
+
+    async def _retry_on_retryable_errors(
         self, operation_name: str, operation_func, *args, **kwargs
     ):
-        """Retry an async operation on 5XX errors with exponential backoff.
+        """Retry an async operation on retryable errors with exponential backoff.
 
         Args:
             operation_name: Name of the operation for logging
@@ -135,21 +144,21 @@ class LLMTestRunner:
             except Exception as e:
                 error_message = str(e)
 
-                if self._is_5xx_error(error_message):
+                if self._is_retryable_error(error_message):
                     if attempt < max_retries - 1:
                         wait_time = 2**attempt
                         self.logger.warning(
-                            f"{operation_name} failed with 5XX error, retrying in {wait_time}s "
+                            f"{operation_name} failed with retryable error, retrying in {wait_time}s "
                             f"(attempt {attempt + 1}/{max_retries}): {error_message}"
                         )
                         await asyncio.sleep(wait_time)
                         continue
                     else:
                         self.logger.error(
-                            f"{operation_name} failed after {max_retries} retries with 5XX error: {error_message}"
+                            f"{operation_name} failed after {max_retries} retries with retryable error: {error_message}"
                         )
 
-                # Re-raise the original exception for non-5XX errors or after max retries
+                # Re-raise the original exception for non-retryable errors or after max retries
                 raise
 
     def analyze_project_structure(self) -> Dict[str, Any]:
@@ -441,8 +450,8 @@ Generate precise test commands targeting only these functions, such as:
         }
 
         try:
-            # Execute the agent with retry on 5XX errors
-            result = await self._retry_on_5xx_errors(
+            # Execute the agent with retry on retryable errors
+            result = await self._retry_on_retryable_errors(
                 "ReAct agent execution", agent_executor.ainvoke, agent_input
             )
             agent_output = result.get("output", "")
@@ -494,8 +503,8 @@ Be precise about the numbers - extract exact counts from the test output.
 If no specific numbers are found, make reasonable inferences based on the number of target test functions ({len(test_functions)}).
 """
 
-        # Execute extraction with retry on 5XX errors
-        result = await self._retry_on_5xx_errors(
+        # Execute extraction with retry on retryable errors
+        result = await self._retry_on_retryable_errors(
             "Structured result extraction",
             extraction_llm.ainvoke,
             [{"role": "user", "content": extraction_prompt}],

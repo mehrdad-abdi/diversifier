@@ -1,5 +1,6 @@
 """Tests for LLMTestRunner class."""
 
+import os
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
@@ -167,26 +168,73 @@ class TestLLMTestRunnerRetryBehavior:
                 mcp_manager=mock_mcp_manager,
             )
 
-    def test_is_5xx_error_detection(self, runner):
-        """Test 5XX error detection helper method."""
-        # Test actual 5XX error messages
-        assert runner._is_5xx_error(
+    def test_is_retryable_error_detection_default_config(self, runner):
+        """Test retryable error detection with default config (500, 502, 503, 504)."""
+        # Test default retryable errors
+        assert runner._is_retryable_error(
             "503 The model is overloaded. Please try again later."
         )
-        assert runner._is_5xx_error("500 Internal Server Error")
-        assert runner._is_5xx_error("502 Bad Gateway")
-        assert runner._is_5xx_error("504 Gateway Timeout")
+        assert runner._is_retryable_error("500 Internal Server Error")
+        assert runner._is_retryable_error("502 Bad Gateway")
+        assert runner._is_retryable_error("504 Gateway Timeout")
 
-        # Test non-5XX errors should not be retried
-        assert not runner._is_5xx_error("404 Not Found")
-        assert not runner._is_5xx_error("401 Unauthorized")
-        assert not runner._is_5xx_error("400 Bad Request")
-        assert not runner._is_5xx_error("Connection timeout")
-        assert not runner._is_5xx_error("Invalid API key")
+        # Test non-retryable errors should not be retried
+        assert not runner._is_retryable_error("404 Not Found")
+        assert not runner._is_retryable_error("401 Unauthorized")
+        assert not runner._is_retryable_error("400 Bad Request")
+        assert not runner._is_retryable_error("Connection timeout")
+        assert not runner._is_retryable_error("Invalid API key")
 
         # Test edge cases
-        assert not runner._is_5xx_error("Error 503 in the middle but not at start")
-        assert runner._is_5xx_error("599 Custom Server Error")  # 5XX range end
+        assert not runner._is_retryable_error(
+            "Error 503 in the middle but not at start"
+        )
+
+        # Test 5XX codes not in default config
+        assert not runner._is_retryable_error(
+            "501 Not Implemented"
+        )  # Not in default list
+        assert not runner._is_retryable_error(
+            "599 Custom Server Error"
+        )  # Not in default list
+
+    def test_is_retryable_error_detection_custom_config(self, mock_mcp_manager):
+        """Test retryable error detection with custom config (429, 503)."""
+        # Create custom config for Gemini with 429 and 503
+        llm_config = LLMConfig(
+            provider="google",
+            model_name="gemini-pro",
+            api_key_env_var="GOOGLE_API_KEY",
+            retryable_error_codes=[429, 503],
+        )
+        migration_config = MigrationConfig(
+            common_project_files=["pyproject.toml", "requirements.txt"],
+            test_paths=["tests/", "test/"],
+        )
+
+        with (
+            patch("src.orchestration.test_running.llm_test_runner.init_chat_model"),
+            patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}, clear=False),
+        ):
+            runner = LLMTestRunner(
+                project_path="/test/project",
+                llm_config=llm_config,
+                migration_config=migration_config,
+                mcp_manager=mock_mcp_manager,
+            )
+
+            # Test custom retryable errors
+            assert runner._is_retryable_error("429 Too Many Requests")
+            assert runner._is_retryable_error("503 Service Unavailable")
+
+            # Test that default 5XX codes are NOT retryable in custom config
+            assert not runner._is_retryable_error("500 Internal Server Error")
+            assert not runner._is_retryable_error("502 Bad Gateway")
+            assert not runner._is_retryable_error("504 Gateway Timeout")
+
+            # Test non-retryable errors
+            assert not runner._is_retryable_error("404 Not Found")
+            assert not runner._is_retryable_error("401 Unauthorized")
 
     @pytest.mark.asyncio
     async def test_setup_and_run_tests_retries_on_503_error(self, runner):
