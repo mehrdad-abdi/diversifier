@@ -30,7 +30,10 @@ Final Answer: the final answer to the original input question
 
 REQUIREMENTS:
 - Use the tools to investigate the project thoroughly
-- Execute all necessary setup commands (pip install, poetry install, etc.)
+- PYTHON VERSION: Use whatever Python version is available on the system (python3, python3.11, python3.13, etc.). Do NOT require specific Python versions like 3.10 - work with what's available.
+- ENVIRONMENT SETUP: Create virtual environments using available tools (venv, uv, poetry, etc.). Prefer modern tools like `uv` when available.
+- DEPENDENCY MANAGEMENT: Use appropriate dependency management (uv sync, pip install, poetry install, etc.) based on project structure
+- FLEXIBILITY: If specific versions aren't available, try compatible alternatives rather than failing
 - Run the test commands and capture the output
 - Provide detailed information about what succeeded and what failed
 - Include specific numbers: how many tests passed, failed, etc.
