@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +30,12 @@ class CommandMCPServer:
         """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.project_root = self.project_root.resolve()
+
+        # Initialize logger
+        self.logger = logging.getLogger("diversifier.mcp.command")
+        self.logger.info(
+            f"Command MCP Server initialized with project_root: {self.project_root}"
+        )
 
         # Initialize MCP server
         self.server = Server("command-server")
@@ -152,8 +159,16 @@ class CommandMCPServer:
             work_dir = self._validate_path(working_directory)
             if not work_dir.is_dir():
                 raise ValueError(f"Working directory {work_dir} does not exist")
+            self.logger.debug(
+                f"Using provided working_directory: {working_directory} -> resolved to: {work_dir}"
+            )
         else:
             work_dir = self.project_root
+            self.logger.debug(
+                f"No working_directory provided, using project_root: {work_dir}"
+            )
+
+        self.logger.info(f"Executing command: '{command}' in directory: {work_dir}")
 
         try:
             result = subprocess.run(
