@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for Command MCP Server working_directory functionality."""
 
+import os
 import tempfile
 import pytest
 from pathlib import Path
@@ -286,3 +287,73 @@ class TestCommandMCPServer:
             except (ValueError, OSError):
                 # This might fail if target project is outside the MCP server's boundaries
                 pass
+
+    def test_get_clean_environment_removes_venv_variables(self):
+        """Test that _get_clean_environment removes virtual environment variables."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            server = CommandMCPServer(project_root=tmpdir)
+
+            # Mock environment with venv variables
+            original_environ = os.environ.copy()
+            try:
+                # Set some virtual environment variables
+                os.environ["VIRTUAL_ENV"] = "/some/venv/path"
+                os.environ["VIRTUAL_ENV_PROMPT"] = "(venv) "
+                os.environ["PYTHONHOME"] = "/some/python/home"
+                os.environ["PATH"] = "/some/venv/bin:/usr/bin:/bin"
+
+                clean_env = server._get_clean_environment()
+
+                # Check that venv variables are removed
+                assert "VIRTUAL_ENV" not in clean_env
+                assert "VIRTUAL_ENV_PROMPT" not in clean_env
+                assert "PYTHONHOME" not in clean_env
+
+                # Check that venv paths are removed from PATH
+                path_parts = clean_env["PATH"].split(os.pathsep)
+                venv_paths = [part for part in path_parts if "venv" in part.lower()]
+                assert (
+                    len(venv_paths) == 0
+                ), f"Found venv paths in cleaned PATH: {venv_paths}"
+
+                # Check that system paths are still present
+                assert "/usr/bin" in clean_env["PATH"]
+                assert "/bin" in clean_env["PATH"]
+
+            finally:
+                # Restore original environment
+                os.environ.clear()
+                os.environ.update(original_environ)
+
+    @pytest.mark.asyncio
+    async def test_execute_command_uses_clean_environment(self):
+        """Test that command execution uses clean environment without venv variables."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            server = CommandMCPServer(project_root=str(project_root))
+
+            # Mock environment with venv variables
+            original_environ = os.environ.copy()
+            try:
+                os.environ["VIRTUAL_ENV"] = "/some/venv/path"
+                os.environ["VIRTUAL_ENV_PROMPT"] = "(venv) "
+
+                # Execute a command that prints environment variables
+                result = await server._execute_command(
+                    command="env | grep -E '(VIRTUAL_ENV|PYTHONHOME)' || echo 'NO_VENV_VARS'",
+                    working_directory=None,
+                    timeout=30,
+                    capture_output=True,
+                )
+
+                assert len(result) == 1
+                content = result[0].text
+
+                # The command should not see any virtual environment variables
+                assert "NO_VENV_VARS" in content or "VIRTUAL_ENV" not in content
+                assert '"exit_code": 0' in content
+
+            finally:
+                # Restore original environment
+                os.environ.clear()
+                os.environ.update(original_environ)

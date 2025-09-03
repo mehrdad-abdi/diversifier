@@ -4,10 +4,11 @@
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 from mcp.server.stdio import stdio_server
 
 from mcp.server.models import InitializationOptions
@@ -145,6 +146,64 @@ class CommandMCPServer:
 
         return path
 
+    def _get_clean_environment(self) -> Dict[str, str]:
+        """Get a clean environment without diversifier's virtual environment.
+
+        Returns:
+            Dictionary of environment variables with venv-related variables removed
+        """
+        clean_env = os.environ.copy()
+
+        # Remove virtual environment variables
+        venv_vars_to_remove = [
+            "VIRTUAL_ENV",
+            "VIRTUAL_ENV_PROMPT",
+            "PYTHONHOME",
+        ]
+
+        for var in venv_vars_to_remove:
+            clean_env.pop(var, None)
+
+        # Clean up PATH to remove virtual environment paths
+        if "PATH" in clean_env:
+            path_parts = clean_env["PATH"].split(os.pathsep)
+            # Remove paths that contain 'venv', '.venv', or 'virtualenv'
+            clean_path_parts = []
+            for part in path_parts:
+                part_lower = part.lower()
+                if not any(
+                    venv_indicator in part_lower
+                    for venv_indicator in ["venv", "virtualenv"]
+                ):
+                    clean_path_parts.append(part)
+            clean_env["PATH"] = os.pathsep.join(clean_path_parts)
+
+        # Ensure basic system paths are available
+        system_paths = [
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/local/sbin",
+            "/usr/sbin",
+            "/sbin",
+        ]
+        current_path = clean_env.get("PATH", "")
+
+        # Add system paths that aren't already present
+        for sys_path in system_paths:
+            if sys_path not in current_path:
+                if current_path:
+                    clean_env["PATH"] = f"{sys_path}{os.pathsep}{current_path}"
+                else:
+                    clean_env["PATH"] = sys_path
+                current_path = clean_env["PATH"]
+
+        self.logger.debug(
+            f"Cleaned environment PATH: {clean_env.get('PATH', 'Not set')}"
+        )
+
+        return clean_env
+
     async def _execute_command(
         self,
         command: str,
@@ -170,6 +229,9 @@ class CommandMCPServer:
 
         self.logger.info(f"Executing command: '{command}' in directory: {work_dir}")
 
+        # Create a clean environment without diversifier's virtual environment
+        clean_env = self._get_clean_environment()
+
         try:
             result = subprocess.run(
                 command,
@@ -178,6 +240,7 @@ class CommandMCPServer:
                 capture_output=capture_output,
                 text=True,
                 timeout=timeout,
+                env=clean_env,
             )
 
             command_result = {
