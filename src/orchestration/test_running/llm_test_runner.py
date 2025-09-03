@@ -428,7 +428,6 @@ Generate precise test commands targeting only these functions, such as:
             agent=agent,
             tools=tools,
             verbose=True,
-            max_iterations=15,
             handle_parsing_errors=True,
         )
 
