@@ -270,8 +270,30 @@ class LLMTestRunner:
                 if not command_connection:
                     return '{"error": "Command MCP connection not available"}'
 
+                # Calculate working directory relative to MCP manager's project root
+                # We need to ensure commands run in the target project directory
+                try:
+                    # Get the relative path from MCP manager's project root to our target project
+                    mcp_root = Path(self.mcp_manager.project_root).resolve()
+                    target_project = self.project_path.resolve()
+
+                    # If target project is the same as MCP root, use "."
+                    if target_project == mcp_root:
+                        working_dir = "."
+                    else:
+                        # Calculate relative path from MCP root to target project
+                        working_dir = str(target_project.relative_to(mcp_root))
+                except (ValueError, OSError):
+                    # Fallback to absolute path if relative calculation fails
+                    working_dir = str(self.project_path)
+
                 result = command_connection.client.call_tool(
-                    "execute_command", {"command": command, "timeout": timeout}
+                    "execute_command",
+                    {
+                        "command": command,
+                        "working_directory": working_dir,
+                        "timeout": timeout,
+                    },
                 )
                 if (
                     result
