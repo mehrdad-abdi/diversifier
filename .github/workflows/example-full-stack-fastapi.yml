@@ -89,6 +89,7 @@ jobs:
         echo 'api_key_env_var = "GOOGLE_API_KEY"' >> diversifier_config.toml
         echo 'temperature = 0.1' >> diversifier_config.toml
         echo 'max_tokens = 200000' >> diversifier_config.toml
+        echo 'retryable_error_codes = [429, 503]' >> diversifier_config.toml
       
         if [ -f "diversifier_config.toml" ]; then
           echo "Config file location: diversifier_config.toml"
