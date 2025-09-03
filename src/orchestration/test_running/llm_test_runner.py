@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """LLM-based test runner that intelligently analyzes projects and runs tests."""
 
+import asyncio
 import json
+import logging
+import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -85,6 +88,7 @@ class LLMTestRunner:
         self.llm_config = llm_config
         self.migration_config = migration_config
         self.mcp_manager = mcp_manager
+        self.logger = logging.getLogger("diversifier.llm_test_runner")
 
         # Initialize LLM with provided configuration
         model_id = f"{llm_config.provider.lower()}:{llm_config.model_name}"
@@ -93,6 +97,60 @@ class LLMTestRunner:
             temperature=0,  # Use low temperature for consistent test analysis
             **llm_config.additional_params,
         )
+
+    def _is_5xx_error(self, error_message: str) -> bool:
+        """Check if an error message indicates a 5XX HTTP error.
+
+        Args:
+            error_message: Error message from LLM service
+
+        Returns:
+            True if the error indicates a 5XX server error that should be retried
+        """
+        # Look for HTTP 5XX status codes at the beginning of the error message
+        pattern = r"^5[0-9]{2}(?:\s|$)"
+        return bool(re.match(pattern, error_message.strip()))
+
+    async def _retry_on_5xx_errors(
+        self, operation_name: str, operation_func, *args, **kwargs
+    ):
+        """Retry an async operation on 5XX errors with exponential backoff.
+
+        Args:
+            operation_name: Name of the operation for logging
+            operation_func: Async function to retry
+            *args, **kwargs: Arguments to pass to the operation function
+
+        Returns:
+            Result of the operation function
+
+        Raises:
+            The original exception after max retries
+        """
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            try:
+                return await operation_func(*args, **kwargs)
+            except Exception as e:
+                error_message = str(e)
+
+                if self._is_5xx_error(error_message):
+                    if attempt < max_retries - 1:
+                        wait_time = 2**attempt
+                        self.logger.warning(
+                            f"{operation_name} failed with 5XX error, retrying in {wait_time}s "
+                            f"(attempt {attempt + 1}/{max_retries}): {error_message}"
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        self.logger.error(
+                            f"{operation_name} failed after {max_retries} retries with 5XX error: {error_message}"
+                        )
+
+                # Re-raise the original exception for non-5XX errors or after max retries
+                raise
 
     def analyze_project_structure(self) -> Dict[str, Any]:
         """Analyze project structure to understand testing setup and dependencies."""
@@ -384,11 +442,13 @@ Generate precise test commands targeting only these functions, such as:
         }
 
         try:
-            # Execute the agent
-            result = await agent_executor.ainvoke(agent_input)
+            # Execute the agent with retry on 5XX errors
+            result = await self._retry_on_5xx_errors(
+                "ReAct agent execution", agent_executor.ainvoke, agent_input
+            )
             agent_output = result.get("output", "")
 
-            # Use LLM to extract structured information from agent output
+            # Use LLM to extract structured information from agent output with retry
             return await self._extract_structured_results(agent_output, test_functions)
 
         except Exception as e:
@@ -435,7 +495,10 @@ Be precise about the numbers - extract exact counts from the test output.
 If no specific numbers are found, make reasonable inferences based on the number of target test functions ({len(test_functions)}).
 """
 
-        result = await extraction_llm.ainvoke(
-            [{"role": "user", "content": extraction_prompt}]
+        # Execute extraction with retry on 5XX errors
+        result = await self._retry_on_5xx_errors(
+            "Structured result extraction",
+            extraction_llm.ainvoke,
+            [{"role": "user", "content": extraction_prompt}],
         )
         return result.model_dump()
