@@ -110,6 +110,17 @@ class LLMTestRunner:
         # Extract HTTP status code from beginning of error message
         error_message = error_message.strip()
 
+        # Check for specific Gemini/LangChain errors that should be retried
+        retryable_patterns = [
+            "No generation chunks were returned",
+            "Generation stopped due to safety",
+            "Content filtered",
+        ]
+
+        for pattern in retryable_patterns:
+            if pattern in error_message:
+                return True
+
         # Look for HTTP status codes at the beginning of the error message
         pattern = r"^(\d{3})(?:\s|$)"
         match = re.match(pattern, error_message)
@@ -460,8 +471,16 @@ Generate precise test commands targeting only these functions, such as:
             return await self._extract_structured_results(agent_output, test_functions)
 
         except Exception as e:
-            error_msg = f"ReAct agent execution failed: {str(e)}"
-            raise UnrecoverableTestRunnerError(error_msg, "agent_execution", e)
+            # If the ReAct agent fails completely, try to create a fallback result
+            # This can happen with Gemini safety filters or "No generation chunks" errors
+            self.logger.warning(f"ReAct agent failed, attempting fallback: {str(e)}")
+
+            try:
+                return await self._create_fallback_result(test_functions, str(e))
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback also failed: {str(fallback_error)}")
+                error_msg = f"ReAct agent execution failed: {str(e)}"
+                raise UnrecoverableTestRunnerError(error_msg, "agent_execution", e)
 
     async def _extract_structured_results(
         self, agent_output: str, test_functions: List[str]
@@ -510,3 +529,45 @@ If no specific numbers are found, make reasonable inferences based on the number
             [{"role": "user", "content": extraction_prompt}],
         )
         return result.model_dump()
+
+    async def _create_fallback_result(
+        self, test_functions: List[str], error_message: str
+    ) -> Dict[str, Any]:
+        """Create a fallback result when the ReAct agent fails completely.
+
+        This attempts to provide a reasonable default response when LLM services
+        fail due to safety filters, content policy, or other issues.
+
+        Args:
+            test_functions: List of test functions that were targeted
+            error_message: The error message from the failed agent execution
+
+        Returns:
+            Dict containing fallback test results in TestEnvironmentResult format
+        """
+        self.logger.info("Creating fallback result due to LLM agent failure")
+
+        # Create a basic fallback result indicating the setup failed
+        fallback_result = TestEnvironmentResult(
+            testing_framework="pytest",  # Default assumption for Python projects
+            dev_dependencies=[
+                "pytest",
+                "pytest-asyncio",
+            ],  # Common testing dependencies
+            install_commands=["pip install pytest pytest-asyncio"],
+            test_commands=[f"pytest -v {' '.join(test_functions)}"],
+            setup_commands=["python -m venv .venv", "source .venv/bin/activate"],
+            setup_successful=False,  # Agent failed, so setup wasn't successful
+            tests_executed=0,
+            tests_passed=0,
+            tests_failed=len(test_functions),  # Assume all tests would fail
+            test_output=f"LLM agent failed to execute tests due to: {error_message}",
+            test_stderr=f"Error: {error_message}",
+            analysis=(
+                f"The LLM test runner failed to complete due to a service error: {error_message}. "
+                f"This may be due to content policy restrictions or API issues. "
+                f"Manual test execution may be required for the {len(test_functions)} target test functions."
+            ),
+        )
+
+        return fallback_result.model_dump()

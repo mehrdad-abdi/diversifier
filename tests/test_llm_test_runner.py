@@ -185,6 +185,11 @@ class TestLLMTestRunnerRetryBehavior:
         assert not runner._is_retryable_error("Connection timeout")
         assert not runner._is_retryable_error("Invalid API key")
 
+        # Test new Gemini/LangChain specific retryable errors
+        assert runner._is_retryable_error("No generation chunks were returned")
+        assert runner._is_retryable_error("Generation stopped due to safety")
+        assert runner._is_retryable_error("Content filtered")
+
         # Test edge cases
         assert not runner._is_retryable_error(
             "Error 503 in the middle but not at start"
@@ -406,16 +411,20 @@ class TestLLMTestRunnerRetryBehavior:
                 ),
             ):
 
-                # Should still raise UnrecoverableTestRunnerError after retries
-                with pytest.raises(UnrecoverableTestRunnerError) as exc_info:
-                    await runner.setup_and_run_tests(project_structure, ["test_func"])
-
-                # Verify error details
-                assert "503 Service Unavailable" in str(exc_info.value.message)
-                assert exc_info.value.error_type == "agent_execution"
+                # Should now return fallback result after retries instead of raising
+                result = await runner.setup_and_run_tests(
+                    project_structure, ["test_func"]
+                )
 
                 # Verify it tried 3 times (max retries)
                 assert mock_agent_executor.ainvoke.call_count == 3
+
+                # Verify fallback result structure
+                assert result["setup_successful"] is False
+                assert result["tests_executed"] == 0
+                assert result["tests_failed"] == 1  # The one test function we provided
+                assert "503 Service Unavailable" in result["test_output"]
+                assert "LLM agent failed to execute tests" in result["test_output"]
 
     @pytest.mark.asyncio
     async def test_setup_and_run_tests_no_retry_on_non_5xx_error(self, runner):
@@ -457,15 +466,20 @@ class TestLLMTestRunnerRetryBehavior:
                 ),
             ):
 
-                # Should immediately fail without retries
-                with pytest.raises(UnrecoverableTestRunnerError) as exc_info:
-                    await runner.setup_and_run_tests(project_structure, ["test_func"])
-
-                # Verify error details
-                assert "401 Unauthorized" in str(exc_info.value.message)
+                # Should immediately fail without retries but return fallback result
+                result = await runner.setup_and_run_tests(
+                    project_structure, ["test_func"]
+                )
 
                 # Verify it was only called once (no retries)
                 assert mock_agent_executor.ainvoke.call_count == 1
+
+                # Verify fallback result structure
+                assert result["setup_successful"] is False
+                assert result["tests_executed"] == 0
+                assert result["tests_failed"] == 1  # The one test function we provided
+                assert "401 Unauthorized" in result["test_output"]
+                assert "LLM agent failed to execute tests" in result["test_output"]
 
     @pytest.mark.asyncio
     async def test_extract_structured_results_retries_on_5xx_error(self, runner):
