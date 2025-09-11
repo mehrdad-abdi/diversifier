@@ -1,6 +1,5 @@
-Map these specific APIs from {source_library} to {target_library}:
+Please map these specific APIs from {source_library} to their {target_library} equivalents:
 
-{apis_list}
+APIs to map: {apis_list}
 
-Return a JSON mapping for each API. Example format:
-{{"get": "get", "post": "post", "Session": "AsyncClient", "old_function": "NO_EQUIVALENT"}}
+For each API, provide the most appropriate equivalent in {target_library}. Consider functionality, parameters, and usage patterns. If no equivalent exists, use "NO_EQUIVALENT".

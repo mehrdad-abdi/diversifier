@@ -9,6 +9,7 @@ from src.orchestration.api_mapping import (
     APIMapper,
     APIMappingResult,
     DocumentationSource,
+    APIMappingsResult,
 )
 from src.orchestration.config import LLMConfig
 from src.orchestration.mcp_manager import MCPManager
@@ -239,13 +240,15 @@ class TestAPIMapper:
         # Update mapper to use temp prompts directory
         self.api_mapper.prompts_dir = prompts_dir
 
-        # Mock LLM model
+        # Mock LLM model with structured output
         mock_model = Mock()
-        mock_response = Mock()
-        mock_response.content = (
-            '{"get": "get", "post": "post", "Session": "AsyncClient"}'
+        mock_structured_model = Mock()
+        mock_structured_response = APIMappingsResult(
+            api_mappings={"get": "get", "post": "post", "Session": "AsyncClient"},
+            confidence_notes="High confidence mappings",
         )
-        mock_model.invoke = Mock(return_value=mock_response)
+        mock_structured_model.invoke = Mock(return_value=mock_structured_response)
+        mock_model.with_structured_output = Mock(return_value=mock_structured_model)
         mock_init_chat_model.return_value = mock_model
 
         used_apis = {"get", "post", "Session"}
@@ -258,7 +261,8 @@ class TestAPIMapper:
 
         assert result == {"get": "get", "post": "post", "Session": "AsyncClient"}
         mock_init_chat_model.assert_called_once()
-        mock_model.invoke.assert_called_once()
+        mock_model.with_structured_output.assert_called_once_with(APIMappingsResult)
+        mock_structured_model.invoke.assert_called_once()
 
     def test_load_prompt_template_existing_file(self):
         """Test loading prompt template from existing file."""

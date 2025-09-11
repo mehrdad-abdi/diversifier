@@ -1,6 +1,5 @@
 """API mapping analysis for library migration."""
 
-import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Set
@@ -8,6 +7,7 @@ from dataclasses import dataclass
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage, HumanMessage
+from pydantic import BaseModel, Field
 
 from ..mcp_manager import MCPManager, MCPServerType
 from ..config import LLMConfig
@@ -35,6 +35,18 @@ class APIMappingResult:
     target_docs: Optional[DocumentationSource]
     success: bool
     error: Optional[str] = None
+
+
+class APIMappingsResult(BaseModel):
+    """Structured output model for LLM API mappings analysis."""
+
+    api_mappings: Dict[str, str] = Field(
+        description="Dictionary mapping source library APIs to target library APIs"
+    )
+    confidence_notes: Optional[str] = Field(
+        default=None,
+        description="Optional notes about mapping confidence or considerations",
+    )
 
 
 class APIMapper:
@@ -287,6 +299,7 @@ class APIMapper:
             kwargs.update(self.llm_config.additional_params)
 
             model = init_chat_model(model=model_id, **kwargs)
+            structured_model = model.with_structured_output(APIMappingsResult)
 
             # Load prompts from files
             system_prompt = self._load_prompt_template("api_mapping_system.txt")
@@ -322,17 +335,11 @@ class APIMapper:
                 )
             )
 
-            # Get response from LLM
-            response = model.invoke([system_message, human_message])
-            response_text = response.content.strip()
-
-            # Parse JSON response
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()
-            elif response_text.startswith("```"):
-                response_text = response_text[3:-3].strip()
-
-            api_mappings = json.loads(response_text)
+            # Get structured response from LLM
+            structured_response = structured_model.invoke(
+                [system_message, human_message]
+            )
+            api_mappings = structured_response.api_mappings
 
             # Validate mappings
             validated_mappings = {}
