@@ -1,0 +1,15 @@
+Create comprehensive migration guides for these specific APIs from {source_library} to {target_library}:
+
+APIs requiring migration: {apis_list}
+
+For EACH API in the list above, provide a complete migration guide including:
+
+1. **Equivalent API**: The best matching function/method/class in {target_library}
+2. **Practical Examples**: Real code showing how to migrate from {source_library} usage to {target_library} usage
+3. **Migration Notes**: Critical information about parameter changes, behavior differences, or implementation considerations
+4. **Import Requirements**: Any additional imports needed in {target_library}
+5. **Confidence Level**: Your assessment of how direct the mapping is
+
+Focus on practical, copy-paste ready examples that show the actual migration path. Include error handling patterns if they differ between libraries.
+
+If an API has multiple equivalent patterns in {target_library}, choose the most idiomatic and commonly used approach.

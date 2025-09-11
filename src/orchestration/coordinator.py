@@ -10,6 +10,7 @@ from langchain_core.exceptions import LangChainException
 
 from .mcp_manager import MCPManager, MCPServerType
 from .test_generation import TestCoverageSelector
+from .api_mapping import APIMapper
 from .config import LLMConfig, MigrationConfig
 from .test_running.llm_test_runner import LLMTestRunner, UnrecoverableTestRunnerError
 
@@ -82,6 +83,7 @@ class DiversificationCoordinator:
                 ("initialize_environment", self._initialize_environment),
                 ("select_tests", self._select_tests),
                 ("run_baseline_tests", self._run_baseline_tests),
+                ("find_api_mapping", self._find_api_mapping),
                 ("migrate_code", self._migrate_code),
                 ("validate_migration", self._validate_migration),
                 ("repair_issues", self._repair_issues),
@@ -381,6 +383,69 @@ class DiversificationCoordinator:
                     "llm_powered": True,
                 },
             }
+
+    async def _find_api_mapping(self) -> Dict[str, Any]:
+        """Find API mappings between source and target libraries."""
+        try:
+            # Get library usage data from previous steps
+            if "select_tests" not in self.step_results:
+                return {
+                    "success": False,
+                    "error": "No test selection results available for API mapping",
+                }
+
+            selection_result = self.step_results["select_tests"].get("selection_result")
+            if not selection_result:
+                return {"success": False, "error": "No library usage data available"}
+
+            # Extract used library functions/methods from the library usage analysis
+            library_usage_result = selection_result.library_usage_result
+            used_apis = set()
+
+            for module_usage in library_usage_result.module_usages:
+                if module_usage.module_name.startswith(self.source_library):
+                    used_apis.update(module_usage.function_calls)
+                    used_apis.update(module_usage.method_calls)
+                    used_apis.update(module_usage.attribute_accesses)
+
+            # Use APIMapper to perform the mapping
+            api_mapper = APIMapper(
+                source_library=self.source_library,
+                target_library=self.target_library,
+                llm_config=self.llm_config,
+                mcp_manager=self.mcp_manager,
+            )
+
+            mapping_result = await api_mapper.find_api_mappings(used_apis)
+
+            # Convert result to coordinator's expected format
+            if mapping_result.success:
+                return {
+                    "success": True,
+                    "api_mappings": mapping_result.api_mappings,
+                    "source_library": mapping_result.source_library,
+                    "target_library": mapping_result.target_library,
+                    "used_apis": mapping_result.used_apis,
+                    "source_docs_url": (
+                        mapping_result.source_docs.docs_url
+                        if mapping_result.source_docs
+                        else ""
+                    ),
+                    "target_docs_url": (
+                        mapping_result.target_docs.docs_url
+                        if mapping_result.target_docs
+                        else ""
+                    ),
+                    "unmapped_apis": mapping_result.unmapped_apis,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": mapping_result.error or "API mapping failed",
+                }
+
+        except Exception as e:
+            return {"success": False, "error": f"API mapping failed: {str(e)}"}
 
     async def _migrate_code(self) -> Dict[str, Any]:
         """Migrate from source to target library."""

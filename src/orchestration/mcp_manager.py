@@ -12,6 +12,7 @@ from src.mcp_servers.filesystem.launcher import FileSystemMCPClient
 from src.mcp_servers.command.client import CommandMCPClient
 from src.mcp_servers.git.launcher import GitMCPClient
 from src.mcp_servers.docker.launcher import DockerMCPLauncher
+from src.mcp_servers.web.launcher import WebMCPClient
 
 
 class MCPServerType(Enum):
@@ -21,6 +22,7 @@ class MCPServerType(Enum):
     COMMAND = "command"
     GIT = "git"
     DOCKER = "docker"
+    WEB = "web"
 
 
 class MCPConnection:
@@ -330,6 +332,27 @@ class MCPManager:
             self.logger.error(f"Failed to initialize docker server: {e}")
             return False
 
+    async def initialize_web_server(self) -> bool:
+        """Initialize the web MCP server.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            client = WebMCPClient(project_root=self.project_root)
+            connection = MCPConnection(MCPServerType.WEB, client)
+
+            success = await connection.connect()
+            if success:
+                self.connections[MCPServerType.WEB] = connection
+                self.logger.info("Web MCP server initialized")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize web server: {e}")
+            return False
+
     async def initialize_all_servers(self) -> Dict[MCPServerType, bool]:
         """Initialize all MCP servers.
 
@@ -345,6 +368,7 @@ class MCPManager:
         results[MCPServerType.COMMAND] = await self.initialize_command_server()
         results[MCPServerType.GIT] = await self.initialize_git_server()
         results[MCPServerType.DOCKER] = await self.initialize_docker_server()
+        results[MCPServerType.WEB] = await self.initialize_web_server()
 
         successful_count = sum(1 for success in results.values() if success)
         self.logger.info(f"Initialized {successful_count}/{len(results)} MCP servers")
