@@ -1,0 +1,6 @@
+Map these specific APIs from {source_library} to {target_library}:
+
+{apis_list}
+
+Return a JSON mapping for each API. Example format:
+{{"get": "get", "post": "post", "Session": "AsyncClient", "old_function": "NO_EQUIVALENT"}}

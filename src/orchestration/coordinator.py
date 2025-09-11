@@ -1,17 +1,16 @@
 """High-level workflow orchestration coordinator."""
 
 import asyncio
-import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 
 from langchain.chat_models import init_chat_model
 from langchain_core.exceptions import LangChainException
-from langchain_core.messages import SystemMessage, HumanMessage
 
 from .mcp_manager import MCPManager, MCPServerType
 from .test_generation import TestCoverageSelector
+from .api_mapping import APIMapper
 from .config import LLMConfig, MigrationConfig
 from .test_running.llm_test_runner import LLMTestRunner, UnrecoverableTestRunnerError
 
@@ -388,17 +387,6 @@ class DiversificationCoordinator:
     async def _find_api_mapping(self) -> Dict[str, Any]:
         """Find API mappings between source and target libraries."""
         try:
-            self.logger.info(
-                f"Finding API mappings: {self.source_library} -> {self.target_library}"
-            )
-
-            # Check if Web MCP server is available
-            if not self.mcp_manager.is_server_available(MCPServerType.WEB):
-                return {
-                    "success": False,
-                    "error": "Web MCP server not available for API mapping",
-                }
-
             # Get library usage data from previous steps
             if "select_tests" not in self.step_results:
                 return {
@@ -420,210 +408,44 @@ class DiversificationCoordinator:
                     used_apis.update(module_usage.method_calls)
                     used_apis.update(module_usage.attribute_accesses)
 
-            if not used_apis:
+            # Use APIMapper to perform the mapping
+            api_mapper = APIMapper(
+                source_library=self.source_library,
+                target_library=self.target_library,
+                llm_config=self.llm_config,
+                mcp_manager=self.mcp_manager,
+            )
+
+            mapping_result = await api_mapper.find_api_mappings(used_apis)
+
+            # Convert result to coordinator's expected format
+            if mapping_result.success:
                 return {
                     "success": True,
-                    "api_mappings": {},
-                    "note": f"No {self.source_library} API usage found in the project",
+                    "api_mappings": mapping_result.api_mappings,
+                    "source_library": mapping_result.source_library,
+                    "target_library": mapping_result.target_library,
+                    "used_apis": mapping_result.used_apis,
+                    "source_docs_url": (
+                        mapping_result.source_docs.docs_url
+                        if mapping_result.source_docs
+                        else ""
+                    ),
+                    "target_docs_url": (
+                        mapping_result.target_docs.docs_url
+                        if mapping_result.target_docs
+                        else ""
+                    ),
+                    "unmapped_apis": mapping_result.unmapped_apis,
                 }
-
-            self.logger.info(
-                f"Found {len(used_apis)} API usages to map: {list(used_apis)[:5]}..."
-            )
-
-            # Get documentation for both libraries
-            web_connection = self.mcp_manager.get_connection(MCPServerType.WEB)
-            if not web_connection:
-                return {"success": False, "error": "Failed to get web connection"}
-
-            # Fetch PyPI information for both libraries
-            source_pypi_info = web_connection.call_tool(
-                "get_pypi_info", {"package_name": self.source_library}
-            )
-            target_pypi_info = web_connection.call_tool(
-                "get_pypi_info", {"package_name": self.target_library}
-            )
-
-            # Get documentation URLs
-            source_docs_url = self._extract_docs_url(
-                source_pypi_info, self.source_library
-            )
-            target_docs_url = self._extract_docs_url(
-                target_pypi_info, self.target_library
-            )
-
-            # Fetch documentation content (limited to avoid token limits)
-            source_docs = ""
-            target_docs = ""
-
-            if source_docs_url:
-                source_docs_result = web_connection.call_tool(
-                    "fetch_documentation", {"docs_url": source_docs_url}
-                )
-                if source_docs_result and isinstance(source_docs_result, dict):
-                    # Extract text content from result
-                    result_data = source_docs_result.get("result", [])
-                    if (
-                        result_data
-                        and isinstance(result_data, list)
-                        and len(result_data) > 0
-                    ):
-                        source_docs = result_data[0].get("text", "")
-                        if len(source_docs) > 10000:  # Limit content size
-                            source_docs = source_docs[:10000] + "...[truncated]"
-
-            if target_docs_url:
-                target_docs_result = web_connection.call_tool(
-                    "fetch_documentation", {"docs_url": target_docs_url}
-                )
-                if target_docs_result and isinstance(target_docs_result, dict):
-                    # Extract text content from result
-                    result_data = target_docs_result.get("result", [])
-                    if (
-                        result_data
-                        and isinstance(result_data, list)
-                        and len(result_data) > 0
-                    ):
-                        target_docs = result_data[0].get("text", "")
-                        if len(target_docs) > 10000:  # Limit content size
-                            target_docs = target_docs[:10000] + "...[truncated]"
-
-            # Use LLM to analyze API mappings
-            api_mappings = await self._analyze_api_mappings_with_llm(
-                used_apis, source_docs, target_docs
-            )
-
-            if not api_mappings:
+            else:
                 return {
                     "success": False,
-                    "error": f"Failed to find API mappings between {self.source_library} and {self.target_library}",
+                    "error": mapping_result.error or "API mapping failed",
                 }
-
-            return {
-                "success": True,
-                "api_mappings": api_mappings,
-                "source_library": self.source_library,
-                "target_library": self.target_library,
-                "used_apis": list(used_apis),
-                "source_docs_url": source_docs_url,
-                "target_docs_url": target_docs_url,
-                "unmapped_apis": [api for api in used_apis if api not in api_mappings],
-            }
 
         except Exception as e:
             return {"success": False, "error": f"API mapping failed: {str(e)}"}
-
-    def _extract_docs_url(
-        self, pypi_info: Optional[Dict[str, Any]], library_name: str
-    ) -> str:
-        """Extract documentation URL from PyPI information."""
-        if not pypi_info or "info" not in pypi_info:
-            return ""
-
-        info = pypi_info["info"]
-
-        # Try different fields for documentation URL
-        for field in ["docs_url", "home_page", "project_urls"]:
-            if field in info and info[field]:
-                if field == "project_urls" and isinstance(info[field], dict):
-                    # Look for documentation-related URLs
-                    for key, url in info[field].items():
-                        if any(
-                            doc_keyword in key.lower()
-                            for doc_keyword in ["doc", "manual", "guide"]
-                        ):
-                            return url
-                    # Fallback to homepage
-                    if "homepage" in info[field]:
-                        return info[field]["homepage"]
-                else:
-                    return info[field]
-
-        # Fallback to common documentation patterns
-        return f"https://{library_name}.readthedocs.io/"
-
-    async def _analyze_api_mappings_with_llm(
-        self, used_apis: set, source_docs: str, target_docs: str
-    ) -> Dict[str, Any]:
-        """Use LLM to analyze and map APIs between libraries."""
-        try:
-            # Initialize chat model
-            model_id = (
-                f"{self.llm_config.provider.lower()}:{self.llm_config.model_name}"
-            )
-            kwargs: Dict[str, Any] = {
-                "temperature": 0.1
-            }  # Low temperature for consistent results
-            kwargs.update(self.llm_config.additional_params)
-
-            model = init_chat_model(model=model_id, **kwargs)
-
-            # Create system message with instructions
-            system_message = SystemMessage(
-                content=f"""
-You are an expert in Python library migration and API mapping. Your task is to analyze the APIs used from the source library '{self.source_library}' and find their equivalent implementations in the target library '{self.target_library}'.
-
-TASK:
-1. For each API from the source library, find the equivalent or similar API in the target library
-2. Consider not just exact matches but also functionally equivalent alternatives
-3. If no direct equivalent exists, suggest the closest alternative or indicate "NO_EQUIVALENT"
-4. Focus on commonly used APIs and main functionality
-
-IMPORTANT:
-- Return ONLY a JSON object with the mapping
-- Use the exact format: {{"source_api": "target_api", "source_api2": "target_api2"}}
-- If an API has no equivalent, use "NO_EQUIVALENT" as the value
-- Keep API names simple (function/method names, not full import paths)
-
-SOURCE LIBRARY: {self.source_library}
-TARGET LIBRARY: {self.target_library}
-
-DOCUMENTATION CONTEXT:
-Source library docs: {source_docs[:2000] if source_docs else "No documentation available"}
-
-Target library docs: {target_docs[:2000] if target_docs else "No documentation available"}
-"""
-            )
-
-            # Create human message with the specific APIs to map
-            apis_list = list(used_apis)[
-                :20
-            ]  # Limit to first 20 APIs to avoid token limits
-            human_message = HumanMessage(
-                content=f"""
-Map these specific APIs from {self.source_library} to {self.target_library}:
-
-{apis_list}
-
-Return a JSON mapping for each API. Example format:
-{{"get": "get", "post": "post", "Session": "AsyncClient", "old_function": "NO_EQUIVALENT"}}
-"""
-            )
-
-            # Get response from LLM
-            response = model.invoke([system_message, human_message])
-            response_text = response.content.strip()
-
-            # Parse JSON response
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()
-            elif response_text.startswith("```"):
-                response_text = response_text[3:-3].strip()
-
-            api_mappings = json.loads(response_text)
-
-            # Validate mappings
-            validated_mappings = {}
-            for source_api, target_api in api_mappings.items():
-                if source_api in used_apis:
-                    validated_mappings[source_api] = target_api
-
-            self.logger.info(f"Successfully mapped {len(validated_mappings)} APIs")
-            return validated_mappings
-
-        except Exception as e:
-            self.logger.error(f"LLM API mapping analysis failed: {e}")
-            return {}
 
     async def _migrate_code(self) -> Dict[str, Any]:
         """Migrate from source to target library."""
