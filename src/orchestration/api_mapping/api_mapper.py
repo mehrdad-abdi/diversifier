@@ -1,13 +1,35 @@
 """API mapping analysis for library migration."""
 
 import logging
+import re
+import requests
 from pathlib import Path
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, Optional, Set, List
 from dataclasses import dataclass
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
+
+# Optional RAG dependencies - import only if available
+try:
+    from langchain_community.embeddings import OpenAIEmbeddings  # type: ignore
+    from langchain_community.vectorstores import FAISS  # type: ignore
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    from langchain.schema import Document
+
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+    # Create placeholder classes for type checking
+    class OpenAIEmbeddings: # type: ignore
+        pass
+    class FAISS: # type: ignore
+        pass 
+    class RecursiveCharacterTextSplitter: # type: ignore
+        pass
+    class Document: # type: ignore
+        pass
 
 from ..mcp_manager import MCPManager, MCPServerType
 from ..config import LLMConfig
@@ -37,16 +59,140 @@ class APIMappingResult:
     error: Optional[str] = None
 
 
-class APIMappingsResult(BaseModel):
-    """Structured output model for LLM API mappings analysis."""
+class APIMigrationGuide(BaseModel):
+    """Migration guide for a specific API."""
 
-    api_mappings: Dict[str, str] = Field(
-        description="Dictionary mapping source library APIs to target library APIs"
+    source_api: str = Field(description="Original API from source library")
+    target_api: str = Field(description="Equivalent API in target library")
+    confidence: str = Field(
+        description="Confidence level: HIGH, MEDIUM, LOW, or NO_EQUIVALENT"
     )
-    confidence_notes: Optional[str] = Field(
+    source_example: Optional[str] = Field(
+        default=None, description="Code example showing how the source API is used"
+    )
+    target_example: Optional[str] = Field(
         default=None,
-        description="Optional notes about mapping confidence or considerations",
+        description="Code example showing equivalent usage in target library",
     )
+    migration_notes: Optional[str] = Field(
+        default=None,
+        description="Important considerations, parameter changes, or behavior differences",
+    )
+    additional_imports: Optional[str] = Field(
+        default=None, description="Additional imports needed for the target library"
+    )
+
+
+class APIMappingsResult(BaseModel):
+    """Structured output model for comprehensive API migration analysis."""
+
+    migration_guides: list[APIMigrationGuide] = Field(
+        description="Detailed migration guides for each API"
+    )
+    general_migration_notes: Optional[str] = Field(
+        default=None,
+        description="General notes about migrating between these libraries",
+    )
+    compatibility_issues: Optional[str] = Field(
+        default=None,
+        description="Known compatibility issues or breaking changes to be aware of",
+    )
+
+
+class DocumentationRAG:
+    """RAG system for semantic documentation search."""
+
+    def __init__(self, llm_config: LLMConfig):
+        """Initialize RAG system."""
+        self.llm_config = llm_config
+        self.embeddings = None
+        self.vector_stores: Dict[str, Any] = {}
+        self.logger = logging.getLogger(__name__)
+        self.rag_enabled = RAG_AVAILABLE
+
+        if self.rag_enabled:
+            self.text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200,
+                separators=["\n\n", "\n", ".", " ", ""],
+            )
+        else:
+            self.logger.warning(
+                "RAG dependencies not available - using fallback text search"
+            )
+            self.text_splitter = None  # type: ignore
+
+    def _get_embeddings(self):
+        """Get embeddings model (lazy initialization)."""
+        if not self.rag_enabled:
+            return None
+
+        if self.embeddings is None:
+            # Use OpenAI embeddings for now - could be made configurable
+            self.embeddings = OpenAIEmbeddings()  # type: ignore
+        return self.embeddings
+
+    def index_documentation(self, library_name: str, content: str) -> None:
+        """Index documentation content for semantic search."""
+        if not self.rag_enabled:
+            # Store content for simple text search fallback
+            self.vector_stores[library_name] = content
+            return
+
+        try:
+            # Split content into chunks
+            chunks = self.text_splitter.split_text(content)
+
+            # Create documents
+            documents = [
+                Document(  # type: ignore
+                    page_content=chunk,
+                    metadata={"library": library_name, "chunk_id": i},
+                )
+                for i, chunk in enumerate(chunks)
+            ]
+
+            # Create vector store
+            embeddings = self._get_embeddings()
+            vector_store = FAISS.from_documents(documents, embeddings)  # type: ignore
+            self.vector_stores[library_name] = vector_store
+
+            self.logger.info(f"Indexed {len(documents)} chunks for {library_name}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to index documentation for {library_name}: {e}")
+            # Fallback to simple storage
+            self.vector_stores[library_name] = content
+
+    def search_documentation(
+        self, library_name: str, query: str, top_k: int = 3
+    ) -> List[str]:
+        """Search documentation for relevant content."""
+        if library_name not in self.vector_stores:
+            return []
+
+        if not self.rag_enabled:
+            # Simple text search fallback
+            content = self.vector_stores[library_name]
+            if query.lower() in content.lower():
+                # Return relevant chunks (simple approach)
+                lines = content.split("\n")
+                relevant_lines = [
+                    line for line in lines if query.lower() in line.lower()
+                ][: top_k * 5]
+                return [
+                    "\n".join(relevant_lines[i : i + 5])
+                    for i in range(0, len(relevant_lines), 5)
+                ][:top_k]
+            return []
+
+        try:
+            vector_store = self.vector_stores[library_name]
+            docs = vector_store.similarity_search(query, k=top_k)
+            return [doc.page_content for doc in docs]
+        except Exception as e:
+            self.logger.error(f"Failed to search documentation for {library_name}: {e}")
+            return []
 
 
 class APIMapper:
@@ -74,6 +220,10 @@ class APIMapper:
         self.llm_config = llm_config
         self.mcp_manager = mcp_manager
         self.logger = logging.getLogger("diversifier.api_mapper")
+
+        # Initialize RAG system
+        self.rag = DocumentationRAG(llm_config)
+        self._last_migration_guides = None
 
         # Set prompts directory
         if prompts_dir:
@@ -127,8 +277,8 @@ class APIMapper:
             )
 
             # Get documentation for both libraries
-            source_docs = await self._fetch_library_documentation(self.source_library)
-            target_docs = await self._fetch_library_documentation(self.target_library)
+            source_docs = await self._fetch_enhanced_documentation(self.source_library)
+            target_docs = await self._fetch_enhanced_documentation(self.target_library)
 
             # Use LLM to analyze API mappings
             api_mappings = await self._analyze_api_mappings_with_llm(
@@ -174,6 +324,81 @@ class APIMapper:
                 success=False,
                 error=f"API mapping failed: {str(e)}",
             )
+
+    def _fetch_additional_documentation(
+        self, library_name: str, base_docs_url: str
+    ) -> List[str]:
+        """Fetch additional documentation pages via HTTP requests."""
+        additional_content = []
+
+        try:
+            # Common documentation patterns to try
+            common_paths = [
+                "/api/",
+                "/reference/",
+                "/tutorial/",
+                "/quickstart/",
+                "/examples/",
+                "/migration/",
+                "/changelog/",
+                "/guide/",
+            ]
+
+            base_url = base_docs_url.rstrip("/")
+            session = requests.Session()
+            session.headers.update(
+                {"User-Agent": "DiversifierBot/1.0 (Library Migration Tool)"}
+            )
+
+            for path in common_paths:
+                try:
+                    url = f"{base_url}{path}"
+                    response = session.get(url, timeout=10)
+                    if response.status_code == 200:
+                        # Simple HTML text extraction
+                        text_content = re.sub(r"<[^>]+>", " ", response.text)
+                        text_content = re.sub(r"\s+", " ", text_content).strip()
+                        if len(text_content) > 500:  # Only keep substantial content
+                            additional_content.append(text_content[:5000])  # Limit size
+                            self.logger.info(f"Fetched additional docs from {url}")
+
+                except requests.RequestException as e:
+                    self.logger.debug(f"Failed to fetch {url}: {e}")
+                    continue
+
+        except Exception as e:
+            self.logger.error(f"Error fetching additional documentation: {e}")
+
+        return additional_content
+
+    async def _fetch_enhanced_documentation(
+        self, library_name: str
+    ) -> Optional[DocumentationSource]:
+        """Fetch comprehensive documentation using multiple sources."""
+        # First get base documentation via MCP
+        base_docs = await self._fetch_library_documentation(library_name)
+        if not base_docs:
+            return None
+
+        # Fetch additional documentation via HTTP
+        additional_content = []
+        if base_docs.docs_url:
+            additional_content = self._fetch_additional_documentation(
+                library_name, base_docs.docs_url
+            )
+
+        # Combine all content
+        full_content = base_docs.content
+        if additional_content:
+            full_content += "\n\n--- ADDITIONAL DOCUMENTATION ---\n\n"
+            full_content += "\n\n".join(additional_content)
+
+        # Index in RAG system for semantic search
+        self.rag.index_documentation(library_name, full_content)
+
+        return DocumentationSource(
+            library_name=library_name, docs_url=base_docs.docs_url, content=full_content
+        )
 
     async def _fetch_library_documentation(
         self, library_name: str
@@ -305,28 +530,52 @@ class APIMapper:
             system_prompt = self._load_prompt_template("api_mapping_system.txt")
             human_prompt = self._load_prompt_template("api_mapping_human.txt")
 
-            # Format system message
+            # Use RAG to get relevant documentation for the specific APIs
+            apis_list = list(used_apis)[
+                :20
+            ]  # Limit to first 20 APIs to avoid token limits
+
+            # Get relevant documentation chunks for each API via RAG search
+            source_relevant_docs = []
+            target_relevant_docs = []
+
+            for api in apis_list:
+                # Search for API-specific documentation
+                source_chunks = self.rag.search_documentation(
+                    self.source_library, f"{api} function method usage example", top_k=2
+                )
+                target_chunks = self.rag.search_documentation(
+                    self.target_library,
+                    f"{api} function method usage example equivalent",
+                    top_k=2,
+                )
+                source_relevant_docs.extend(source_chunks)
+                target_relevant_docs.extend(target_chunks)
+
+            # Combine and deduplicate relevant documentation
+            source_docs_text = "\n\n".join(list(dict.fromkeys(source_relevant_docs)))[
+                :3000
+            ]
+            target_docs_text = "\n\n".join(list(dict.fromkeys(target_relevant_docs)))[
+                :3000
+            ]
+
+            if not source_docs_text and source_docs:
+                source_docs_text = source_docs.content[:2000]
+            if not target_docs_text and target_docs:
+                target_docs_text = target_docs.content[:2000]
+
+            # Format system message with RAG-retrieved documentation
             system_message = SystemMessage(
                 content=system_prompt.format(
                     source_library=self.source_library,
                     target_library=self.target_library,
-                    source_docs=(
-                        source_docs.content[:2000]
-                        if source_docs and source_docs.content
-                        else "No documentation available"
-                    ),
-                    target_docs=(
-                        target_docs.content[:2000]
-                        if target_docs and target_docs.content
-                        else "No documentation available"
-                    ),
+                    source_docs=source_docs_text or "No documentation available",
+                    target_docs=target_docs_text or "No documentation available",
                 )
             )
 
             # Format human message
-            apis_list = list(used_apis)[
-                :20
-            ]  # Limit to first 20 APIs to avoid token limits
             human_message = HumanMessage(
                 content=human_prompt.format(
                     source_library=self.source_library,
@@ -339,15 +588,20 @@ class APIMapper:
             structured_response = structured_model.invoke(
                 [system_message, human_message]
             )
-            api_mappings = structured_response.api_mappings
 
-            # Validate mappings
+            # Extract simple mappings for backward compatibility
+            # TODO: Update callers to use full migration guides
             validated_mappings = {}
-            for source_api, target_api in api_mappings.items():
-                if source_api in used_apis:
-                    validated_mappings[source_api] = target_api
+            for guide in structured_response.migration_guides:
+                if (
+                    guide.source_api in used_apis
+                    and guide.target_api != "NO_EQUIVALENT"
+                ):
+                    validated_mappings[guide.source_api] = guide.target_api
 
             self.logger.info(f"Successfully mapped {len(validated_mappings)} APIs")
+            # Store detailed migration guides for future use
+            self._last_migration_guides = structured_response
             return validated_mappings
 
         except Exception as e:

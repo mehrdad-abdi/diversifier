@@ -5,6 +5,8 @@ from .api_mapper import (
     APIMappingResult,
     DocumentationSource,
     APIMappingsResult,
+    APIMigrationGuide,
+    DocumentationRAG,
 )
 
 __all__ = [
@@ -12,4 +14,6 @@ __all__ = [
     "APIMappingResult",
     "DocumentationSource",
     "APIMappingsResult",
+    "APIMigrationGuide",
+    "DocumentationRAG",
 ]

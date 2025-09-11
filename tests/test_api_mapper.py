@@ -10,6 +10,7 @@ from src.orchestration.api_mapping import (
     APIMappingResult,
     DocumentationSource,
     APIMappingsResult,
+    APIMigrationGuide,
 )
 from src.orchestration.config import LLMConfig
 from src.orchestration.mcp_manager import MCPManager
@@ -244,8 +245,31 @@ class TestAPIMapper:
         mock_model = Mock()
         mock_structured_model = Mock()
         mock_structured_response = APIMappingsResult(
-            api_mappings={"get": "get", "post": "post", "Session": "AsyncClient"},
-            confidence_notes="High confidence mappings",
+            migration_guides=[
+                APIMigrationGuide(
+                    source_api="get",
+                    target_api="get",
+                    confidence="HIGH",
+                    source_example="requests.get('https://api.example.com')",
+                    target_example="httpx.get('https://api.example.com')",
+                ),
+                APIMigrationGuide(
+                    source_api="post",
+                    target_api="post",
+                    confidence="HIGH",
+                    source_example="requests.post('https://api.example.com', data={'key': 'value'})",
+                    target_example="httpx.post('https://api.example.com', data={'key': 'value'})",
+                ),
+                APIMigrationGuide(
+                    source_api="Session",
+                    target_api="AsyncClient",
+                    confidence="MEDIUM",
+                    source_example="session = requests.Session()",
+                    target_example="client = httpx.AsyncClient()",
+                    migration_notes="Note: AsyncClient is async and requires await",
+                ),
+            ],
+            general_migration_notes="Migration from requests to httpx requires async/await patterns",
         )
         mock_structured_model.invoke = Mock(return_value=mock_structured_response)
         mock_model.with_structured_output = Mock(return_value=mock_structured_model)
